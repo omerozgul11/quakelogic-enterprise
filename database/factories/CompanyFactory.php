@@ -1,0 +1,25 @@
+<?php
+
+namespace Database\Factories;
+
+use App\Models\Company;
+use App\Models\Organization;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
+
+class CompanyFactory extends Factory
+{
+    protected $model = Company::class;
+
+    public function definition(): array
+    {
+        return [
+            'ulid' => (string) Str::ulid(),
+            'organization_id' => Organization::factory(),
+            'name' => $this->faker->company(),
+            'type' => $this->faker->randomElement(['competitor', 'partner', 'vendor', 'subcontractor']),
+            'city' => $this->faker->city(),
+            'state' => $this->faker->stateAbbr(),
+        ];
+    }
+}
