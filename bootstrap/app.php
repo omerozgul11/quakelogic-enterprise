@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Trust reverse proxies / tunnels (VS Code Dev Tunnels, Cloudflare, nginx)
+        // so X-Forwarded-Proto/Host are honored and generated URLs match the
+        // public scheme + host (avoids http asset links on an https page).
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,

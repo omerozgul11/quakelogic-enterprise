@@ -77,7 +77,7 @@ class CaptureController extends Controller
         abort_unless($opportunity->organization_id === $user->organization_id, 403);
 
         if (CapturePlan::where('opportunity_id', $opportunity->id)->exists()) {
-            return back()->with('error', 'This opportunity already has a capture plan.');
+            return back()->withErrors(['opportunity_id' => 'This opportunity already has a capture plan.']);
         }
 
         $plan = CapturePlan::create([

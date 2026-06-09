@@ -99,3 +99,28 @@ export function getStatusColor(status: string): string {
 export function statusLabel(status: string): string {
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
+
+export function getInitials(name?: string | null): string {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const AVATAR_GRADIENTS = [
+    'from-indigo-500 to-violet-500',
+    'from-blue-500 to-cyan-500',
+    'from-emerald-500 to-teal-500',
+    'from-fuchsia-500 to-pink-500',
+    'from-amber-500 to-orange-500',
+    'from-rose-500 to-red-500',
+    'from-sky-500 to-indigo-500',
+    'from-violet-500 to-purple-500',
+];
+
+export function avatarGradient(seed?: string | null): string {
+    if (!seed) return AVATAR_GRADIENTS[0];
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
+}

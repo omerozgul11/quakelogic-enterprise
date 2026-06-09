@@ -4,26 +4,53 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* QuakeLogic — signature orange #f26522 on a clean light slate canvas */
+    --background: 210 40% 98%;          /* slate-50 */
+    --foreground: 215 28% 17%;          /* slate-800 */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 215 28% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 215 28% 17%;
+    --primary: 19 89% 54%;              /* #f26522 — QuakeLogic orange */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;           /* slate-100 */
+    --secondary-foreground: 215 25% 27%;/* slate-700 */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;    /* slate-500 */
+    --accent: 34 100% 95%;              /* orange-50 */
+    --accent-foreground: 20 91% 40%;    /* orange-700 */
+    --destructive: 0 84% 60%;           /* red-500 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 41%;             /* green-600 */
+    --warning: 38 92% 50%;              /* amber-500 */
+    --border: 214 32% 91%;              /* slate-200 */
+    --input: 215 20% 84%;               /* slate-300 */
+    --ring: 27 96% 55%;                 /* orange focus */
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 24% 9%;            /* deep slate canvas */
+    --foreground: 210 22% 92%;          /* soft off-white, easy on the eyes */
+    --card: 222 19% 13%;                /* cards lift slightly above canvas */
+    --card-foreground: 210 22% 92%;
+    --popover: 222 19% 13%;
+    --popover-foreground: 210 22% 92%;
+    --primary: 20 90% 56%;              /* QuakeLogic orange, a touch brighter */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 16% 19%;
+    --secondary-foreground: 210 16% 82%;
+    --muted: 222 16% 19%;
+    --muted-foreground: 215 15% 64%;    /* readable secondary text on dark */
+    --accent: 24 45% 18%;
+    --accent-foreground: 28 92% 72%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 55% 48%;
+    --warning: 38 92% 56%;
+    --border: 220 14% 23%;
+    --input: 220 13% 28%;
+    --ring: 27 96% 55%;
   }
 }
 
@@ -31,7 +58,115 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui,
+      Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
+  h1, h2, h3, h4 { letter-spacing: -0.015em; }
+
+  /* Seamless light <-> dark transition across the whole UI */
+  body, .card-surface, header, aside, nav, table, thead, tbody, tr, td, th,
+  input, select, textarea, button, a, span, p, h1, h2, h3, h4, div {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
+  }
+
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(215 16% 80%);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 66%); background-clip: content-box; }
+  ::selection { background: hsl(19 89% 54% / 0.20); }
+}
+
+@layer components {
+  .glass {
+    background: hsl(0 0% 100% / 0.85);
+    backdrop-filter: saturate(160%) blur(12px);
+    -webkit-backdrop-filter: saturate(160%) blur(12px);
+  }
+  .dark .glass {
+    background: hsl(222 19% 13% / 0.82);
+  }
+
+  /* Flat, clean card — QuakeLogic style */
+  .card-surface {
+    @apply rounded-xl border border-border bg-card shadow-sm;
+  }
+  .card-hover {
+    @apply transition-shadow duration-200 hover:shadow-md;
+  }
+
+  /* Brand fills */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(120deg, #f97316 0%, #ea580c 100%);
+  }
+  .bg-brand-gradient {
+    background-color: #f26522;
+    background-image: linear-gradient(180deg, #f6772f 0%, #f26522 60%, #e85f1d 100%);
+  }
+  /* Warm brand panel (used by split-screen auth pages) */
+  .bg-sidebar {
+    background-color: #e85f1d;
+    background-image:
+      radial-gradient(60% 50% at 50% 0%, rgba(255, 200, 150, 0.35) 0%, rgba(255, 200, 150, 0) 70%),
+      linear-gradient(160deg, #fb8c3e 0%, #f26522 52%, #c2410c 100%);
+  }
+
+  /* Form controls */
+  .input {
+    @apply w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400;
+  }
+  .input-with-icon { @apply pl-10; }
+  .select {
+    @apply cursor-pointer rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400;
+  }
+  .label { @apply mb-1.5 block text-sm font-medium text-foreground; }
+
+  /* Tables */
+  .th {
+    @apply whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+  .td { @apply px-4 py-3.5 align-middle text-sm text-foreground; }
+  .row-link { @apply transition-colors hover:bg-secondary/70; }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in { animation: fade-in 0.4s ease-out both; }
+  .animate-rise { animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-scale-in { animation: scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-float { animation: float 8s ease-in-out infinite; }
+
+  .stagger > * { opacity: 0; animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0.03s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.07s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.11s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.15s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.19s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.23s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.27s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.31s; }
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes float { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-16px) translateX(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .stagger > * { animation: none !important; transition: none !important; }
 }

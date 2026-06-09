@@ -72,17 +72,17 @@ class ProposalTest extends TestCase
         $proposal = ProposalSubmission::factory()->create([
             'organization_id' => $this->organization->id,
             'status' => 'draft',
-            'owner_user_id' => $this->proposalManager->id,
+            'owner_id' => $this->proposalManager->id,
         ]);
 
         $response = $this->actingAs($this->proposalManager)->post("/proposals/{$proposal->id}/transition", [
-            'status' => 'in_review',
+            'status' => 'in_progress',
         ]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('proposal_submissions', [
             'id' => $proposal->id,
-            'status' => 'in_review',
+            'status' => 'in_progress',
         ]);
     }
 
@@ -90,12 +90,12 @@ class ProposalTest extends TestCase
     {
         $ownedProposal = ProposalSubmission::factory()->create([
             'organization_id' => $this->organization->id,
-            'owner_user_id' => $this->proposalWriter->id,
+            'owner_id' => $this->proposalWriter->id,
         ]);
 
         $otherProposal = ProposalSubmission::factory()->create([
             'organization_id' => $this->organization->id,
-            'owner_user_id' => $this->proposalManager->id,
+            'owner_id' => $this->proposalManager->id,
         ]);
 
         // Writer can see their own proposal

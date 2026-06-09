@@ -39,12 +39,12 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend }: {
     trend?: { value: number; positive: boolean };
 }) {
     return (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-card rounded-xl border border-border p-5">
             <div className="flex items-start justify-between">
                 <div>
-                    <p className="text-sm font-medium text-gray-500">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-                    {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+                    <p className="text-sm font-medium text-muted-foreground">{title}</p>
+                    <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
+                    {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
                 </div>
                 <Icon className="h-6 w-6 text-blue-500" />
             </div>
@@ -75,8 +75,8 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
             <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Executive Dashboard</h1>
-                        <p className="text-gray-500 mt-1">Company-wide performance overview</p>
+                        <h1 className="text-2xl font-bold text-foreground">Executive Dashboard</h1>
+                        <p className="text-muted-foreground mt-1">Company-wide performance overview</p>
                     </div>
                     <Link href="/" className="text-sm text-blue-600 hover:underline">← My Dashboard</Link>
                 </div>
@@ -100,8 +100,8 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                 {/* Charts Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* Monthly Trend */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposal Activity (12 Months)</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Proposal Activity (12 Months)</h2>
                         <ResponsiveContainer width="100%" height={250}>
                             <BarChart data={metrics.monthlyTrend}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -116,8 +116,8 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                     </div>
 
                     {/* Proposals by Status */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposals by Status</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Proposals by Status</h2>
                         <ResponsiveContainer width="100%" height={250}>
                             <PieChart>
                                 <Pie data={statusChartData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
@@ -131,38 +131,38 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Top Users */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Top BD Performance</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Top BD Performance</h2>
                         <div className="space-y-3">
                             {metrics.topUsers.length === 0 ? (
-                                <p className="text-sm text-gray-500 text-center py-6">No data yet</p>
+                                <p className="text-sm text-muted-foreground text-center py-6">No data yet</p>
                             ) : metrics.topUsers.map((u, i) => (
-                                <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div key={i} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
                                             {i + 1}
                                         </span>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-900">{u.user}</p>
-                                            <p className="text-xs text-gray-500">{u.total_proposals} proposals · {u.won} won</p>
+                                            <p className="text-sm font-medium text-foreground">{u.user}</p>
+                                            <p className="text-xs text-muted-foreground">{u.total_proposals} proposals · {u.won} won</p>
                                         </div>
                                     </div>
-                                    <span className="text-sm font-semibold text-gray-900">{formatCurrency(u.total_value)}</span>
+                                    <span className="text-sm font-semibold text-foreground">{formatCurrency(u.total_value)}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
                     {/* Source Analysis */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Opportunity Sources</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Opportunity Sources</h2>
                         <div className="space-y-3">
                             {sourceData.map((s, i) => (
                                 <div key={i} className="flex items-center gap-3">
                                     <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                    <span className="text-sm text-gray-700 flex-1">{s.name}</span>
-                                    <span className="text-sm font-semibold text-gray-900">{s.count}</span>
-                                    <div className="w-24 bg-gray-100 rounded-full h-2">
+                                    <span className="text-sm text-foreground flex-1">{s.name}</span>
+                                    <span className="text-sm font-semibold text-foreground">{s.count}</span>
+                                    <div className="w-24 bg-secondary rounded-full h-2">
                                         <div
                                             className="h-2 rounded-full"
                                             style={{

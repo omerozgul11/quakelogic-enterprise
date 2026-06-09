@@ -8,18 +8,17 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // Structural seeders only — these set up the organization, RBAC, and the
+        // single admin account. Demo/sample business data is intentionally NOT
+        // seeded so the app starts clean for real use.
         $this->call([
             OrganizationSeeder::class,
             RolesPermissionsSeeder::class,
             UserSeeder::class,
-            AgencySeeder::class,
-            CompanySeeder::class,
-            ContactSeeder::class,
-            OpportunitySeeder::class,
-            ProposalSeeder::class,
-            CapturePlanSeeder::class,
-            CommissionSeeder::class,
-            FollowUpSeeder::class,
         ]);
+
+        // Demo data seeders (disabled). Re-enable to repopulate sample records:
+        // AgencySeeder, CompanySeeder, ContactSeeder, OpportunitySeeder,
+        // ProposalSeeder, CapturePlanSeeder, CommissionSeeder, FollowUpSeeder.
     }
 }

@@ -19,10 +19,10 @@ class CapturePlanFactory extends Factory
             'ulid' => (string) Str::ulid(),
             'organization_id' => Organization::factory(),
             'opportunity_id' => Opportunity::factory(),
-            'owner_user_id' => User::factory(),
+            'capture_manager_id' => User::factory(),
+            'created_by' => User::factory(),
             'stage' => 'discovery',
-            'win_probability' => $this->faker->numberBetween(5, 90),
-            'go_no_go_decision' => null,
+            'probability_of_win' => $this->faker->numberBetween(5, 90),
             'notes' => $this->faker->optional()->sentence(),
         ];
     }

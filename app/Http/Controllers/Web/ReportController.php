@@ -35,10 +35,10 @@ class ReportController extends Controller
             ->get();
 
         $topOpportunities = Opportunity::where('organization_id', $orgId)
-            ->whereNotNull('award_value')
-            ->orderByDesc('award_value')
+            ->whereNotNull('estimated_value')
+            ->orderByDesc('estimated_value')
             ->limit(10)
-            ->get(['id', 'title', 'agency_name', 'award_value', 'status', 'due_date']);
+            ->get(['id', 'title', 'agency_name', 'estimated_value', 'status', 'due_date']);
 
         return Inertia::render('Reports/Index', [
             'proposalTrend' => $proposals,

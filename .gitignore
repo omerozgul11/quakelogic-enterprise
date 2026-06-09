@@ -8,6 +8,15 @@
 .env
 .env.backup
 .env.production
+.env.bak*
+*.bak.predeploy
+
+# Laravel runtime (do not commit caches, logs, sessions, or DB backups)
+/bootstrap/cache
+/storage/backups
+/storage/logs
+/storage/framework
+/storage/app/public
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml

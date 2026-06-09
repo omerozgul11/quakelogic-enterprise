@@ -1,9 +1,13 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Button } from '@/Components/ui/Button';
+import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
+import { StatCard } from '@/Components/ui/StatCard';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
-import { formatDate } from '@/Lib/utils';
+import { formatDate, formatCurrency, cn } from '@/Lib/utils';
 import { CapturePlan } from '@/Types';
-import { ArrowLeft, AlertTriangle, CheckSquare } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertTriangle, CheckSquare, Target, Percent, DollarSign, ExternalLink } from 'lucide-react';
 
 const STAGE_ORDER = ['discovery', 'qualification', 'pursuit', 'proposal_development', 'submission', 'evaluation', 'award', 'execution'];
 
@@ -35,140 +39,182 @@ export default function CaptureShow({ capturePlan, allowedTransitions, can }: Pr
     return (
         <AppLayout>
             <Head title={`Capture — ${capturePlan.opportunity?.title ?? ''}`} />
-            <div className="p-6 max-w-6xl mx-auto">
-                <div className="flex items-center gap-4 mb-6">
-                    <Link href="/capture" className="text-gray-400 hover:text-gray-600">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Link>
-                    <div className="flex-1">
-                        <h1 className="text-xl font-bold text-gray-900 leading-tight">{capturePlan.opportunity?.title}</h1>
-                        <p className="text-sm text-gray-500">{capturePlan.opportunity?.agency_name}</p>
-                    </div>
-                    {can.transition && allowedTransitions.length > 0 && (
-                        <div className="flex gap-2">
-                            {allowedTransitions.map(t => (
-                                <button key={t} onClick={() => handleTransition(t)}
-                                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 capitalize">
-                                    → {t.replace(/_/g, ' ')}
-                                </button>
+            <div className="mx-auto max-w-6xl p-6">
+                <PageHeader
+                    icon={Target}
+                    title={capturePlan.opportunity?.title ?? 'Capture Plan'}
+                    description={capturePlan.opportunity?.agency_name ?? undefined}
+                    actions={
+                        <>
+                            <Button href="/capture" variant="secondary" icon={ArrowLeft}>
+                                Back
+                            </Button>
+                            {can.transition && allowedTransitions.map(t => (
+                                <Button key={t} variant="primary" iconRight={ArrowRight} onClick={() => handleTransition(t)} className="capitalize">
+                                    {t.replace(/_/g, ' ')}
+                                </Button>
                             ))}
-                        </div>
-                    )}
+                        </>
+                    }
+                />
+
+                {/* Metrics */}
+                <div className="stagger mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <StatCard
+                        title="Win Probability"
+                        value={capturePlan.win_probability ? `${capturePlan.win_probability}%` : '—'}
+                        icon={Percent}
+                        tone="emerald"
+                    />
+                    <StatCard
+                        title="Estimated Value"
+                        value={capturePlan.opportunity?.estimated_value ? formatCurrency(capturePlan.opportunity.estimated_value) : '—'}
+                        icon={DollarSign}
+                        tone="indigo"
+                    />
+                    <StatCard
+                        title="Open Tasks"
+                        value={capturePlan.tasks.filter(t => t.status !== 'completed').length}
+                        subtitle={`${capturePlan.tasks.length} total`}
+                        icon={CheckSquare}
+                        tone="sky"
+                    />
                 </div>
 
                 {/* Stage Progress Bar */}
-                <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-semibold text-gray-900">Capture Progress</h2>
+                <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle>Capture Progress</CardTitle>
                         <StatusBadge status={stage} />
-                    </div>
-                    <div className="flex gap-1">
-                        {STAGE_ORDER.map((s, i) => (
-                            <div key={s} className={`flex-1 h-2 rounded-full transition-colors ${
-                                i < currentStageIndex ? 'bg-green-500' :
-                                i === currentStageIndex ? 'bg-blue-600' : 'bg-gray-200'
-                            }`} title={s.replace(/_/g, ' ')} />
-                        ))}
-                    </div>
-                    <div className="flex justify-between mt-1">
-                        <span className="text-xs text-gray-400">Discovery</span>
-                        <span className="text-xs text-gray-400">Execution</span>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Risks */}
-                        <div className="bg-white rounded-xl border border-gray-200 p-6">
-                            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                                <AlertTriangle className="h-4 w-4 text-amber-500" /> Risks ({capturePlan.risks.length})
-                            </h2>
-                            {capturePlan.risks.length === 0 ? (
-                                <p className="text-sm text-gray-500 text-center py-4">No risks identified.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {capturePlan.risks.map(risk => (
-                                        <div key={risk.id} className="p-3 border border-gray-100 rounded-lg">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <p className="text-sm font-medium text-gray-900">{risk.title}</p>
-                                                <StatusBadge status={risk.status} />
-                                            </div>
-                                            <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                                                <span>Impact: <span className="font-medium capitalize">{risk.impact}</span></span>
-                                                <span>Prob: <span className="font-medium capitalize">{risk.probability}</span></span>
-                                            </div>
-                                            {risk.mitigation && <p className="text-xs text-gray-600 mt-2">Mitigation: {risk.mitigation}</p>}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex gap-1">
+                            {STAGE_ORDER.map((s, i) => (
+                                <div key={s} className={cn(
+                                    'h-2 flex-1 rounded-full transition-colors',
+                                    i < currentStageIndex ? 'bg-emerald-500' :
+                                    i === currentStageIndex ? 'bg-brand-gradient' : 'bg-secondary'
+                                )} title={s.replace(/_/g, ' ')} />
+                            ))}
                         </div>
+                        <div className="mt-1 flex justify-between">
+                            <span className="text-xs text-muted-foreground">Discovery</span>
+                            <span className="text-xs text-muted-foreground">Execution</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <div className="space-y-6 lg:col-span-2">
+                        {/* Risks */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-amber-500" /> Risks ({capturePlan.risks.length})
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {capturePlan.risks.length === 0 ? (
+                                    <p className="py-4 text-center text-sm text-muted-foreground">No risks identified.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {capturePlan.risks.map(risk => (
+                                            <div key={risk.id} className="rounded-xl border border-border p-3">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="text-sm font-medium text-foreground">{risk.title}</p>
+                                                    <StatusBadge status={risk.status} />
+                                                </div>
+                                                <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                                                    <span>Impact: <span className="font-medium capitalize text-foreground">{risk.impact}</span></span>
+                                                    <span>Prob: <span className="font-medium capitalize text-foreground">{risk.probability}</span></span>
+                                                </div>
+                                                {risk.mitigation && <p className="mt-2 text-xs text-muted-foreground">Mitigation: {risk.mitigation}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
 
                         {/* Tasks */}
-                        <div className="bg-white rounded-xl border border-gray-200 p-6">
-                            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                                <CheckSquare className="h-4 w-4 text-blue-500" /> Tasks ({capturePlan.tasks.length})
-                            </h2>
-                            {capturePlan.tasks.length === 0 ? (
-                                <p className="text-sm text-gray-500 text-center py-4">No tasks yet.</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {capturePlan.tasks.map(task => (
-                                        <div key={task.id} className="flex items-center gap-3 p-3 border border-gray-100 rounded-lg">
-                                            <div className={`h-2 w-2 rounded-full shrink-0 ${task.status === 'completed' ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300'}`} />
-                                            <div className="flex-1">
-                                                <p className={`text-sm ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                                                    {task.title}
-                                                </p>
-                                                <p className="text-xs text-gray-500">
-                                                    {task.assignee?.name ?? 'Unassigned'}
-                                                    {task.due_date ? ` · Due ${formatDate(task.due_date)}` : ''}
-                                                </p>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <CheckSquare className="h-4 w-4 text-primary" /> Tasks ({capturePlan.tasks.length})
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {capturePlan.tasks.length === 0 ? (
+                                    <p className="py-4 text-center text-sm text-muted-foreground">No tasks yet.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {capturePlan.tasks.map(task => (
+                                            <div key={task.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
+                                                <div className={cn(
+                                                    'h-2 w-2 shrink-0 rounded-full',
+                                                    task.status === 'completed' ? 'bg-emerald-500' : task.status === 'in_progress' ? 'bg-primary' : 'bg-muted-foreground/40'
+                                                )} />
+                                                <div className="flex-1">
+                                                    <p className={cn('text-sm', task.status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground')}>
+                                                        {task.title}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {task.assignee?.name ?? 'Unassigned'}
+                                                        {task.due_date ? ` · Due ${formatDate(task.due_date)}` : ''}
+                                                    </p>
+                                                </div>
+                                                <StatusBadge status={task.status} />
                                             </div>
-                                            <StatusBadge status={task.status} />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* Sidebar */}
-                    <div className="space-y-4">
-                        <div className="bg-white rounded-xl border border-gray-200 p-5">
-                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Capture Details</h3>
-                            <dl className="space-y-2">
-                                {[
-                                    ['Owner', capturePlan.owner?.name],
-                                    ['Win Probability', capturePlan.win_probability ? `${capturePlan.win_probability}%` : null],
-                                    ['Go/No-Go Decision', capturePlan.go_no_go_decision],
-                                    ['RFP Release Date', capturePlan.rfp_release_date ? formatDate(capturePlan.rfp_release_date) : null],
-                                    ['Proposal Due', capturePlan.opportunity?.due_date ? formatDate(capturePlan.opportunity.due_date) : null],
-                                ].map(([label, value]) => (
-                                    <div key={label as string} className="flex justify-between text-sm">
-                                        <dt className="text-gray-500">{label}</dt>
-                                        <dd className="font-medium text-gray-900 capitalize">{value ?? '—'}</dd>
-                                    </div>
-                                ))}
-                            </dl>
-                        </div>
+                    <div className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Capture Details</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <dl className="space-y-2.5">
+                                    {[
+                                        ['Owner', capturePlan.owner?.name],
+                                        ['Win Probability', capturePlan.win_probability ? `${capturePlan.win_probability}%` : null],
+                                        ['Go/No-Go Decision', capturePlan.go_no_go_decision],
+                                        ['RFP Release Date', capturePlan.rfp_release_date ? formatDate(capturePlan.rfp_release_date) : null],
+                                        ['Proposal Due', capturePlan.opportunity?.due_date ? formatDate(capturePlan.opportunity.due_date) : null],
+                                    ].map(([label, value]) => (
+                                        <div key={label as string} className="flex justify-between gap-2 text-sm">
+                                            <dt className="text-muted-foreground">{label}</dt>
+                                            <dd className="font-semibold capitalize text-foreground">{value ?? '—'}</dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </CardContent>
+                        </Card>
 
-                        <div className="bg-white rounded-xl border border-gray-200 p-5">
-                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Stage History</h3>
-                            <div className="space-y-2">
-                                {capturePlan.stage_history?.map(h => (
-                                    <div key={h.id} className="text-xs">
-                                        <p className="font-medium text-gray-700 capitalize">{h.stage.replace(/_/g, ' ')}</p>
-                                        <p className="text-gray-400">{formatDate(h.created_at)} · {h.user?.name ?? 'System'}</p>
-                                    </div>
-                                )) ?? <p className="text-sm text-gray-400">No history.</p>}
-                            </div>
-                        </div>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Stage History</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2.5">
+                                    {capturePlan.stage_history?.map(h => (
+                                        <div key={h.id} className="text-xs">
+                                            <p className="font-medium capitalize text-foreground">{h.stage.replace(/_/g, ' ')}</p>
+                                            <p className="text-muted-foreground">{formatDate(h.created_at)} · {h.user?.name ?? 'System'}</p>
+                                        </div>
+                                    )) ?? <p className="text-sm text-muted-foreground">No history.</p>}
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                        <Link href={`/opportunities/${capturePlan.opportunity_id}`}
-                            className="block w-full text-center text-sm text-blue-600 border border-blue-200 rounded-lg px-4 py-2 hover:bg-blue-50">
-                            View Opportunity →
-                        </Link>
+                        <Button href={`/opportunities/${capturePlan.opportunity_id}`} variant="secondary" iconRight={ExternalLink} className="w-full">
+                            View Opportunity
+                        </Button>
                     </div>
                 </div>
             </div>

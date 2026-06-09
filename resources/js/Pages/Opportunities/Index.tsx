@@ -1,9 +1,14 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Button } from '@/Components/ui/Button';
+import { Card } from '@/Components/ui/Card';
+import { EmptyState } from '@/Components/ui/EmptyState';
+import { Pagination } from '@/Components/ui/Pagination';
 import { formatCurrency, formatDate, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
 import { PaginatedResponse, Opportunity } from '@/Types';
-import { Plus, Upload, Search, Filter, X, ExternalLink } from 'lucide-react';
+import { Plus, Upload, Search, X, ExternalLink, Target } from 'lucide-react';
 import { useState } from 'react';
 
 interface Props {
@@ -22,12 +27,6 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
         router.get('/opportunities', { ...filters, [key]: value || undefined }, { preserveState: true });
     };
 
-    const clearFilter = (key: string) => {
-        const newFilters = { ...filters };
-        delete newFilters[key];
-        router.get('/opportunities', newFilters, { preserveState: true });
-    };
-
     const handleImport = (e: React.FormEvent) => {
         e.preventDefault();
         post('/opportunities/import/sam-gov', { onSuccess: () => setShowImportModal(false) });
@@ -37,122 +36,106 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
         <AppLayout>
             <Head title="Opportunities" />
             <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Opportunities</h1>
-                        <p className="text-gray-500 mt-1">{opportunities.total} total opportunities</p>
-                    </div>
-                    <div className="flex gap-3">
-                        {can.import && (
-                            <button
-                                onClick={() => setShowImportModal(true)}
-                                className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
-                            >
-                                <Upload className="h-4 w-4" />
-                                Import from SAM.gov
-                            </button>
-                        )}
-                        {can.create && (
-                            <Link
-                                href="/opportunities/create"
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Add Opportunity
-                            </Link>
-                        )}
-                    </div>
-                </div>
+                <PageHeader
+                    icon={Target}
+                    title="Opportunities"
+                    description={`${opportunities.total} ${opportunities.total === 1 ? 'opportunity' : 'opportunities'} in your pipeline`}
+                    actions={
+                        <>
+                            {can.import && (
+                                <Button variant="secondary" icon={Upload} onClick={() => setShowImportModal(true)}>
+                                    Import from SAM.gov
+                                </Button>
+                            )}
+                            {can.create && (
+                                <Button href="/opportunities/create" icon={Plus}>
+                                    Add Opportunity
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
 
                 {/* Filters */}
-                <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-                    <div className="flex flex-wrap gap-3">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Card className="mb-4 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative min-w-[18rem] flex-1">
+                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 type="text"
-                                placeholder="Search title, number, agency..."
+                                placeholder="Search title, number, agency…"
                                 defaultValue={filters.search ?? ''}
                                 onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-72"
+                                className="input input-with-icon"
                             />
                         </div>
-                        <select
-                            value={filters.status ?? ''}
-                            onChange={e => handleFilter('status', e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
+                        <select value={filters.status ?? ''} onChange={e => handleFilter('status', e.target.value)} className="select">
                             <option value="">All Statuses</option>
                             {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
-                        <select
-                            value={filters.source ?? ''}
-                            onChange={e => handleFilter('source', e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
+                        <select value={filters.source ?? ''} onChange={e => handleFilter('source', e.target.value)} className="select">
                             <option value="">All Sources</option>
                             {sources.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
                         {Object.keys(filters).length > 0 && (
-                            <button onClick={() => router.get('/opportunities')} className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700">
+                            <button onClick={() => router.get('/opportunities')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear
                             </button>
                         )}
                     </div>
-                </div>
+                </Card>
 
                 {/* Table */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <Card className="overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-gray-200 bg-gray-50">
-                                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Title</th>
-                                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Agency</th>
-                                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Status</th>
-                                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Value</th>
-                                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Due Date</th>
-                                    <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Source</th>
-                                    <th className="px-4 py-3"></th>
+                            <thead className="border-b border-border bg-secondary/40">
+                                <tr>
+                                    <th className="th">Title</th>
+                                    <th className="th">Agency</th>
+                                    <th className="th">Status</th>
+                                    <th className="th">Value</th>
+                                    <th className="th">Due Date</th>
+                                    <th className="th">Source</th>
+                                    <th className="th" />
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-border">
                                 {opportunities.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="text-center py-12 text-gray-500">
-                                            <Target className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                            <p className="font-medium">No opportunities found</p>
-                                            <p className="text-sm mt-1">Try adjusting your filters or import from SAM.gov</p>
+                                        <td colSpan={7}>
+                                            <EmptyState
+                                                icon={Target}
+                                                title="No opportunities found"
+                                                description="Try adjusting your filters, or import fresh opportunities from SAM.gov."
+                                                action={can.import && <Button variant="secondary" icon={Upload} onClick={() => setShowImportModal(true)}>Import from SAM.gov</Button>}
+                                            />
                                         </td>
                                     </tr>
                                 ) : opportunities.data.map(opp => (
-                                    <tr key={opp.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <Link href={`/opportunities/${opp.id}`} className="text-sm font-medium text-blue-600 hover:underline line-clamp-2">
+                                    <tr key={opp.id} className="row-link">
+                                        <td className="td max-w-md">
+                                            <Link href={`/opportunities/${opp.id}`} className="font-medium text-foreground hover:text-primary line-clamp-2">
                                                 {opp.title}
                                             </Link>
                                             {opp.solicitation_number && (
-                                                <p className="text-xs text-gray-500 mt-0.5">{opp.solicitation_number}</p>
+                                                <p className="mt-0.5 text-xs text-muted-foreground">{opp.solicitation_number}</p>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{opp.agency_name ?? '—'}</td>
-                                        <td className="px-4 py-3">
-                                            <StatusBadge status={opp.status} />
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(opp.estimated_value)}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`text-sm ${getDueDateColor(opp.due_date)}`}>
+                                        <td className="td text-muted-foreground">{opp.agency_name ?? '—'}</td>
+                                        <td className="td"><StatusBadge status={opp.status} /></td>
+                                        <td className="td font-medium">{formatCurrency(opp.estimated_value)}</td>
+                                        <td className="td">
+                                            <span className={`text-sm font-medium ${getDueDateColor(opp.due_date)}`}>
                                                 {opp.due_date ? getDueDateLabel(opp.due_date) : '—'}
                                             </span>
-                                            {opp.due_date && <p className="text-xs text-gray-400">{formatDate(opp.due_date)}</p>}
+                                            {opp.due_date && <p className="text-xs text-muted-foreground">{formatDate(opp.due_date)}</p>}
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                                                {opp.source?.replace(/_/g, ' ').toUpperCase()}
-                                            </span>
+                                        <td className="td">
+                                            <span className="chip">{opp.source?.replace(/_/g, ' ').toUpperCase()}</span>
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <Link href={`/opportunities/${opp.id}`} className="text-gray-400 hover:text-gray-600">
+                                        <td className="td">
+                                            <Link href={`/opportunities/${opp.id}`} className="text-muted-foreground transition-colors hover:text-primary">
                                                 <ExternalLink className="h-4 w-4" />
                                             </Link>
                                         </td>
@@ -161,56 +144,34 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
                             </tbody>
                         </table>
                     </div>
-
-                    {/* Pagination */}
-                    {opportunities.last_page > 1 && (
-                        <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between">
-                            <p className="text-sm text-gray-500">
-                                Showing {opportunities.from}–{opportunities.to} of {opportunities.total}
-                            </p>
-                            <div className="flex gap-2">
-                                {opportunities.links.map((link, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => link.url && router.get(link.url)}
-                                        disabled={!link.url}
-                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                        className={`px-3 py-1 text-sm rounded ${link.active ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100 disabled:opacity-50'}`}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                    <Pagination from={opportunities.from} to={opportunities.to} total={opportunities.total} links={opportunities.links} />
+                </Card>
             </div>
 
             {/* Import Modal */}
             {showImportModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="fixed inset-0 bg-black/50" onClick={() => setShowImportModal(false)} />
-                    <div className="relative bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Import from SAM.gov</h2>
-                        <form onSubmit={handleImport} className="space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="animate-fade-in fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
+                    <div className="card-surface animate-scale-in relative w-full max-w-md p-6">
+                        <h2 className="text-lg font-semibold text-foreground">Import from SAM.gov</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">Pull the latest federal opportunities into your pipeline.</p>
+                        <form onSubmit={handleImport} className="mt-5 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Keywords (optional)</label>
+                                <label className="label">Keywords (optional)</label>
                                 <input
                                     type="text"
                                     value={data.keywords}
                                     onChange={e => setData('keywords', e.target.value)}
                                     placeholder="e.g., cybersecurity, cloud, AI"
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="input"
                                 />
                             </div>
-                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                Note: No SAM.gov API key configured. This will use the demo fake data client to demonstrate the import functionality.
+                            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                                No SAM.gov API key configured — this uses the demo data client to showcase the import flow.
                             </p>
                             <div className="flex justify-end gap-3">
-                                <button type="button" onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">
-                                    Cancel
-                                </button>
-                                <button type="submit" disabled={processing} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                                    {processing ? 'Importing...' : 'Start Import'}
-                                </button>
+                                <Button type="button" variant="secondary" onClick={() => setShowImportModal(false)}>Cancel</Button>
+                                <Button type="submit" disabled={processing}>{processing ? 'Importing…' : 'Start Import'}</Button>
                             </div>
                         </form>
                     </div>

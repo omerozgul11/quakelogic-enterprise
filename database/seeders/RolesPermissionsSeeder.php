@@ -136,7 +136,6 @@ class RolesPermissionsSeeder extends Seeder
         // Finance
         $finance = Role::firstOrCreate(['name' => 'Finance']);
         $finance->syncPermissions([
-            'view proposals', 'view all proposals',
             'view own commissions', 'view all commissions', 'approve commissions', 'export commissions',
             'view dashboards', 'view executive dashboard', 'export reports',
         ]);

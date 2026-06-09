@@ -24,7 +24,6 @@ return new class extends Migration
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
             $table->index(['status']);
-            $table->index(['document_type', 'document_id']);
         });
 
         Schema::create('document_extractions', function (Blueprint $table) {
@@ -58,7 +57,6 @@ return new class extends Migration
             $table->integer('input_tokens')->nullable();
             $table->integer('output_tokens')->nullable();
             $table->timestamps();
-            $table->index(['subject_type', 'subject_id']);
             $table->index(['analysis_type', 'status']);
         });
 

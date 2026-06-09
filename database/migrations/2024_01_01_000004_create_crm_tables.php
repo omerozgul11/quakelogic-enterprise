@@ -146,7 +146,6 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->timestamp('occurred_at')->nullable();
             $table->timestamps();
-            $table->index(['subject_type', 'subject_id']);
         });
     }
 

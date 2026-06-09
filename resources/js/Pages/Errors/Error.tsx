@@ -18,15 +18,15 @@ export default function Error({ status }: Props) {
     const error = ERROR_MESSAGES[status] ?? { title: 'Error', description: 'An unexpected error occurred.' };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-secondary flex items-center justify-center p-4">
             <Head title={`${status} — ${error.title}`} />
             <div className="text-center max-w-md">
-                <p className="text-8xl font-bold text-gray-200">{status}</p>
-                <h1 className="text-2xl font-bold text-gray-900 mt-4">{error.title}</h1>
-                <p className="text-gray-500 mt-2">{error.description}</p>
+                <p className="text-8xl font-bold text-muted-foreground/30">{status}</p>
+                <h1 className="text-2xl font-bold text-foreground mt-4">{error.title}</h1>
+                <p className="text-muted-foreground mt-2">{error.description}</p>
                 <div className="flex gap-3 justify-center mt-6">
                     <button onClick={() => window.history.back()}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                        className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-secondary">
                         Go Back
                     </button>
                     <Link href="/" className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">

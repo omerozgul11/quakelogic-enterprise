@@ -4,8 +4,10 @@ namespace Database\Factories;
 
 use App\Models\Commission;
 use App\Models\Organization;
+use App\Models\ProposalSubmission;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 class CommissionFactory extends Factory
 {
@@ -17,10 +19,11 @@ class CommissionFactory extends Factory
         $rate = $this->faker->randomFloat(2, 1, 5);
         $commissionAmount = round($baseAmount * ($rate / 100), 2);
         return [
+            'ulid' => (string) Str::ulid(),
             'organization_id' => Organization::factory(),
             'user_id' => User::factory(),
             'commission_rule_id' => null,
-            'proposal_submission_id' => null,
+            'proposal_submission_id' => ProposalSubmission::factory(),
             'type' => 'percentage',
             'base_amount' => $baseAmount,
             'rate' => $rate,

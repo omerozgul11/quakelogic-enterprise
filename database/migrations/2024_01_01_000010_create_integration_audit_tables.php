@@ -22,6 +22,7 @@ return new class extends Migration
             $table->json('sync_settings')->nullable();
             $table->boolean('is_enabled')->default(true);
             $table->timestamps();
+            $table->softDeletes();
             $table->unique(['organization_id', 'type']);
         });
 
@@ -116,7 +117,6 @@ return new class extends Migration
             $table->text('user_agent')->nullable();
             $table->json('tags')->nullable();
             $table->timestamps();
-            $table->index(['auditable_type', 'auditable_id']);
             $table->index(['user_id', 'event']);
         });
 

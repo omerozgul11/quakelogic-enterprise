@@ -1,7 +1,10 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Card } from '@/Components/ui/Card';
+import { EmptyState } from '@/Components/ui/EmptyState';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
-import { formatDate } from '@/Lib/utils';
+import { formatDate, cn } from '@/Lib/utils';
 import { CapturePlan } from '@/Types';
 import { PaginatedResponse } from '@/Types';
 import { Target, ExternalLink, Search, X } from 'lucide-react';
@@ -25,107 +28,118 @@ export default function CaptureIndex({ capturePlans, filters }: Props) {
         <AppLayout>
             <Head title="Capture Management" />
             <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Capture Management</h1>
-                        <p className="text-gray-500 mt-1">{capturePlans.total} active capture plans</p>
-                    </div>
-                </div>
+                <PageHeader
+                    icon={Target}
+                    title="Capture Management"
+                    description={`${capturePlans.total} active capture ${capturePlans.total === 1 ? 'plan' : 'plans'}`}
+                />
 
-                <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-                    <div className="flex flex-wrap gap-3">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <input type="text" placeholder="Search opportunities..."
+                {/* Filters */}
+                <Card className="mb-4 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative min-w-[18rem] flex-1">
+                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                                type="text"
+                                placeholder="Search opportunities…"
                                 defaultValue={filters.search ?? ''}
                                 onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64" />
+                                className="input input-with-icon"
+                            />
                         </div>
-                        <select value={filters.stage ?? ''} onChange={e => handleFilter('stage', e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select value={filters.stage ?? ''} onChange={e => handleFilter('stage', e.target.value)} className="select">
                             <option value="">All Stages</option>
                             {STAGES.map(s => (
                                 <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                             ))}
                         </select>
                         {Object.keys(filters).length > 0 && (
-                            <button onClick={() => router.get('/capture')} className="flex items-center gap-1 text-sm text-red-600">
+                            <button onClick={() => router.get('/capture')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear
                             </button>
                         )}
                     </div>
-                </div>
+                </Card>
 
                 {/* Stage pipeline view */}
-                <div className="grid grid-cols-4 lg:grid-cols-8 gap-2 mb-6 overflow-x-auto">
+                <div className="stagger mb-6 grid grid-cols-4 gap-2 overflow-x-auto lg:grid-cols-8">
                     {STAGES.map(stage => {
                         const count = capturePlans.data.filter(p => {
                             const s = typeof p.stage === 'string' ? p.stage : (p.stage as any)?.value ?? '';
                             return s === stage;
                         }).length;
+                        const active = filters.stage === stage;
                         return (
-                            <button key={stage} onClick={() => handleFilter('stage', filters.stage === stage ? '' : stage)}
-                                className={`text-center p-3 rounded-lg border text-xs font-medium transition-colors ${
-                                    filters.stage === stage
-                                        ? 'bg-blue-600 text-white border-blue-600'
-                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                }`}>
-                                <p className="text-lg font-bold">{count}</p>
+                            <button
+                                key={stage}
+                                onClick={() => handleFilter('stage', active ? '' : stage)}
+                                className={cn(
+                                    'card-surface card-hover rounded-xl p-3 text-center text-xs font-medium transition-all',
+                                    active ? 'bg-brand-gradient text-white shadow-glow' : 'text-muted-foreground'
+                                )}
+                            >
+                                <p className={cn('text-lg font-bold', active ? 'text-white' : 'text-foreground')}>{count}</p>
                                 <p className="capitalize">{stage.replace(/_/g, ' ')}</p>
                             </button>
                         );
                     })}
                 </div>
 
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Opportunity</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Stage</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Win Prob.</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Owner</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Due Date</th>
-                                <th className="px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {capturePlans.data.length === 0 ? (
+                {/* Table */}
+                <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="border-b border-border bg-secondary/40">
                                 <tr>
-                                    <td colSpan={6} className="text-center py-12 text-gray-500">
-                                        <Target className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                        <p className="font-medium">No capture plans found</p>
-                                    </td>
+                                    <th className="th">Opportunity</th>
+                                    <th className="th">Stage</th>
+                                    <th className="th">Win Prob.</th>
+                                    <th className="th">Owner</th>
+                                    <th className="th">Due Date</th>
+                                    <th className="th" />
                                 </tr>
-                            ) : capturePlans.data.map(plan => {
-                                const stage = typeof plan.stage === 'string' ? plan.stage : (plan.stage as any)?.value ?? 'discovery';
-                                return (
-                                    <tr key={plan.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3">
-                                            <Link href={`/capture/${plan.id}`} className="text-sm font-medium text-blue-600 hover:underline line-clamp-1">
-                                                {plan.opportunity?.title ?? 'Unknown'}
-                                            </Link>
-                                            <p className="text-xs text-gray-500">{plan.opportunity?.agency_name}</p>
-                                        </td>
-                                        <td className="px-4 py-3"><StatusBadge status={stage} /></td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">
-                                            {plan.win_probability ? `${plan.win_probability}%` : '—'}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{plan.owner?.name ?? '—'}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-500">
-                                            {plan.opportunity?.due_date ? formatDate(plan.opportunity.due_date) : '—'}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <Link href={`/capture/${plan.id}`} className="text-gray-400 hover:text-gray-600">
-                                                <ExternalLink className="h-4 w-4" />
-                                            </Link>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {capturePlans.data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6}>
+                                            <EmptyState
+                                                icon={Target}
+                                                title="No capture plans found"
+                                                description="Try adjusting your filters to find active capture plans."
+                                            />
                                         </td>
                                     </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : capturePlans.data.map(plan => {
+                                    const stage = typeof plan.stage === 'string' ? plan.stage : (plan.stage as any)?.value ?? 'discovery';
+                                    return (
+                                        <tr key={plan.id} className="row-link">
+                                            <td className="td">
+                                                <Link href={`/capture/${plan.id}`} className="line-clamp-1 font-medium text-foreground hover:text-primary">
+                                                    {plan.opportunity?.title ?? 'Unknown'}
+                                                </Link>
+                                                <p className="text-xs text-muted-foreground">{plan.opportunity?.agency_name}</p>
+                                            </td>
+                                            <td className="td"><StatusBadge status={stage} /></td>
+                                            <td className="td font-medium">
+                                                {plan.win_probability ? `${plan.win_probability}%` : '—'}
+                                            </td>
+                                            <td className="td text-muted-foreground">{plan.owner?.name ?? '—'}</td>
+                                            <td className="td text-muted-foreground">
+                                                {plan.opportunity?.due_date ? formatDate(plan.opportunity.due_date) : '—'}
+                                            </td>
+                                            <td className="td">
+                                                <Link href={`/capture/${plan.id}`} className="text-muted-foreground transition-colors hover:text-primary">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
             </div>
         </AppLayout>
     );

@@ -1,15 +1,24 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
-import { AiAnalysis, PaginatedResponse } from '@/Types';
-import { Brain, Sparkles, ExternalLink, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Card, CardHeader, CardTitle } from '@/Components/ui/Card';
+import { EmptyState } from '@/Components/ui/EmptyState';
+import { AiAnalysis } from '@/Types';
+import { Sparkles, ExternalLink, Clock, CheckCircle, AlertCircle, Target, BarChart3, FileText, ArrowRight } from 'lucide-react';
 import { formatDateTime } from '@/Lib/utils';
 
+type AnalysisRow = AiAnalysis & {
+    created_by?: { id: number; name: string } | null;
+    created_by_user?: { id: number; name: string } | null;
+    subject_type?: string | null;
+    subject_id?: number | string | null;
+};
+
 interface Props {
-    analyses: PaginatedResponse<AiAnalysis & {
-        created_by_user: { id: number; name: string } | null;
-    }>;
-    filters: Record<string, string>;
-    provider: string;
+    recentAnalyses?: AnalysisRow[];
+    aiProvider?: string;
+    aiAvailable?: boolean;
+    analysisTypes?: Array<{ value: string; label: string }>;
 }
 
 const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -22,104 +31,114 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 
 const STATUS_COLORS: Record<string, string> = {
     pending: 'text-amber-500',
-    processing: 'text-blue-500',
-    completed: 'text-green-500',
-    failed: 'text-red-500',
-    cancelled: 'text-gray-400',
+    processing: 'text-sky-500',
+    completed: 'text-emerald-500',
+    failed: 'text-destructive',
+    cancelled: 'text-muted-foreground',
 };
 
-export default function AiIndex({ analyses, filters, provider }: Props) {
+const QUICK_ACTIONS = [
+    { label: 'Go/No-Go Analysis', desc: 'AI-powered bid decision recommendation', type: 'go_no_go', icon: Target },
+    { label: 'Win Probability', desc: 'Estimate win likelihood based on past data', type: 'win_probability', icon: BarChart3 },
+    { label: 'Proposal Summary', desc: 'Generate an executive summary from an RFP', type: 'proposal_summary', icon: FileText },
+];
+
+export default function AiIndex({ recentAnalyses = [], aiProvider = 'unknown', aiAvailable = true }: Props) {
+    const isDemo = aiProvider === 'fake' || aiProvider === 'unknown';
+
     return (
         <AppLayout>
-            <Head title="AI Assistant" />
+            <Head title="Ask QuakeAI" />
             <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                            <Brain className="h-6 w-6 text-purple-500" />
-                            AI Assistant
-                        </h1>
-                        <p className="text-gray-500 mt-1">
-                            Provider: <span className="font-medium capitalize">{provider}</span>
-                            {provider === 'fake' && (
-                                <span className="ml-2 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">Demo mode</span>
-                            )}
-                        </p>
-                    </div>
-                </div>
+                <PageHeader
+                    icon={Sparkles}
+                    eyebrow={isDemo ? 'Demo mode' : undefined}
+                    title="Ask QuakeAI"
+                    description={`Provider: ${aiProvider}${aiAvailable ? '' : ' · unavailable'}`}
+                />
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    {[
-                        { label: 'Go/No-Go Analysis', desc: 'AI-powered bid decision recommendation', type: 'go_no_go', icon: '🎯' },
-                        { label: 'Win Probability', desc: 'Estimate win likelihood based on past data', type: 'win_probability', icon: '📊' },
-                        { label: 'Proposal Summary', desc: 'Generate executive summary from RFP', type: 'proposal_summary', icon: '📝' },
-                    ].map(action => (
-                        <div key={action.type} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
-                            <div className="text-2xl mb-2">{action.icon}</div>
-                            <h3 className="text-sm font-semibold text-gray-900">{action.label}</h3>
-                            <p className="text-xs text-gray-500 mt-1">{action.desc}</p>
-                            <Link href={`/opportunities`} className="mt-3 block text-xs text-blue-600 hover:underline">
-                                Select an opportunity →
+                <div className="stagger mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    {QUICK_ACTIONS.map(action => {
+                        const Icon = action.icon;
+                        return (
+                            <Link key={action.type} href="/opportunities" className="block">
+                                <Card hover className="animate-rise h-full p-5">
+                                    <div className="bg-brand-gradient shadow-glow mb-3 flex h-10 w-10 items-center justify-center rounded-xl">
+                                        <Icon className="h-5 w-5 text-white" />
+                                    </div>
+                                    <h3 className="text-sm font-semibold text-foreground">{action.label}</h3>
+                                    <p className="mt-1 text-xs text-muted-foreground">{action.desc}</p>
+                                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                                        Select an opportunity <ArrowRight className="h-3.5 w-3.5" />
+                                    </span>
+                                </Card>
                             </Link>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* Recent Analyses */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                        <h2 className="text-base font-semibold text-gray-900">Recent Analyses</h2>
-                    </div>
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Type</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Subject</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Status</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">By</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Date</th>
-                                <th className="px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {analyses.data.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-12 text-gray-500">
-                                    <Sparkles className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                    <p>No AI analyses yet. Select an opportunity to run an analysis.</p>
-                                </td></tr>
-                            ) : analyses.data.map(a => {
-                                const statusKey = typeof a.status === 'string' ? a.status : (a.status as any)?.value ?? 'pending';
-                                const StatusIcon = STATUS_ICONS[statusKey] ?? Clock;
-                                return (
-                                    <tr key={a.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3">
-                                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full capitalize">
-                                                {(a.analysis_type ?? '').replace(/_/g, ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-700 max-w-xs truncate">
-                                            {a.subject_type}: #{a.subject_id}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className={`flex items-center gap-1 ${STATUS_COLORS[statusKey] ?? 'text-gray-500'}`}>
-                                                <StatusIcon className="h-4 w-4" />
-                                                <span className="text-xs capitalize">{statusKey}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-600">{a.created_by_user?.name ?? '—'}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-500">{formatDateTime(a.created_at)}</td>
-                                        <td className="px-4 py-3">
-                                            <Link href={`/ai/${a.id}`} className="text-gray-400 hover:text-gray-600">
-                                                <ExternalLink className="h-4 w-4" />
-                                            </Link>
+                <Card className="overflow-hidden">
+                    <CardHeader>
+                        <CardTitle>Recent Analyses</CardTitle>
+                    </CardHeader>
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="border-b border-border bg-secondary/40">
+                                <tr>
+                                    <th className="th">Type</th>
+                                    <th className="th">Subject</th>
+                                    <th className="th">Status</th>
+                                    <th className="th">By</th>
+                                    <th className="th">Date</th>
+                                    <th className="th" />
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {recentAnalyses.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6}>
+                                            <EmptyState
+                                                icon={Sparkles}
+                                                title="No AI analyses yet"
+                                                description="Select an opportunity to run a Go/No-Go, win probability, or summary analysis."
+                                            />
                                         </td>
                                     </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : recentAnalyses.map(a => {
+                                    const statusKey = typeof a.status === 'string' ? a.status : (a.status as { value?: string } | null)?.value ?? 'pending';
+                                    const StatusIcon = STATUS_ICONS[statusKey] ?? Clock;
+                                    const who = a.created_by_user?.name ?? a.created_by?.name ?? '—';
+                                    const subject = a.subject_type
+                                        ? `${String(a.subject_type).split('\\').pop()}${a.subject_id ? ` #${a.subject_id}` : ''}`
+                                        : '—';
+                                    return (
+                                        <tr key={a.id} className="row-link">
+                                            <td className="td">
+                                                <span className="chip capitalize">{String(a.analysis_type ?? '').replace(/_/g, ' ')}</span>
+                                            </td>
+                                            <td className="td max-w-xs truncate text-muted-foreground">{subject}</td>
+                                            <td className="td">
+                                                <div className={`flex items-center gap-1.5 ${STATUS_COLORS[statusKey] ?? 'text-muted-foreground'}`}>
+                                                    <StatusIcon className="h-4 w-4" />
+                                                    <span className="text-xs font-medium capitalize">{statusKey}</span>
+                                                </div>
+                                            </td>
+                                            <td className="td text-muted-foreground">{who}</td>
+                                            <td className="td text-muted-foreground">{formatDateTime(a.created_at)}</td>
+                                            <td className="td">
+                                                <Link href={`/ai/${a.id}`} className="text-muted-foreground transition-colors hover:text-primary">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
             </div>
         </AppLayout>
     );

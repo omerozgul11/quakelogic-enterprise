@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Opportunity;
 use App\Models\Organization;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -18,7 +19,8 @@ class OpportunityFactory extends Factory
         return [
             'ulid' => (string) Str::ulid(),
             'organization_id' => Organization::factory(),
-            'source' => $this->faker->randomElement(['sam_gov', 'bidprime', 'manual', 'referral']),
+            'created_by' => User::factory(),
+            'source' => $this->faker->randomElement(['sam_gov', 'bidprime', 'manual', 'other']),
             'external_id' => $this->faker->uuid(),
             'solicitation_number' => $solNum,
             'title' => $title,

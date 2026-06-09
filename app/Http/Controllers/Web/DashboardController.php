@@ -27,7 +27,7 @@ class DashboardController extends Controller
 
     public function executive(Request $request): Response
     {
-        $this->authorize('viewExecutive', 'dashboard');
+        $this->authorize('view executive dashboard');
 
         $user = $request->user();
         $orgId = $user->organization_id;

@@ -15,7 +15,7 @@ class IntegrationController extends Controller
     public function index(Request $request): Response
     {
         $integrations = Integration::where('organization_id', $request->user()->organization_id)
-            ->get(['id', 'name', 'type', 'status', 'last_synced_at', 'created_at']);
+            ->get(['id', 'name', 'type', 'status', 'last_sync_at as last_synced_at', 'created_at']);
 
         return Inertia::render('Integrations/Index', ['integrations' => $integrations]);
     }

@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CaptureStageHistory extends Model
 {
+    protected $table = 'capture_stage_history';
+
+    public $timestamps = false;
+
     protected $fillable = ['capture_plan_id', 'changed_by', 'from_stage', 'to_stage', 'notes', 'changed_at'];
     protected function casts(): array { return ['changed_at' => 'datetime']; }
     public function capturePlan(): BelongsTo { return $this->belongsTo(CapturePlan::class); }

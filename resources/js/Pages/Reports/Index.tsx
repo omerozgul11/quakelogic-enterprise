@@ -7,7 +7,7 @@ import { BarChart2 } from 'lucide-react';
 interface Props {
     proposalTrend: Array<{ year: number; month: number; total: number; awarded: number; proposal_value: number; award_value: number }>;
     commissionTrend: Array<{ period_month: string; total_commissions: number; count: number }>;
-    topOpportunities: Array<{ id: number; title: string; agency_name: string | null; award_value: number }>;
+    topOpportunities: Array<{ id: number; title: string; agency_name: string | null; estimated_value: number }>;
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -31,7 +31,7 @@ export default function ReportsIndex({ proposalTrend, commissionTrend, topOpport
             <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
                             <BarChart2 className="h-6 w-6 text-blue-500" />
                             Reports & Analytics
                         </h1>
@@ -40,10 +40,10 @@ export default function ReportsIndex({ proposalTrend, commissionTrend, topOpport
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* Proposal Activity */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-base font-semibold text-gray-900 mb-4">Proposal Activity (Last 12 Months)</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-base font-semibold text-foreground mb-4">Proposal Activity (Last 12 Months)</h2>
                         {chartData.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-8">No data available.</p>
+                            <p className="text-sm text-muted-foreground text-center py-8">No data available.</p>
                         ) : (
                             <ResponsiveContainer width="100%" height={250}>
                                 <BarChart data={chartData}>
@@ -60,10 +60,10 @@ export default function ReportsIndex({ proposalTrend, commissionTrend, topOpport
                     </div>
 
                     {/* Commission Trend */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-base font-semibold text-gray-900 mb-4">Commission Trend (Last 6 Months)</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-base font-semibold text-foreground mb-4">Commission Trend (Last 6 Months)</h2>
                         {commissionData.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-8">No commission data available.</p>
+                            <p className="text-sm text-muted-foreground text-center py-8">No commission data available.</p>
                         ) : (
                             <ResponsiveContainer width="100%" height={250}>
                                 <BarChart data={commissionData}>
@@ -79,33 +79,33 @@ export default function ReportsIndex({ proposalTrend, commissionTrend, topOpport
                 </div>
 
                 {/* Top Awarded Opportunities */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                        <h2 className="text-base font-semibold text-gray-900">Top Awarded Contracts</h2>
+                <div className="bg-card rounded-xl border border-border overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border">
+                        <h2 className="text-base font-semibold text-foreground">Top Awarded Contracts</h2>
                     </div>
                     <table className="w-full">
                         <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Opportunity</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Agency</th>
-                                <th className="text-right text-xs font-medium text-gray-500 uppercase px-4 py-3">Award Value</th>
+                            <tr className="border-b border-border bg-secondary">
+                                <th className="text-left text-xs font-medium text-muted-foreground uppercase px-4 py-3">Opportunity</th>
+                                <th className="text-left text-xs font-medium text-muted-foreground uppercase px-4 py-3">Agency</th>
+                                <th className="text-right text-xs font-medium text-muted-foreground uppercase px-4 py-3">Award Value</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {topOpportunities.length === 0 ? (
-                                <tr><td colSpan={3} className="text-center py-8 text-gray-500">No awarded contracts yet.</td></tr>
+                                <tr><td colSpan={3} className="text-center py-8 text-muted-foreground">No awarded contracts yet.</td></tr>
                             ) : topOpportunities.map((opp, i) => (
-                                <tr key={opp.id} className="hover:bg-gray-50">
+                                <tr key={opp.id} className="hover:bg-secondary">
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-3">
                                             <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
                                                 {i + 1}
                                             </span>
-                                            <span className="text-sm text-gray-900 truncate max-w-sm">{opp.title}</span>
+                                            <span className="text-sm text-foreground truncate max-w-sm">{opp.title}</span>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{opp.agency_name ?? '—'}</td>
-                                    <td className="px-4 py-3 text-sm font-semibold text-green-700 text-right">{formatCurrency(opp.award_value)}</td>
+                                    <td className="px-4 py-3 text-sm text-muted-foreground">{opp.agency_name ?? '—'}</td>
+                                    <td className="px-4 py-3 text-sm font-semibold text-green-700 text-right">{formatCurrency(opp.estimated_value)}</td>
                                 </tr>
                             ))}
                         </tbody>

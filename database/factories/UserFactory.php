@@ -19,6 +19,8 @@ class UserFactory extends Factory
             'organization_id' => Organization::factory(),
             'name' => $this->faker->name(),
             'email' => $this->faker->unique()->safeEmail(),
+            'title' => $this->faker->jobTitle(),
+            'avatar_path' => null,
             'email_verified_at' => now(),
             'password' => Hash::make('password123!'),
             'is_active' => true,
