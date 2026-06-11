@@ -29,7 +29,7 @@ class Opportunity extends Model
         'period_of_performance_start', 'period_of_performance_end',
         'description', 'scope', 'requirements_summary', 'notes', 'go_no_go_notes',
         'go_no_go_decision', 'go_no_go_decided_by', 'go_no_go_decided_at',
-        'raw_source_data', 'is_duplicate_flagged', 'duplicate_of', 'canonical_hash',
+        'raw_source_data', 'matched_keywords', 'is_duplicate_flagged', 'duplicate_of', 'canonical_hash',
     ];
 
     protected function casts(): array
@@ -51,6 +51,7 @@ class Opportunity extends Model
             'probability_of_win' => 'decimal:2',
             'is_duplicate_flagged' => 'boolean',
             'raw_source_data' => 'array',
+            'matched_keywords' => 'array',
         ];
     }
 

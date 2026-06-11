@@ -3,6 +3,7 @@ import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardContent } from '@/Components/ui/Card';
+import { Select } from '@/Components/ui/Select';
 import { ArrowLeft, Target } from 'lucide-react';
 
 const SOURCES = ['manual', 'sam_gov', 'bidprime', 'govwin', 'merx', 'world_bank', 'referral', 'repeat_business'];
@@ -57,15 +58,21 @@ export default function OpportunityCreate() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="label">Source</label>
-                                    <select value={data.source} onChange={e => setData('source', e.target.value)} className="select">
-                                        {SOURCES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>)}
-                                    </select>
+                                    <Select
+                                        value={data.source}
+                                        onChange={v => setData('source', v)}
+                                        options={SOURCES.map(s => ({ value: s, label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }))}
+                                        className="w-full"
+                                    />
                                 </div>
                                 <div>
                                     <label className="label">Status</label>
-                                    <select value={data.status} onChange={e => setData('status', e.target.value)} className="select">
-                                        {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>)}
-                                    </select>
+                                    <Select
+                                        value={data.status}
+                                        onChange={v => setData('status', v)}
+                                        options={STATUSES.map(s => ({ value: s, label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }))}
+                                        className="w-full"
+                                    />
                                 </div>
                             </div>
 

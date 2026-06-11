@@ -1,31 +1,85 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
+import { Select } from '@/Components/ui/Select';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
-import { formatCurrency, formatDate, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
+import { cn, formatCurrency, formatDate, formatRelativeDate, formatTime, getDueDateLabel, getDueDateColor, sourceLabel } from '@/Lib/utils';
 import { PaginatedResponse, Opportunity } from '@/Types';
-import { Plus, Upload, Search, X, ExternalLink, Target } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, Upload, Search, X, ExternalLink, Target, Tag, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface Props {
     opportunities: PaginatedResponse<Opportunity>;
-    filters: Record<string, string>;
+    filters: Record<string, string | string[]>;
+    keywordOptions: string[];
+    personalKeywords: string[];
     statuses: Array<{ value: string; label: string; color: string }>;
     sources: Array<{ value: string; label: string }>;
     can: { create: boolean; import: boolean };
 }
 
-export default function OpportunitiesIndex({ opportunities, filters, statuses, sources, can }: Props) {
+export default function OpportunitiesIndex({ opportunities, filters, keywordOptions, personalKeywords, statuses, sources, can }: Props) {
     const [showImportModal, setShowImportModal] = useState(false);
+    const [newKeyword, setNewKeyword] = useState('');
     const { data, setData, post, processing } = useForm({ naics_codes: [] as string[], keywords: '' });
 
+    const selectedKeywords: string[] = Array.isArray(filters.keywords) ? filters.keywords : [];
+    const hasFilters = !!(filters.status || filters.source || filters.search || filters.naics || selectedKeywords.length);
+
+    // Auto-refresh the pipeline every 5 minutes (the server also purges expired
+    // opportunities and pulls fresh ones from SAM.gov, throttled).
+    useEffect(() => {
+        const id = setInterval(() => {
+            router.reload({ only: ['opportunities'] });
+        }, 5 * 60 * 1000);
+        return () => clearInterval(id);
+    }, []);
+
     const handleFilter = (key: string, value: string) => {
-        router.get('/opportunities', { ...filters, [key]: value || undefined }, { preserveState: true });
+        router.get('/opportunities', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true });
     };
+
+    const toggleKeyword = (kw: string) => {
+        const next = selectedKeywords.includes(kw)
+            ? selectedKeywords.filter(k => k !== kw)
+            : [...selectedKeywords, kw];
+        router.get('/opportunities', { ...filters, keywords: next.length ? next : undefined }, { preserveState: true, preserveScroll: true });
+    };
+
+    const addKeyword = (e: React.FormEvent) => {
+        e.preventDefault();
+        const kw = newKeyword.trim();
+        if (!kw) return;
+        router.post('/opportunities/keywords', { keyword: kw }, { preserveScroll: true, onSuccess: () => setNewKeyword('') });
+    };
+
+    const removeKeyword = (kw: string) => {
+        router.delete('/opportunities/keywords', { data: { keyword: kw }, preserveScroll: true });
+    };
+
+    const sort = typeof filters.sort === 'string' ? filters.sort : 'created_at';
+    const direction = filters.direction === 'asc' ? 'asc' : 'desc';
+    const DEFAULT_DIR: Record<string, 'asc' | 'desc'> = {
+        estimated_value: 'desc', due_date: 'asc', title: 'asc', agency_name: 'asc', status: 'asc',
+    };
+    const setSort = (field: string) => {
+        const dir = sort === field ? (direction === 'asc' ? 'desc' : 'asc') : (DEFAULT_DIR[field] ?? 'asc');
+        router.get('/opportunities', { ...filters, sort: field, direction: dir }, { preserveState: true, preserveScroll: true });
+    };
+    const SortHeader = ({ field, label, align = 'left' }: { field: string; label: string; align?: 'left' | 'right' }) => (
+        <th className="th cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => setSort(field)}>
+            <span className={cn('inline-flex items-center gap-1', align === 'right' && 'justify-end')}>
+                {label}
+                {sort === field
+                    ? (direction === 'asc' ? <ChevronUp className="h-3.5 w-3.5 text-primary" /> : <ChevronDown className="h-3.5 w-3.5 text-primary" />)
+                    : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/40" />}
+            </span>
+        </th>
+    );
 
     const handleImport = (e: React.FormEvent) => {
         e.preventDefault();
@@ -63,23 +117,94 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
                             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 type="text"
-                                placeholder="Search title, number, agency…"
-                                defaultValue={filters.search ?? ''}
+                                placeholder="Search by keyword — title, agency, description…"
+                                defaultValue={typeof filters.search === 'string' ? filters.search : ''}
                                 onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
                                 className="input input-with-icon"
                             />
                         </div>
-                        <select value={filters.status ?? ''} onChange={e => handleFilter('status', e.target.value)} className="select">
-                            <option value="">All Statuses</option>
-                            {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
-                        <select value={filters.source ?? ''} onChange={e => handleFilter('source', e.target.value)} className="select">
-                            <option value="">All Sources</option>
-                            {sources.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
-                        {Object.keys(filters).length > 0 && (
+                        <Select
+                            value={(filters.status as string) ?? ''}
+                            onChange={v => handleFilter('status', v)}
+                            options={statuses.map(s => ({ value: s.value, label: s.label }))}
+                            placeholder="All Statuses"
+                            className="w-44"
+                        />
+                        <Select
+                            value={(filters.source as string) ?? ''}
+                            onChange={v => handleFilter('source', v)}
+                            options={sources.map(s => ({ value: s.value, label: s.label }))}
+                            placeholder="All Sources"
+                            className="w-40"
+                        />
+                        {hasFilters && (
                             <button onClick={() => router.get('/opportunities')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                            <Tag className="h-3.5 w-3.5" /> Keywords
+                        </span>
+                        {keywordOptions.map(kw => {
+                            const active = selectedKeywords.includes(kw);
+                            return (
+                                <button
+                                    key={kw}
+                                    onClick={() => toggleKeyword(kw)}
+                                    className={cn(
+                                        'rounded-full border px-3 py-1 text-xs font-medium capitalize transition',
+                                        active
+                                            ? 'border-primary bg-primary/10 text-primary'
+                                            : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground',
+                                    )}
+                                >
+                                    {kw}
+                                </button>
+                            );
+                        })}
+
+                        {/* Your private keywords — only you can see/use these. */}
+                        {personalKeywords.map(kw => {
+                            const active = selectedKeywords.includes(kw);
+                            return (
+                                <span
+                                    key={kw}
+                                    className={cn(
+                                        'inline-flex items-center gap-1 rounded-full border py-1 pl-3 pr-1.5 text-xs font-medium capitalize transition',
+                                        active
+                                            ? 'border-primary bg-primary/10 text-primary'
+                                            : 'border-dashed border-primary/40 bg-card text-muted-foreground hover:bg-secondary hover:text-foreground',
+                                    )}
+                                    title="Your private keyword"
+                                >
+                                    <button onClick={() => toggleKeyword(kw)}>{kw}</button>
+                                    <button onClick={() => removeKeyword(kw)} title="Remove keyword" className="rounded-full p-0.5 hover:bg-destructive/15 hover:text-destructive">
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </span>
+                            );
+                        })}
+
+                        {/* Add a private keyword */}
+                        <form onSubmit={addKeyword} className="inline-flex items-center">
+                            <input
+                                type="text"
+                                value={newKeyword}
+                                onChange={e => setNewKeyword(e.target.value)}
+                                placeholder="+ add keyword"
+                                className="h-7 w-32 rounded-full border border-dashed border-border bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-orange-400"
+                            />
+                        </form>
+
+                        {selectedKeywords.length > 0 && (
+                            <button
+                                onClick={() => router.get('/opportunities', { ...filters, keywords: undefined }, { preserveState: true, preserveScroll: true })}
+                                className="text-xs font-medium text-destructive hover:underline"
+                            >
+                                Clear keywords
                             </button>
                         )}
                     </div>
@@ -91,11 +216,12 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
                         <table className="w-full">
                             <thead className="border-b border-border bg-secondary/40">
                                 <tr>
-                                    <th className="th">Title</th>
-                                    <th className="th">Agency</th>
-                                    <th className="th">Status</th>
-                                    <th className="th">Value</th>
-                                    <th className="th">Due Date</th>
+                                    <SortHeader field="title" label="Title" />
+                                    <SortHeader field="agency_name" label="Agency" />
+                                    <SortHeader field="status" label="Status" />
+                                    <SortHeader field="estimated_value" label="Value" />
+                                    <SortHeader field="due_date" label="Due Date" />
+                                    <SortHeader field="created_at" label="Added" />
                                     <th className="th">Source</th>
                                     <th className="th" />
                                 </tr>
@@ -103,7 +229,7 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
                             <tbody className="divide-y divide-border">
                                 {opportunities.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7}>
+                                        <td colSpan={8}>
                                             <EmptyState
                                                 icon={Target}
                                                 title="No opportunities found"
@@ -132,7 +258,15 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
                                             {opp.due_date && <p className="text-xs text-muted-foreground">{formatDate(opp.due_date)}</p>}
                                         </td>
                                         <td className="td">
-                                            <span className="chip">{opp.source?.replace(/_/g, ' ').toUpperCase()}</span>
+                                            <span className="text-sm text-foreground">{formatRelativeDate(opp.created_at)}</span>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatRelativeDate(opp.created_at) !== formatDate(opp.created_at)
+                                                    ? `${formatDate(opp.created_at)} · ${formatTime(opp.created_at)}`
+                                                    : formatTime(opp.created_at)}
+                                            </p>
+                                        </td>
+                                        <td className="td">
+                                            <span className="chip">{sourceLabel(opp.source)}</span>
                                         </td>
                                         <td className="td">
                                             <Link href={`/opportunities/${opp.id}`} className="text-muted-foreground transition-colors hover:text-primary">
@@ -166,8 +300,9 @@ export default function OpportunitiesIndex({ opportunities, filters, statuses, s
                                     className="input"
                                 />
                             </div>
-                            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-                                No SAM.gov API key configured — this uses the demo data client to showcase the import flow.
+                            <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+                                Connected to SAM.gov. Your pipeline also refreshes automatically on login — fresh
+                                opportunities are pulled in and past-due ones are removed. Use this to pull on demand.
                             </p>
                             <div className="flex justify-end gap-3">
                                 <Button type="button" variant="secondary" onClick={() => setShowImportModal(false)}>Cancel</Button>

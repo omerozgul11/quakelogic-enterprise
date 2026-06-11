@@ -4,6 +4,7 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
+import { Select } from '@/Components/ui/Select';
 import { formatDate, cn } from '@/Lib/utils';
 import { CapturePlan } from '@/Types';
 import { PaginatedResponse } from '@/Types';
@@ -47,12 +48,13 @@ export default function CaptureIndex({ capturePlans, filters }: Props) {
                                 className="input input-with-icon"
                             />
                         </div>
-                        <select value={filters.stage ?? ''} onChange={e => handleFilter('stage', e.target.value)} className="select">
-                            <option value="">All Stages</option>
-                            {STAGES.map(s => (
-                                <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                            ))}
-                        </select>
+                        <Select
+                            value={filters.stage ?? ''}
+                            onChange={v => handleFilter('stage', v)}
+                            options={STAGES.map(s => ({ value: s, label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }))}
+                            placeholder="All Stages"
+                            className="w-44"
+                        />
                         {Object.keys(filters).length > 0 && (
                             <button onClick={() => router.get('/capture')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear

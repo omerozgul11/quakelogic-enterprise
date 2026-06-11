@@ -12,6 +12,7 @@ enum ProposalStatus: string
     case ClarificationRequested = 'clarification_requested';
     case Negotiation = 'negotiation';
     case Awarded = 'awarded';
+    case Completed = 'completed';
     case Lost = 'lost';
     case Cancelled = 'cancelled';
 
@@ -26,6 +27,7 @@ enum ProposalStatus: string
             self::ClarificationRequested => 'Clarification Requested',
             self::Negotiation => 'Negotiation',
             self::Awarded => 'Awarded',
+            self::Completed => 'Completed',
             self::Lost => 'Lost',
             self::Cancelled => 'Cancelled',
         };
@@ -42,6 +44,7 @@ enum ProposalStatus: string
             self::ClarificationRequested => 'amber',
             self::Negotiation => 'purple',
             self::Awarded => 'green',
+            self::Completed => 'teal',
             self::Lost => 'red',
             self::Cancelled => 'slate',
         };
@@ -57,6 +60,12 @@ enum ProposalStatus: string
 
     public function isFinal(): bool
     {
-        return in_array($this, [self::Awarded, self::Lost, self::Cancelled]);
+        return in_array($this, [self::Awarded, self::Completed, self::Lost, self::Cancelled]);
+    }
+
+    /** Statuses that count as won business (awarded, including finished work). */
+    public static function wonValues(): array
+    {
+        return [self::Awarded->value, self::Completed->value];
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Opportunity;
 use App\Models\ProposalSubmission;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Currency;
 use Illuminate\Support\Facades\DB;
 
 class DashboardMetricsService
@@ -20,21 +21,27 @@ class DashboardMetricsService
         $proposals = ProposalSubmission::forOrganization($organizationId);
         $opportunities = Opportunity::forOrganization($organizationId);
 
+        $won = \App\Enums\ProposalStatus::wonValues();
+
         $totalProposals = (clone $proposals)->count();
-        $awarded = (clone $proposals)->where('status', 'awarded')->count();
+        $awarded = (clone $proposals)->whereIn('status', $won)->count();
         $lost = (clone $proposals)->where('status', 'lost')->count();
         $closed = $awarded + $lost;
 
         $winRate = $closed > 0 ? round(($awarded / $closed) * 100, 1) : 0;
         $lossRate = $closed > 0 ? round(($lost / $closed) * 100, 1) : 0;
 
+        // All monetary totals are normalised to USD (proposals may be in any
+        // currency) so the executive dashboard is comparable company-wide.
         $pipelineValue = (clone $proposals)
             ->whereIn('status', ['draft', 'in_progress', 'under_review', 'submitted', 'pending', 'negotiation'])
-            ->sum('proposal_value');
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
 
+        // Earnings (YTD): value of contracts awarded this calendar year.
         $awardValue = (clone $proposals)
-            ->where('status', 'awarded')
-            ->sum('award_value');
+            ->whereIn('status', $won)
+            ->whereYear('award_date', $currentYear)
+            ->sum(DB::raw(Currency::usdExpr('COALESCE(NULLIF(award_value, 0), proposal_value)')));
 
         $submittedThisMonth = (clone $proposals)
             ->whereYear('submission_date', $currentYear)
@@ -44,7 +51,7 @@ class DashboardMetricsService
         $submittedThisMonthValue = (clone $proposals)
             ->whereYear('submission_date', $currentYear)
             ->whereMonth('submission_date', $currentMonth)
-            ->sum('proposal_value');
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
 
         $submittedThisYear = (clone $proposals)
             ->whereYear('submission_date', $currentYear)
@@ -52,7 +59,7 @@ class DashboardMetricsService
 
         $submittedThisYearValue = (clone $proposals)
             ->whereYear('submission_date', $currentYear)
-            ->sum('proposal_value');
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
 
         $activeOpportunities = (clone $opportunities)->active()->count();
         $newOpportunitiesThisMonth = (clone $opportunities)
@@ -99,13 +106,25 @@ class DashboardMetricsService
     {
         $myProposals = ProposalSubmission::forOrganization($organizationId)->where('owner_id', $user->id);
 
+        $won = \App\Enums\ProposalStatus::wonValues();
+
         $mySubmitted = (clone $myProposals)->whereNotNull('submission_date')->count();
-        $myAwarded = (clone $myProposals)->where('status', 'awarded')->count();
+        $myAwarded = (clone $myProposals)->whereIn('status', $won)->count();
         $myLost = (clone $myProposals)->where('status', 'lost')->count();
         $myPending = (clone $myProposals)->whereIn('status', ['draft', 'in_progress', 'under_review'])->count();
 
-        $mySubmittedValue = (clone $myProposals)->whereNotNull('submission_date')->sum('proposal_value');
-        $myAwardValue = (clone $myProposals)->where('status', 'awarded')->sum('award_value');
+        // Monetary totals are normalised to USD across whatever currency each
+        // proposal is denominated in.
+        $mySubmittedValue = (clone $myProposals)->whereNotNull('submission_date')->sum(DB::raw(Currency::usdExpr('proposal_value')));
+        // Earnings (YTD): value of contracts awarded this calendar year.
+        $myAwardValue = (clone $myProposals)->whereIn('status', $won)
+            ->whereYear('award_date', now()->year)
+            ->sum(DB::raw(Currency::usdExpr('COALESCE(NULLIF(award_value, 0), proposal_value)')));
+
+        // Projected pipeline value across open proposals (includes drafts).
+        $myPipelineValue = (clone $myProposals)
+            ->whereIn('status', ['draft', 'in_progress', 'under_review', 'submitted', 'pending', 'negotiation'])
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
 
         $myCommissions = Commission::where('user_id', $user->id)
             ->where('organization_id', $organizationId)
@@ -128,6 +147,31 @@ class DashboardMetricsService
             ->orderBy('due_date')
             ->get(['id', 'proposal_number', 'project_name', 'due_date', 'status']);
 
+        // Recent additions to the portal (proposals + documents), org-wide.
+        $recentProposals = ProposalSubmission::forOrganization($organizationId)
+            ->latest()->limit(6)
+            ->get(['id', 'proposal_number', 'project_name', 'proposal_value', 'currency', 'created_at']);
+        $recentDocuments = \App\Models\ProposalFile::whereHas('proposal', fn ($q) => $q->where('organization_id', $organizationId))
+            ->with('proposal:id,proposal_number')
+            ->latest()->limit(6)
+            ->get(['id', 'proposal_submission_id', 'display_name', 'created_at']);
+
+        $recentActivity = $recentProposals->map(fn ($p) => [
+            'type' => 'proposal',
+            'title' => $p->project_name,
+            'sub' => $p->proposal_number,
+            'value' => Currency::toUsd((float) $p->proposal_value, $p->currency),
+            'url' => "/proposals/{$p->id}",
+            'at' => $p->created_at?->toIso8601String(),
+        ])->concat($recentDocuments->map(fn ($f) => [
+            'type' => 'document',
+            'title' => $f->display_name,
+            'sub' => $f->proposal?->proposal_number,
+            'value' => 0.0,
+            'url' => "/proposals/{$f->proposal_submission_id}",
+            'at' => $f->created_at?->toIso8601String(),
+        ]))->sortByDesc('at')->take(7)->values()->all();
+
         // Company-wide totals (visible to all users)
         $companyTotalProposals = ProposalSubmission::forOrganization($organizationId)
             ->whereYear('created_at', now()->year)
@@ -141,13 +185,31 @@ class DashboardMetricsService
         $companyMonthlyValue = ProposalSubmission::forOrganization($organizationId)
             ->whereYear('submission_date', now()->year)
             ->whereMonth('submission_date', now()->month)
-            ->sum('proposal_value');
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
+
+        // Total value of everything that has been submitted (any submitted-or-later
+        // status), shown as its own bubble separate from the overall pipeline total.
+        $submittedStatuses = ['submitted', 'pending', 'clarification_requested', 'negotiation', 'awarded', 'completed', 'lost'];
+        $companySubmittedValue = ProposalSubmission::forOrganization($organizationId)
+            ->whereIn('status', $submittedStatuses)
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
+        $companySubmittedCount = ProposalSubmission::forOrganization($organizationId)
+            ->whereIn('status', $submittedStatuses)
+            ->count();
+
+        // Org-wide earnings: value of every contract awarded this year, so the
+        // dashboard reflects kanban awards regardless of who owns the proposal.
+        $companyAwardValue = ProposalSubmission::forOrganization($organizationId)
+            ->whereIn('status', $won)
+            ->whereYear('award_date', now()->year)
+            ->sum(DB::raw(Currency::usdExpr('COALESCE(NULLIF(award_value, 0), proposal_value)')));
 
         return compact(
             'mySubmitted', 'myAwarded', 'myLost', 'myPending',
-            'mySubmittedValue', 'myAwardValue', 'myCommissions',
-            'myTasks', 'myFollowUps', 'myUpcomingDeadlines',
-            'companyTotalProposals', 'companyMonthlySubmissions', 'companyMonthlyValue'
+            'mySubmittedValue', 'myAwardValue', 'myPipelineValue', 'myCommissions',
+            'myTasks', 'myFollowUps', 'myUpcomingDeadlines', 'recentActivity',
+            'companyTotalProposals', 'companyMonthlySubmissions', 'companyMonthlyValue',
+            'companySubmittedValue', 'companySubmittedCount', 'companyAwardValue'
         );
     }
 
@@ -165,7 +227,7 @@ class DashboardMetricsService
                 ->count();
 
             $awarded = ProposalSubmission::forOrganization($organizationId)
-                ->where('status', 'awarded')
+                ->whereIn('status', \App\Enums\ProposalStatus::wonValues())
                 ->whereYear('award_date', $year)
                 ->whereMonth('award_date', $month)
                 ->count();
@@ -182,7 +244,7 @@ class DashboardMetricsService
     private function getTopUsersByProposalValue(int $organizationId, int $limit): array
     {
         return ProposalSubmission::forOrganization($organizationId)
-            ->select('owner_id', DB::raw('count(*) as total_proposals'), DB::raw('sum(proposal_value) as total_value'), DB::raw('sum(case when status = \'awarded\' then 1 else 0 end) as won'))
+            ->select('owner_id', DB::raw('count(*) as total_proposals'), DB::raw('sum(' . Currency::usdExpr('proposal_value') . ') as total_value'), DB::raw('sum(case when status in (\'awarded\', \'completed\') then 1 else 0 end) as won'))
             ->whereNotNull('owner_id')
             ->groupBy('owner_id')
             ->orderByDesc('total_value')

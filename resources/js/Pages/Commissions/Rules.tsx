@@ -5,6 +5,7 @@ import { Button } from '@/Components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { EmptyState } from '@/Components/ui/EmptyState';
+import { Select } from '@/Components/ui/Select';
 import { formatPercent, formatCurrency } from '@/Lib/utils';
 import { ArrowLeft, Plus, Percent } from 'lucide-react';
 import { useState } from 'react';
@@ -74,11 +75,16 @@ export default function CommissionRules({ rules }: Props) {
                                     </div>
                                     <div>
                                         <label className="label">Type</label>
-                                        <select value={data.type} onChange={e => setData('type', e.target.value)} className="select">
-                                            <option value="percentage">Percentage</option>
-                                            <option value="fixed">Fixed Amount</option>
-                                            <option value="tiered">Tiered</option>
-                                        </select>
+                                        <Select
+                                            value={data.type}
+                                            onChange={v => setData('type', v)}
+                                            options={[
+                                                { value: 'percentage', label: 'Percentage' },
+                                                { value: 'fixed', label: 'Fixed Amount' },
+                                                { value: 'tiered', label: 'Tiered' },
+                                            ]}
+                                            className="w-full"
+                                        />
                                     </div>
                                 </div>
                                 {data.type === 'percentage' && (

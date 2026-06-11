@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Services\Reporting\DashboardMetricsService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -12,10 +13,16 @@ class DashboardController extends Controller
 {
     public function __construct(private readonly DashboardMetricsService $metrics) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
         $orgId = $user->organization_id;
+
+        // Honour the user's preferred default dashboard view.
+        $defaultView = $user->notification_preferences['dashboard']['default_view'] ?? 'personal';
+        if ($defaultView === 'executive' && !$request->boolean('home') && $user->can('view executive dashboard')) {
+            return redirect()->route('dashboard.executive');
+        }
 
         $data = $this->metrics->getUserDashboard($orgId, $user);
 

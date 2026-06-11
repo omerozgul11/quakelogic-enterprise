@@ -6,6 +6,7 @@ use App\Enums\CommissionType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -22,6 +23,7 @@ class User extends Authenticatable
         'ulid', 'organization_id', 'name', 'email', 'title', 'phone',
         'avatar_path', 'password', 'is_active', 'hire_date',
         'commission_rate_override', 'timezone', 'notification_preferences',
+        'pipeline_keywords', 'market_keywords',
     ];
 
     protected $hidden = [
@@ -36,6 +38,8 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'hire_date' => 'date',
             'notification_preferences' => 'array',
+            'pipeline_keywords' => 'array',
+            'market_keywords' => 'array',
         ];
     }
 
@@ -68,6 +72,11 @@ class User extends Authenticatable
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'assigned_to');
+    }
+
+    public function emailAccount(): HasOne
+    {
+        return $this->hasOne(EmailAccount::class);
     }
 
     public function followUps(): HasMany

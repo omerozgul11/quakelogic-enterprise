@@ -11,7 +11,7 @@
     --card-foreground: 215 28% 17%;
     --popover: 0 0% 100%;
     --popover-foreground: 215 28% 17%;
-    --primary: 19 89% 54%;              /* #f26522 — QuakeLogic orange */
+    --primary: 19 74% 50%;              /* QuakeLogic orange, toned down a notch */
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;           /* slate-100 */
     --secondary-foreground: 215 25% 27%;/* slate-700 */
@@ -25,7 +25,7 @@
     --warning: 38 92% 50%;              /* amber-500 */
     --border: 214 32% 91%;              /* slate-200 */
     --input: 215 20% 84%;               /* slate-300 */
-    --ring: 27 96% 55%;                 /* orange focus */
+    --ring: 24 80% 53%;                 /* orange focus */
     --radius: 0.75rem;
   }
 
@@ -36,7 +36,7 @@
     --card-foreground: 210 22% 92%;
     --popover: 222 19% 13%;
     --popover-foreground: 210 22% 92%;
-    --primary: 20 90% 56%;              /* QuakeLogic orange, a touch brighter */
+    --primary: 20 74% 55%;              /* QuakeLogic orange, softened for dark */
     --primary-foreground: 0 0% 100%;
     --secondary: 222 16% 19%;
     --secondary-foreground: 210 16% 82%;
@@ -50,7 +50,7 @@
     --warning: 38 92% 56%;
     --border: 220 14% 23%;
     --input: 220 13% 28%;
-    --ring: 27 96% 55%;
+    --ring: 24 80% 53%;
   }
 }
 
@@ -85,7 +85,7 @@
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 66%); background-clip: content-box; }
-  ::selection { background: hsl(19 89% 54% / 0.20); }
+  ::selection { background: hsl(19 74% 50% / 0.20); }
 }
 
 @layer components {
@@ -109,18 +109,20 @@
   /* Brand fills */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(120deg, #f97316 0%, #ea580c 100%);
+    background-image: linear-gradient(120deg, #ec7434 0%, #d65a1c 100%);
   }
+  /* Buttons / brand fills: a clear but softened orange */
   .bg-brand-gradient {
-    background-color: #f26522;
-    background-image: linear-gradient(180deg, #f6772f 0%, #f26522 60%, #e85f1d 100%);
+    background-color: #e2581c;
+    background-image: linear-gradient(180deg, #ec6e33 0%, #e2581c 60%, #d04f15 100%);
   }
-  /* Warm brand panel (used by split-screen auth pages) */
+  /* Warm brand panel (dashboard hero + split-screen auth pages): deeper,
+     muted terracotta so brand-orange buttons placed on it stay distinct. */
   .bg-sidebar {
-    background-color: #e85f1d;
+    background-color: #b1521f;
     background-image:
-      radial-gradient(60% 50% at 50% 0%, rgba(255, 200, 150, 0.35) 0%, rgba(255, 200, 150, 0) 70%),
-      linear-gradient(160deg, #fb8c3e 0%, #f26522 52%, #c2410c 100%);
+      radial-gradient(60% 50% at 50% 0%, rgba(255, 205, 160, 0.22) 0%, rgba(255, 205, 160, 0) 70%),
+      linear-gradient(160deg, #cf7038 0%, #b1521f 52%, #813a10 100%);
   }
 
   /* Form controls */
@@ -128,8 +130,19 @@
     @apply w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400;
   }
   .input-with-icon { @apply pl-10; }
+  /* Native selects, restyled: no OS chrome, custom chevron, theme-aware
+     popup list (color-scheme). One class styles every dropdown in the app. */
   .select {
-    @apply cursor-pointer rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400;
+    @apply cursor-pointer appearance-none rounded-lg border border-input bg-card py-2 pl-3 pr-9 text-sm text-foreground transition hover:border-muted-foreground/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:cursor-not-allowed disabled:opacity-60;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.7rem center;
+    background-repeat: no-repeat;
+    background-size: 0.95em;
+    color-scheme: light;
+  }
+  .dark .select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    color-scheme: dark;
   }
   .label { @apply mb-1.5 block text-sm font-medium text-foreground; }
 

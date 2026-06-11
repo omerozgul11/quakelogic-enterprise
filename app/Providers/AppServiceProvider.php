@@ -9,8 +9,11 @@ use App\Services\BidSources\SamGov\SamGovConnector;
 use App\Services\BidSources\BidPrime\FakeBidPrimeClient;
 use App\Services\BidSources\OpportunityDeduplicationService;
 use App\Services\BidSources\SamGov\SamGovImportService;
+use App\Listeners\RefreshPipelineOnLogin;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,7 +29,9 @@ class AppServiceProvider extends ServiceProvider
         // SAM.gov client: use real if configured, fake otherwise
         $this->app->singleton(SamGovConnector::class, function () {
             $apiKey = config('integrations.sam_gov.api_key');
-            $client = $apiKey ? new \App\Services\BidSources\SamGov\SamGovClient($apiKey) : new FakeSamGovClient();
+            $client = $apiKey
+                ? new \App\Services\BidSources\SamGov\SamGovClient($apiKey, config('integrations.sam_gov.base_url'))
+                : new FakeSamGovClient();
             return new SamGovConnector($client);
         });
 
@@ -44,6 +49,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Model::shouldBeStrict(!$this->app->isProduction());
+
+        // Keep the opportunity pipeline fresh on every login (purge past-due +
+        // throttled SAM.gov refresh).
+        Event::listen(Login::class, RefreshPipelineOnLogin::class);
 
         if ($this->app->isLocal()) {
             DB::listen(function ($query) {

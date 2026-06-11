@@ -13,17 +13,17 @@ class OpenAiProvider implements AiProviderInterface
 
     public function __construct()
     {
-        $this->model = config('ai.openai.model', 'gpt-4o');
-        $this->client = Http::withToken(config('ai.openai.api_key'))
-            ->baseUrl('https://api.openai.com/v1')
-            ->timeout(120);
+        $this->model = config('ai.providers.openai.model', 'gpt-4o');
+        $this->client = Http::withToken((string) config('ai.providers.openai.api_key'))
+            ->baseUrl(rtrim((string) config('ai.providers.openai.base_url', 'https://api.openai.com/v1'), '/'))
+            ->timeout((int) config('ai.providers.openai.timeout', 60));
     }
 
     public function getName(): string { return 'openai'; }
 
     public function isAvailable(): bool
     {
-        return !empty(config('ai.openai.api_key'));
+        return !empty(config('ai.providers.openai.api_key'));
     }
 
     public function extractDocumentData(string $documentText, array $schema): array

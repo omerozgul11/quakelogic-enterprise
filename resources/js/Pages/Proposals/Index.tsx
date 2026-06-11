@@ -1,25 +1,57 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
+import { Select } from '@/Components/ui/Select';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
-import { formatCurrency, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
+import { cn, formatCurrency, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
 import { PaginatedResponse, ProposalSubmission } from '@/Types';
-import { Plus, Search, X, FileText, ExternalLink } from 'lucide-react';
+import { Plus, Search, X, FileText, ExternalLink, Trash2, KanbanSquare, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 interface Props {
     proposals: PaginatedResponse<ProposalSubmission>;
     filters: Record<string, string>;
     statuses: Array<{ value: string; label: string; color: string }>;
-    can: { create: boolean };
+    can: { create: boolean; delete: boolean };
 }
 
+const DEFAULT_DIR: Record<string, 'asc' | 'desc'> = {
+    name: 'asc', company: 'asc', owner: 'asc', status: 'asc', value: 'desc', due_date: 'asc', date: 'desc',
+};
+
 export default function ProposalsIndex({ proposals, filters, statuses, can }: Props) {
+    const sort = typeof filters.sort === 'string' ? filters.sort : 'date';
+    const direction = filters.direction === 'asc' ? 'asc' : 'desc';
+
+    const setSort = (field: string) => {
+        const dir = sort === field ? (direction === 'asc' ? 'desc' : 'asc') : (DEFAULT_DIR[field] ?? 'asc');
+        router.get('/proposals', { ...filters, sort: field, direction: dir }, { preserveState: true, preserveScroll: true });
+    };
+
+    const SortHeader = ({ field, label }: { field: string; label: string }) => (
+        <th className="th cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => setSort(field)}>
+            <span className="inline-flex items-center gap-1">
+                {label}
+                {sort === field
+                    ? (direction === 'asc' ? <ChevronUp className="h-3.5 w-3.5 text-primary" /> : <ChevronDown className="h-3.5 w-3.5 text-primary" />)
+                    : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/40" />}
+            </span>
+        </th>
+    );
+
     const handleFilter = (key: string, value: string) => {
         router.get('/proposals', { ...filters, [key]: value || undefined }, { preserveState: true });
+    };
+
+    const handleDelete = (e: React.MouseEvent, proposal: ProposalSubmission) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Delete proposal ${proposal.proposal_number}? This cannot be undone.`)) {
+            router.delete(`/proposals/${proposal.id}`, { preserveScroll: true });
+        }
     };
 
     return (
@@ -31,11 +63,14 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                     title="Proposals"
                     description={`${proposals.total} ${proposals.total === 1 ? 'proposal' : 'proposals'} total`}
                     actions={
-                        can.create && (
-                            <Button href="/proposals/create" icon={Plus}>
-                                New Proposal
-                            </Button>
-                        )
+                        <>
+                            <Button href="/proposals/board" variant="secondary" icon={KanbanSquare}>Board view</Button>
+                            {can.create && (
+                                <Button href="/proposals/create" icon={Plus}>
+                                    New Proposal
+                                </Button>
+                            )}
+                        </>
                     }
                 />
 
@@ -52,10 +87,13 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                 className="input input-with-icon"
                             />
                         </div>
-                        <select value={filters.status ?? ''} onChange={e => handleFilter('status', e.target.value)} className="select">
-                            <option value="">All Statuses</option>
-                            {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
+                        <Select
+                            value={filters.status ?? ''}
+                            onChange={v => handleFilter('status', v)}
+                            options={statuses.map(s => ({ value: s.value, label: s.label }))}
+                            placeholder="All Statuses"
+                            className="w-44"
+                        />
                         {Object.keys(filters).length > 0 && (
                             <button onClick={() => router.get('/proposals')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear
@@ -71,12 +109,12 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                             <thead className="border-b border-border bg-secondary/40">
                                 <tr>
                                     <th className="th">Proposal #</th>
-                                    <th className="th">Project</th>
-                                    <th className="th">Agency</th>
-                                    <th className="th">Status</th>
-                                    <th className="th">Value</th>
-                                    <th className="th">Due Date</th>
-                                    <th className="th">Owner</th>
+                                    <SortHeader field="name" label="Project" />
+                                    <SortHeader field="company" label="Company" />
+                                    <SortHeader field="status" label="Status" />
+                                    <SortHeader field="value" label="Value" />
+                                    <SortHeader field="due_date" label="Due Date" />
+                                    <SortHeader field="owner" label="Owner" />
                                     <th className="th" />
                                 </tr>
                             </thead>
@@ -105,14 +143,14 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                                 <p className="mt-0.5 text-xs text-muted-foreground">{proposal.solicitation_number}</p>
                                             )}
                                         </td>
-                                        <td className="td text-muted-foreground">{proposal.agency?.name ?? '—'}</td>
+                                        <td className="td text-muted-foreground">{proposal.company?.name ?? proposal.agency?.name ?? '—'}</td>
                                         <td className="td">
                                             <StatusBadge status={typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'draft'} />
                                         </td>
                                         <td className="td font-medium">
                                             {proposal.award_value ? (
-                                                <span className="text-emerald-600">{formatCurrency(proposal.award_value)}</span>
-                                            ) : formatCurrency(proposal.proposal_value)}
+                                                <span className="text-emerald-600">{formatCurrency(proposal.award_value, proposal.currency)}</span>
+                                            ) : formatCurrency(proposal.proposal_value, proposal.currency)}
                                         </td>
                                         <td className="td">
                                             <span className={`text-sm font-medium ${getDueDateColor(proposal.due_date)}`}>
@@ -121,9 +159,16 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                         </td>
                                         <td className="td text-muted-foreground">{proposal.owner?.name ?? '—'}</td>
                                         <td className="td">
-                                            <Link href={`/proposals/${proposal.id}`} className="text-muted-foreground transition-colors hover:text-primary">
-                                                <ExternalLink className="h-4 w-4" />
-                                            </Link>
+                                            <div className="flex items-center gap-2">
+                                                <Link href={`/proposals/${proposal.id}`} title="Open" className="text-muted-foreground transition-colors hover:text-primary">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                                {can.delete && (
+                                                    <button onClick={e => handleDelete(e, proposal)} title="Delete" className="text-muted-foreground transition-colors hover:text-destructive">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

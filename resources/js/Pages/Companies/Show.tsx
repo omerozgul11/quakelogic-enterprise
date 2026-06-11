@@ -1,19 +1,32 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
+import { ConfirmDialog } from '@/Components/ui/Modal';
+import { CompanyFormModal, EditableCompany } from '@/Components/crm/CompanyFormModal';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { Company } from '@/Types';
-import { ArrowLeft, Mail, Phone, Globe, Building2, Users } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Globe, Building2, Users, Pencil, Trash2 } from 'lucide-react';
 
 interface Props {
-    company: Company & {
+    company: Company & EditableCompany & {
         contacts: Array<{ id: number; first_name: string; last_name: string; title: string | null; email: string | null }>;
     };
+    can: { manage: boolean };
 }
 
-export default function CompanyShow({ company }: Props) {
+export default function CompanyShow({ company, can }: Props) {
+    const [editOpen, setEditOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [processing, setProcessing] = useState(false);
+
+    const confirmDelete = () => {
+        setProcessing(true);
+        router.delete(`/companies/${company.id}`, { onFinish: () => setProcessing(false) });
+    };
+
     return (
         <AppLayout>
             <Head title={company.name} />
@@ -21,11 +34,13 @@ export default function CompanyShow({ company }: Props) {
                 <PageHeader
                     icon={Building2}
                     title={company.name}
-                    description={company.type ? company.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : undefined}
+                    description={company.company_type ? company.company_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : undefined}
                     actions={
-                        <Button href="/companies" variant="secondary" icon={ArrowLeft}>
-                            Back
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button href="/companies" variant="secondary" icon={ArrowLeft}>Back</Button>
+                            {can?.manage && <Button variant="secondary" icon={Pencil} onClick={() => setEditOpen(true)}>Edit</Button>}
+                            {can?.manage && <Button variant="danger" icon={Trash2} onClick={() => setDeleteOpen(true)}>Delete</Button>}
+                        </div>
                     }
                 />
 
@@ -51,7 +66,7 @@ export default function CompanyShow({ company }: Props) {
                                     <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />{company.email}
                                 </div>
                             )}
-                            {company.description && <p className="pt-2 text-sm text-muted-foreground">{company.description}</p>}
+                            {company.notes && <p className="whitespace-pre-line pt-2 text-sm text-muted-foreground">{company.notes}</p>}
                         </CardContent>
                     </Card>
 
@@ -87,6 +102,18 @@ export default function CompanyShow({ company }: Props) {
                     </Card>
                 </div>
             </div>
+
+            {editOpen && (
+                <CompanyFormModal open onClose={() => setEditOpen(false)} company={company} />
+            )}
+            <ConfirmDialog
+                open={deleteOpen}
+                onClose={() => setDeleteOpen(false)}
+                onConfirm={confirmDelete}
+                processing={processing}
+                title="Delete company?"
+                message={<>This will remove <span className="font-medium text-foreground">{company.name}</span> from your CRM. Linked contacts are kept.</>}
+            />
         </AppLayout>
     );
 }

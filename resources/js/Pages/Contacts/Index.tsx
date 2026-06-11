@@ -1,24 +1,46 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
+import { ConfirmDialog } from '@/Components/ui/Modal';
+import { ContactFormModal } from '@/Components/crm/ContactFormModal';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { Contact, PaginatedResponse } from '@/Types';
-import { Users, Mail, Phone, Search, X, Plus, ExternalLink, Star } from 'lucide-react';
+import { Users, Mail, Phone, Search, X, Plus, ExternalLink, Star, Pencil, Trash2 } from 'lucide-react';
+
+type ContactRow = Contact & {
+    agency: { id: number; name: string } | null;
+    company: { id: number; name: string } | null;
+};
 
 interface Props {
-    contacts: PaginatedResponse<Contact & {
-        agency: { id: number; name: string } | null;
-        company: { id: number; name: string } | null;
-    }>;
+    contacts: PaginatedResponse<ContactRow>;
     filters: Record<string, string>;
-    can: { create: boolean };
+    companies: Array<{ id: number; name: string }>;
+    can: { create: boolean; manage: boolean };
 }
 
-export default function ContactsIndex({ contacts, filters, can }: Props) {
+export default function ContactsIndex({ contacts, filters, companies, can }: Props) {
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<ContactRow | null>(null);
+    const [deleting, setDeleting] = useState<ContactRow | null>(null);
+    const [processing, setProcessing] = useState(false);
+
+    const openAdd = () => { setEditing(null); setFormOpen(true); };
+    const openEdit = (c: ContactRow) => { setEditing(c); setFormOpen(true); };
+    const confirmDelete = () => {
+        if (!deleting) return;
+        setProcessing(true);
+        router.delete(`/contacts/${deleting.id}`, {
+            preserveScroll: true,
+            onFinish: () => { setProcessing(false); setDeleting(null); },
+        });
+    };
+
     const handleSearch = (value: string) => {
         router.get('/contacts', value ? { search: value } : {}, { preserveState: true });
     };
@@ -33,7 +55,7 @@ export default function ContactsIndex({ contacts, filters, can }: Props) {
                     description={`${contacts.total} ${contacts.total === 1 ? 'contact' : 'contacts'} in your network`}
                     actions={
                         can.create && (
-                            <Button href="/contacts/create" icon={Plus}>
+                            <Button onClick={openAdd} icon={Plus}>
                                 Add Contact
                             </Button>
                         )
@@ -82,7 +104,7 @@ export default function ContactsIndex({ contacts, filters, can }: Props) {
                                                 icon={Users}
                                                 title="No contacts found"
                                                 description="Try adjusting your search, or add a new contact to your network."
-                                                action={can.create && <Button href="/contacts/create" icon={Plus}>Add Contact</Button>}
+                                                action={can.create && <Button onClick={openAdd} icon={Plus}>Add Contact</Button>}
                                             />
                                         </td>
                                     </tr>
@@ -126,9 +148,21 @@ export default function ContactsIndex({ contacts, filters, can }: Props) {
                                                 </div>
                                             </td>
                                             <td className="td">
-                                                <Link href={`/contacts/${contact.id}`} className="text-muted-foreground transition-colors hover:text-primary">
-                                                    <ExternalLink className="h-4 w-4" />
-                                                </Link>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Link href={`/contacts/${contact.id}`} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title="View profile">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                    </Link>
+                                                    {can.manage && (
+                                                        <>
+                                                            <button onClick={() => openEdit(contact)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" title="Edit">
+                                                                <Pencil className="h-4 w-4" />
+                                                            </button>
+                                                            <button onClick={() => setDeleting(contact)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -139,6 +173,25 @@ export default function ContactsIndex({ contacts, filters, can }: Props) {
                     <Pagination from={contacts.from} to={contacts.to} total={contacts.total} links={contacts.links} />
                 </Card>
             </div>
+
+            {formOpen && (
+                <ContactFormModal
+                    key={editing?.id ?? 'new'}
+                    open
+                    onClose={() => setFormOpen(false)}
+                    contact={editing}
+                    companies={companies}
+                />
+            )}
+
+            <ConfirmDialog
+                open={!!deleting}
+                onClose={() => setDeleting(null)}
+                onConfirm={confirmDelete}
+                processing={processing}
+                title="Delete contact?"
+                message={deleting ? <>This will remove <span className="font-medium text-foreground">{deleting.first_name} {deleting.last_name}</span> from your contacts. You can restore it later if needed.</> : ''}
+            />
         </AppLayout>
     );
 }

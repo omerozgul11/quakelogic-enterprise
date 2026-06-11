@@ -1,3 +1,9 @@
+export interface UserPreferences {
+    display: { theme: 'system' | 'light' | 'dark'; density: 'comfortable' | 'compact' };
+    dashboard: { default_view: 'personal' | 'executive' };
+    channels: { new_proposal: boolean; new_opportunity: boolean; desktop: boolean; sound: boolean };
+}
+
 export interface User {
     id: number;
     name: string;
@@ -7,6 +13,7 @@ export interface User {
     organization_id: number;
     roles: string[];
     permissions: string[];
+    preferences?: UserPreferences;
 }
 
 export interface Organization {
@@ -49,6 +56,7 @@ export interface ProposalSubmission {
     status: string;
     proposal_value?: number;
     award_value?: number;
+    currency?: string;
     due_date?: string;
     submission_date?: string;
     award_date?: string;
@@ -56,6 +64,7 @@ export interface ProposalSubmission {
     owner?: User;
     proposal_manager?: User;
     agency?: Agency;
+    company?: Company;
     created_at: string;
     updated_at: string;
 }
@@ -104,10 +113,17 @@ export interface Contact {
     last_name: string;
     full_name?: string;
     title?: string;
+    department?: string | null;
     email?: string;
     phone?: string;
+    mobile?: string | null;
+    linkedin_url?: string | null;
+    notes?: string | null;
     is_decision_maker: boolean;
     is_key_contact: boolean;
+    last_contact_date?: string | null;
+    next_follow_up_date?: string | null;
+    created_at?: string;
     agency?: Agency;
     company?: Company;
 }
@@ -151,6 +167,18 @@ export interface FlashMessages {
     success?: string;
     error?: string;
     warning?: string;
+    celebrate?: string | null;
+}
+
+export interface NotificationItem {
+    id: string;
+    type: string;
+    title: string;
+    message?: string | null;
+    url?: string | null;
+    icon?: string;
+    read: boolean;
+    created_at: string | null;
 }
 
 export interface SharedProps {
@@ -158,6 +186,7 @@ export interface SharedProps {
     flash: FlashMessages;
     app: { name: string; version: string };
     notifications_count: number;
+    notifications: NotificationItem[];
 }
 
 export type StatusColor = 'blue' | 'green' | 'red' | 'yellow' | 'gray' | 'purple' | 'indigo' | 'orange' | 'teal' | 'cyan' | 'amber' | 'slate' | 'emerald';

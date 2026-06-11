@@ -7,6 +7,7 @@ import { StatCard } from '@/Components/ui/StatCard';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
+import { Select } from '@/Components/ui/Select';
 import { Commission, PaginatedResponse } from '@/Types';
 import { formatCurrency } from '@/Lib/utils';
 import { DollarSign, Check, X, Clock, Settings } from 'lucide-react';
@@ -63,13 +64,18 @@ export default function CommissionsIndex({ commissions, filters = {}, can = {}, 
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-wrap items-center gap-3">
-                        <select value={filters.status ?? ''} onChange={e => handleFilter('status', e.target.value)} className="select">
-                            <option value="">All Statuses</option>
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="paid">Paid</option>
-                            <option value="disputed">Disputed</option>
-                        </select>
+                        <Select
+                            value={filters.status ?? ''}
+                            onChange={v => handleFilter('status', v)}
+                            options={[
+                                { value: 'pending', label: 'Pending' },
+                                { value: 'approved', label: 'Approved' },
+                                { value: 'paid', label: 'Paid' },
+                                { value: 'disputed', label: 'Disputed' },
+                            ]}
+                            placeholder="All Statuses"
+                            className="w-44"
+                        />
                         <input type="month" value={filters.period ?? ''} onChange={e => handleFilter('period', e.target.value)} className="input max-w-[12rem]" />
                         {Object.keys(filters).length > 0 && (
                             <button onClick={() => router.get('/commissions')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">

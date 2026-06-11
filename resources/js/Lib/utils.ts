@@ -34,9 +34,48 @@ export function formatDateTime(date?: string | null): string {
     });
 }
 
+export function formatTime(date?: string | null): string {
+    if (!date) return '—';
+    return new Date(date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+export function formatRelativeDate(date?: string | null): string {
+    if (!date) return '—';
+    const days = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
+    if (days <= 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return formatDate(date);
+}
+
 export function formatPercent(value?: number | null): string {
     if (value == null) return '—';
     return `${Number(value).toFixed(1)}%`;
+}
+
+/**
+ * Generate a strong, readable password. Guarantees at least one lowercase,
+ * uppercase, digit and symbol, and avoids visually ambiguous characters
+ * (0/O, 1/l/I) so it can be read aloud or copied without confusion.
+ */
+export function generatePassword(length = 16): string {
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const digits = '23456789';
+    const symbols = '!@#$%^&*?-_=+';
+    const all = lower + upper + digits + symbols;
+    const len = Math.max(12, length);
+
+    const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+    const chars = [pick(lower), pick(upper), pick(digits), pick(symbols)];
+    while (chars.length < len) chars.push(pick(all));
+
+    // Fisher–Yates shuffle so the guaranteed characters aren't always first.
+    for (let i = chars.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    return chars.join('');
 }
 
 export function getDaysUntil(date?: string | null): number | null {
@@ -73,6 +112,7 @@ const STATUS_COLORS: Record<string, string> = {
     submitted: 'bg-cyan-100 text-cyan-800',
     under_evaluation: 'bg-teal-100 text-teal-800',
     awarded: 'bg-green-100 text-green-800',
+    completed: 'bg-teal-100 text-teal-800',
     lost: 'bg-red-100 text-red-800',
     cancelled: 'bg-gray-100 text-gray-600',
     archived: 'bg-slate-100 text-slate-600',
@@ -98,6 +138,19 @@ export function getStatusColor(status: string): string {
 
 export function statusLabel(status: string): string {
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+    sam_gov: 'SAM',
+    bidprime: 'BidPrime',
+    govwin: 'GovWin IQ',
+    manual: 'Manual',
+    merx: 'MERX',
+};
+
+export function sourceLabel(source?: string | null): string {
+    if (!source) return '—';
+    return SOURCE_LABELS[source] ?? source.replace(/_/g, ' ').toUpperCase();
 }
 
 export function getInitials(name?: string | null): string {

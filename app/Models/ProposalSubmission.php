@@ -19,7 +19,7 @@ class ProposalSubmission extends Model
         'ulid', 'organization_id', 'opportunity_id', 'created_by', 'updated_by',
         'owner_id', 'proposal_manager_id', 'agency_id', 'company_id',
         'proposal_number', 'solicitation_number', 'project_name', 'status',
-        'submission_channel', 'submission_confirmation_number',
+        'submission_channel', 'submission_methods', 'submission_confirmation_number',
         'due_date', 'submission_date', 'award_date',
         'proposal_value', 'award_value', 'currency', 'estimated_margin',
         'place_of_performance', 'period_of_performance', 'pop_start', 'pop_end',
@@ -31,6 +31,7 @@ class ProposalSubmission extends Model
     {
         return [
             'status' => ProposalStatus::class,
+            'submission_methods' => 'array',
             'due_date' => 'date',
             'submission_date' => 'date',
             'award_date' => 'date',

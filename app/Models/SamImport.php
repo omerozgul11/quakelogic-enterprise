@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SamImport extends Model
 {
     protected $fillable = [
-        'organization_id', 'status', 'filters', 'total_fetched',
-        'total_created', 'total_updated', 'total_skipped',
-        'total_errors', 'started_at', 'completed_at', 'error_message',
+        'organization_id', 'triggered_by', 'status', 'query_params',
+        'total_records', 'imported_records', 'updated_records',
+        'skipped_records', 'error_records', 'error_log',
+        'started_at', 'completed_at',
     ];
 
     protected $casts = [
-        'filters' => 'array',
+        'query_params' => 'array',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

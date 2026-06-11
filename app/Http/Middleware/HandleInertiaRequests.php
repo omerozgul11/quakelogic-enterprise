@@ -30,12 +30,14 @@ class HandleInertiaRequests extends Middleware
                     'organization_id' => $user->organization_id,
                     'roles' => $user->getRoleNames(),
                     'permissions' => $user->getAllPermissions()->pluck('name'),
+                    'preferences' => \App\Http\Controllers\Web\SettingsController::mergedPreferences($user->notification_preferences),
                 ] : null,
             ],
             'flash' => [
                 'success' => fn() => $request->session()->get('success'),
                 'error' => fn() => $request->session()->get('error'),
                 'warning' => fn() => $request->session()->get('warning'),
+                'celebrate' => fn() => $request->session()->get('celebrate'),
             ],
             'app' => [
                 'name' => config('app.name'),
@@ -44,6 +46,18 @@ class HandleInertiaRequests extends Middleware
             'notifications_count' => fn() => $user
                 ? $user->unreadNotifications()->count()
                 : 0,
+            'notifications' => fn() => $user
+                ? $user->notifications()->take(8)->get()->map(fn ($n) => [
+                    'id' => $n->id,
+                    'type' => $n->data['type'] ?? 'info',
+                    'title' => $n->data['title'] ?? 'Notification',
+                    'message' => $n->data['message'] ?? null,
+                    'url' => $n->data['url'] ?? null,
+                    'icon' => $n->data['icon'] ?? 'bell',
+                    'read' => $n->read_at !== null,
+                    'created_at' => $n->created_at?->toIso8601String(),
+                ])
+                : [],
         ];
     }
 }

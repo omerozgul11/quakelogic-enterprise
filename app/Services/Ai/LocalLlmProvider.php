@@ -12,8 +12,8 @@ class LocalLlmProvider implements AiProviderInterface
 
     public function __construct()
     {
-        $this->host = config('ai.local_llm.host', 'http://localhost:11434');
-        $this->model = config('ai.local_llm.model', 'llama3');
+        $this->host = rtrim((string) config('ai.providers.local.base_url', 'http://localhost:11434'), '/');
+        $this->model = config('ai.providers.local.model', 'llama3');
     }
 
     public function getName(): string { return 'local'; }

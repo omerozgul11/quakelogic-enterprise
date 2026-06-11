@@ -14,3 +14,11 @@ Artisan::command('inspire', function () {
 Schedule::command('bids:sync sam-gov')->dailyAt('06:00')->withoutOverlapping();
 Schedule::command('bids:sync bidprime')->dailyAt('06:30')->withoutOverlapping();
 Schedule::command('follow-ups:generate')->dailyAt('08:00')->withoutOverlapping();
+// Monthly status follow-up per open proposal (emails only when a mailbox is connected).
+Schedule::command('follow-ups:monthly')->monthlyOn(1, '08:30')->withoutOverlapping();
+
+// Background pipeline refresh: runs every 5 minutes so opportunities stay
+// fresh without anyone having the page open. The expired purge runs each
+// time; the SAM.gov pull respects pipeline.sync_throttle_minutes to stay
+// within SAM's API rate limits.
+Schedule::command('pipeline:sync')->everyFiveMinutes()->withoutOverlapping();

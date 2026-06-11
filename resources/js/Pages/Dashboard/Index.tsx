@@ -1,11 +1,11 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
-import { formatCurrency, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
+import { formatCurrency, getDueDateLabel, getDueDateColor, formatDate } from '@/Lib/utils';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { SharedProps } from '@/Types';
 import {
     Target, FileText, Trophy, TrendingUp, DollarSign,
-    Clock, AlertCircle, CheckCircle, ArrowUpRight, Plus, ArrowRight,
+    Clock, AlertCircle, CheckCircle, ArrowUpRight, Plus, ArrowRight, FileSearch,
 } from 'lucide-react';
 
 interface DashboardMetrics {
@@ -15,6 +15,7 @@ interface DashboardMetrics {
     myPending: number;
     mySubmittedValue: number;
     myAwardValue: number;
+    myPipelineValue: number;
     myCommissions: number;
     myTasks: number;
     myFollowUps: number;
@@ -25,9 +26,20 @@ interface DashboardMetrics {
         due_date: string;
         status: string;
     }>;
+    recentActivity: Array<{
+        type: 'proposal' | 'document';
+        title: string;
+        sub: string | null;
+        value: number;
+        url: string;
+        at: string | null;
+    }>;
     companyTotalProposals: number;
     companyMonthlySubmissions: number;
     companyMonthlyValue: number;
+    companySubmittedValue: number;
+    companySubmittedCount: number;
+    companyAwardValue: number;
 }
 
 interface Props {
@@ -79,14 +91,14 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
             <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
                 {/* Hero */}
                 <div className="bg-sidebar relative overflow-hidden rounded-3xl p-6 sm:p-8">
-                    <div className="animate-float absolute -right-10 -top-16 h-56 w-56 rounded-full bg-indigo-500/25 blur-3xl" />
+                    <div className="animate-float absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/15 blur-3xl" />
                     <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <p className="text-sm font-medium text-indigo-300">Welcome back 👋</p>
-                            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                            <p className="text-sm font-semibold text-white/85">Welcome back 👋</p>
+                            <h1 className="mt-1 text-2xl font-bold tracking-tight text-white drop-shadow-sm sm:text-3xl">
                                 {auth.user?.name?.split(' ')[0]}
                             </h1>
-                            <p className="mt-1.5 text-sm text-slate-300">Here's what's happening with your proposals today.</p>
+                            <p className="mt-1.5 text-sm text-white/80">Here's what's happening with your proposals today.</p>
                         </div>
                         <div className="flex flex-wrap gap-2.5">
                             <Link
@@ -111,9 +123,11 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
                 <div className="stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
                     <StatCard title="My Submissions" value={metrics.mySubmitted} icon={FileText} color="indigo" href="/proposals" />
                     <StatCard title="My Awards" value={metrics.myAwarded} icon={Trophy} color="green" />
-                    <StatCard title="Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" />
-                    <StatCard title="Commissions (YTD)" value={formatCurrency(metrics.myCommissions)} icon={TrendingUp} color="teal" href="/commissions" />
-                    <StatCard title="Award Value" value={formatCurrency(metrics.myAwardValue)} icon={CheckCircle} color="green" />
+                    <StatCard title="Pipeline Value" value={formatCurrency(metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle="Projected, open proposals" href="/proposals" />
+                    <StatCard title="My Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" />
+                    <StatCard title="Total Submitted Value" value={formatCurrency(metrics.companySubmittedValue)} icon={DollarSign} color="teal" subtitle={`${metrics.companySubmittedCount} submitted · org-wide`} />
+                    <StatCard title="My Earnings (YTD)" value={formatCurrency(metrics.myAwardValue)} icon={CheckCircle} color="green" subtitle="My awards this year" />
+                    <StatCard title="Company Earnings (YTD)" value={formatCurrency(metrics.companyAwardValue)} icon={Trophy} color="green" subtitle="All contracts awarded this year" href="/proposals/board" />
                     <StatCard title="Active Proposals" value={metrics.myPending} icon={Target} color="orange" href="/proposals" />
                     <StatCard title="Open Tasks" value={metrics.myTasks} icon={Clock} color="indigo" />
                     <StatCard title="Follow-ups Due" value={metrics.myFollowUps} icon={AlertCircle} color={metrics.myFollowUps > 0 ? 'red' : 'green'} href="/follow-ups" />
@@ -186,6 +200,36 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Recently Added */}
+                <div className="card-surface">
+                    <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                        <h2 className="font-semibold text-foreground">Recently Added to the Portal</h2>
+                        <Link href="/documents" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                            Documents <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                    </div>
+                    {metrics.recentActivity.length === 0 ? (
+                        <p className="px-5 py-10 text-center text-sm text-muted-foreground">Nothing added yet. Upload a proposal to get started.</p>
+                    ) : (
+                        <div className="divide-y divide-border">
+                            {metrics.recentActivity.map((a, i) => (
+                                <Link key={i} href={a.url} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-secondary/50">
+                                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${a.type === 'proposal' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                                        {a.type === 'proposal' ? <FileText className="h-4 w-4" /> : <FileSearch className="h-4 w-4" />}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium text-foreground">{a.title}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {a.type === 'proposal' ? 'Proposal' : 'Document'}{a.sub ? ` · ${a.sub}` : ''}{a.at ? ` · ${formatDate(a.at)}` : ''}
+                                        </p>
+                                    </div>
+                                    {a.value > 0 && <span className="whitespace-nowrap text-sm font-semibold text-foreground">{formatCurrency(a.value)}</span>}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </AppLayout>

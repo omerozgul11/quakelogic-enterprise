@@ -1,23 +1,45 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
+import { ConfirmDialog } from '@/Components/ui/Modal';
+import { Select } from '@/Components/ui/Select';
+import { CompanyFormModal, EditableCompany } from '@/Components/crm/CompanyFormModal';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { Company, PaginatedResponse } from '@/Types';
-import { Building2, ExternalLink, Search, X, Plus } from 'lucide-react';
+import { Building2, ExternalLink, Search, X, Plus, Pencil, Trash2 } from 'lucide-react';
+
+type CompanyRow = Company & EditableCompany & { contacts_count: number };
 
 interface Props {
-    companies: PaginatedResponse<Company & { contacts_count: number }>;
+    companies: PaginatedResponse<CompanyRow>;
     filters: Record<string, string>;
-    can: { create: boolean };
+    can: { create: boolean; manage: boolean };
 }
 
 const TYPES = ['competitor', 'partner', 'vendor', 'subcontractor', 'teaming_partner'];
 
 export default function CompaniesIndex({ companies, filters, can }: Props) {
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<CompanyRow | null>(null);
+    const [deleting, setDeleting] = useState<CompanyRow | null>(null);
+    const [processing, setProcessing] = useState(false);
+
+    const openAdd = () => { setEditing(null); setFormOpen(true); };
+    const openEdit = (c: CompanyRow) => { setEditing(c); setFormOpen(true); };
+    const confirmDelete = () => {
+        if (!deleting) return;
+        setProcessing(true);
+        router.delete(`/companies/${deleting.id}`, {
+            preserveScroll: true,
+            onFinish: () => { setProcessing(false); setDeleting(null); },
+        });
+    };
+
     const handleFilter = (key: string, value: string) => {
         router.get('/companies', { ...filters, [key]: value || undefined }, { preserveState: true });
     };
@@ -32,7 +54,7 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                     description={`${companies.total} ${companies.total === 1 ? 'company' : 'companies'} in your CRM`}
                     actions={
                         can.create && (
-                            <Button href="/companies/create" icon={Plus}>
+                            <Button onClick={openAdd} icon={Plus}>
                                 Add Company
                             </Button>
                         )
@@ -52,12 +74,13 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                                 className="input input-with-icon"
                             />
                         </div>
-                        <select value={filters.type ?? ''} onChange={e => handleFilter('type', e.target.value)} className="select">
-                            <option value="">All Types</option>
-                            {TYPES.map(t => (
-                                <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                            ))}
-                        </select>
+                        <Select
+                            value={filters.type ?? ''}
+                            onChange={v => handleFilter('type', v)}
+                            options={TYPES.map(t => ({ value: t, label: t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }))}
+                            placeholder="All Types"
+                            className="w-44"
+                        />
                         {Object.keys(filters).length > 0 && (
                             <button onClick={() => router.get('/companies')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear
@@ -87,7 +110,7 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                                                 icon={Building2}
                                                 title="No companies found"
                                                 description="Try adjusting your filters, or add a new company to your CRM."
-                                                action={can.create && <Button href="/companies/create" icon={Plus}>Add Company</Button>}
+                                                action={can.create && <Button onClick={openAdd} icon={Plus}>Add Company</Button>}
                                             />
                                         </td>
                                     </tr>
@@ -104,8 +127,8 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                                             </div>
                                         </td>
                                         <td className="td">
-                                            {company.type && (
-                                                <span className="chip capitalize">{company.type.replace(/_/g, ' ')}</span>
+                                            {company.company_type && (
+                                                <span className="chip capitalize">{company.company_type.replace(/_/g, ' ')}</span>
                                             )}
                                         </td>
                                         <td className="td text-muted-foreground">{company.contacts_count}</td>
@@ -113,9 +136,21 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                                             {[company.city, company.state].filter(Boolean).join(', ') || '—'}
                                         </td>
                                         <td className="td">
-                                            <Link href={`/companies/${company.id}`} className="text-muted-foreground transition-colors hover:text-primary">
-                                                <ExternalLink className="h-4 w-4" />
-                                            </Link>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Link href={`/companies/${company.id}`} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title="View">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                                {can.manage && (
+                                                    <>
+                                                        <button onClick={() => openEdit(company)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" title="Edit">
+                                                            <Pencil className="h-4 w-4" />
+                                                        </button>
+                                                        <button onClick={() => setDeleting(company)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -125,6 +160,18 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                     <Pagination from={companies.from} to={companies.to} total={companies.total} links={companies.links} />
                 </Card>
             </div>
+
+            {formOpen && (
+                <CompanyFormModal key={editing?.id ?? 'new'} open onClose={() => setFormOpen(false)} company={editing} />
+            )}
+            <ConfirmDialog
+                open={!!deleting}
+                onClose={() => setDeleting(null)}
+                onConfirm={confirmDelete}
+                processing={processing}
+                title="Delete company?"
+                message={deleting ? <>This will remove <span className="font-medium text-foreground">{deleting.name}</span> from your CRM. Linked contacts are kept.</> : ''}
+            />
         </AppLayout>
     );
 }

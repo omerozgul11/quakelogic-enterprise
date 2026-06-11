@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Integration;
+use App\Models\SamImport;
+use App\Services\BidSources\SamGov\SamGovImportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -17,7 +19,44 @@ class IntegrationController extends Controller
         $integrations = Integration::where('organization_id', $request->user()->organization_id)
             ->get(['id', 'name', 'type', 'status', 'last_sync_at as last_synced_at', 'created_at']);
 
-        return Inertia::render('Integrations/Index', ['integrations' => $integrations]);
+        $lastImport = SamImport::where('organization_id', $request->user()->organization_id)
+            ->latest()->first();
+
+        return Inertia::render('Integrations/Index', [
+            'integrations' => $integrations,
+            'samGov' => [
+                'connected' => !empty(config('integrations.sam_gov.api_key')),
+                'sync_enabled' => (bool) config('integrations.sam_gov.sync_enabled'),
+                'last_import' => $lastImport?->completed_at?->toIso8601String(),
+                'last_stats' => $lastImport ? [
+                    'imported' => (int) $lastImport->imported_records,
+                    'updated' => (int) $lastImport->updated_records,
+                ] : null,
+            ],
+        ]);
+    }
+
+    public function sync(Request $request, string $type, SamGovImportService $samImport): RedirectResponse
+    {
+        if ($type !== 'sam_gov') {
+            return back()->with('warning', 'Live sync is not available for this integration yet.');
+        }
+
+        if (empty(config('integrations.sam_gov.api_key'))) {
+            return back()->with('error', 'SAM.gov is not connected — no API key is configured.');
+        }
+
+        $filters = $request->validate([
+            'naics_codes' => 'nullable|array',
+            'keywords' => 'nullable|string',
+        ]);
+        $filters['max_pages'] = 2;
+
+        $stats = $samImport->import($request->user()->organization, $filters, $request->user());
+
+        return back()->with('success',
+            "SAM.gov sync complete: {$stats['imported']} new, {$stats['updated']} updated, {$stats['errors']} errors."
+        );
     }
 
     public function store(Request $request): RedirectResponse

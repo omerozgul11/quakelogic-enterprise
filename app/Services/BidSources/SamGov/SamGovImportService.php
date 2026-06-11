@@ -32,52 +32,18 @@ class SamGovImportService
         try {
             $offset = 0;
             $limit = 50;
+            // Safety cap: a broad SAM.gov query can return tens of thousands of
+            // records. Bound a single sync to a sensible number of pages; users
+            // narrow results with NAICS/keyword filters.
+            $maxPages = (int) ($filters['max_pages'] ?? 4);
+            $page = 0;
 
             do {
                 $results = $this->connector->fetchOpportunities($filters, $limit, $offset);
-
-                foreach ($results as $result) {
-                    try {
-                        DB::beginTransaction();
-
-                        $existing = Opportunity::where('organization_id', $organization->id)
-                            ->where('source', 'sam_gov')
-                            ->where('external_id', $result->externalId)
-                            ->first();
-
-                        if ($existing) {
-                            $this->updateOpportunity($existing, $result);
-                            $stats['updated']++;
-                            $action = 'updated';
-                        } else {
-                            $opportunity = $this->createOpportunity($organization, $result);
-                            $stats['imported']++;
-                            $action = 'created';
-                        }
-
-                        $import->items()->create([
-                            'external_id' => $result->externalId,
-                            'opportunity_id' => $existing?->id ?? $opportunity?->id,
-                            'action' => $action,
-                            'raw_data' => $result->rawData,
-                        ]);
-
-                        DB::commit();
-                    } catch (\Exception $e) {
-                        DB::rollBack();
-                        $stats['errors']++;
-                        Log::warning('SAM.gov import item error', ['external_id' => $result->externalId, 'error' => $e->getMessage()]);
-
-                        $import->items()->create([
-                            'external_id' => $result->externalId,
-                            'action' => 'error',
-                            'error_message' => $e->getMessage(),
-                        ]);
-                    }
-                }
-
+                $this->processResults($import, $organization, $results, $stats);
                 $offset += $limit;
-            } while (count($results) === $limit);
+                $page++;
+            } while (count($results) === $limit && $page < $maxPages);
 
             $import->update([
                 'status' => 'completed',
@@ -93,6 +59,78 @@ class SamGovImportService
         }
 
         return $stats;
+    }
+
+    /**
+     * Import a batch of already-fetched results (e.g. from the full-text
+     * search) through the same dedup/upsert path as a regular import.
+     */
+    public function importResults(Organization $organization, array $results, ?User $triggeredBy = null, array $queryParams = []): array
+    {
+        $import = SamImport::create([
+            'organization_id' => $organization->id,
+            'triggered_by' => $triggeredBy?->id,
+            'status' => 'running',
+            'query_params' => $queryParams,
+            'started_at' => now(),
+        ]);
+
+        $stats = ['imported' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => 0];
+        $this->processResults($import, $organization, $results, $stats);
+
+        $import->update([
+            'status' => 'completed',
+            'imported_records' => $stats['imported'],
+            'updated_records' => $stats['updated'],
+            'skipped_records' => $stats['skipped'],
+            'error_records' => $stats['errors'],
+            'completed_at' => now(),
+        ]);
+
+        return $stats;
+    }
+
+    private function processResults(SamImport $import, Organization $organization, array $results, array &$stats): void
+    {
+        foreach ($results as $result) {
+            try {
+                DB::beginTransaction();
+
+                $existing = Opportunity::where('organization_id', $organization->id)
+                    ->where('source', 'sam_gov')
+                    ->where('external_id', $result->externalId)
+                    ->first();
+
+                if ($existing) {
+                    $this->updateOpportunity($existing, $result);
+                    $stats['updated']++;
+                    $action = 'updated';
+                } else {
+                    $opportunity = $this->createOpportunity($organization, $result);
+                    $stats['imported']++;
+                    $action = 'created';
+                }
+
+                $import->items()->create([
+                    'external_id' => $result->externalId,
+                    'opportunity_id' => $existing?->id ?? $opportunity?->id,
+                    'action' => $action,
+                    'raw_data' => $result->rawData,
+                ]);
+
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                $stats['errors']++;
+                Log::warning('SAM.gov import item error', ['external_id' => $result->externalId, 'error' => $e->getMessage()]);
+
+                $import->items()->create([
+                    'external_id' => $result->externalId,
+                    'action' => 'error',
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     private function createOpportunity(Organization $organization, $result): Opportunity
@@ -128,11 +166,13 @@ class SamGovImportService
 
     private function updateOpportunity(Opportunity $opportunity, $result): void
     {
-        $opportunity->update([
+        // Sparse sources (e.g. full-text search) may carry nulls for fields a
+        // previous import already filled — never overwrite data with null.
+        $opportunity->update(array_filter([
             'due_date' => $result->dueDate,
             'estimated_value' => $result->estimatedValue,
             'description' => $result->description,
             'raw_source_data' => $result->rawData,
-        ]);
+        ], fn ($v) => $v !== null));
     }
 }

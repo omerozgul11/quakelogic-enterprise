@@ -3,10 +3,11 @@ import { AppLayout } from '@/Components/layout/AppLayout';
 import { formatCurrency, formatPercent } from '@/Lib/utils';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import {
-    BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { TrendingUp, TrendingDown, Target, Trophy, DollarSign, AlertCircle, Clock } from 'lucide-react';
+import { ChartGradients, ChartTooltip, CHART_COLORS, AXIS_TICK, GRID_STROKE } from '@/Components/ui/ChartKit';
+import { TrendingUp, TrendingDown, Target, Trophy, DollarSign, AlertCircle } from 'lucide-react';
 
 interface ExecutiveMetrics {
     totalProposals: number;
@@ -31,7 +32,7 @@ interface ExecutiveMetrics {
     sourceAnalysis: Record<string, number>;
 }
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
+const COLORS = CHART_COLORS;
 
 function KpiCard({ title, value, subtitle, icon: Icon, trend }: {
     title: string; value: string; subtitle?: string;
@@ -85,7 +86,7 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <KpiCard title="Win Rate" value={formatPercent(metrics.winRate)} subtitle={`${metrics.awarded} won / ${metrics.awarded + metrics.lost} closed`} icon={Trophy} />
                     <KpiCard title="Pipeline Value" value={formatCurrency(metrics.pipelineValue)} subtitle="Active proposals" icon={Target} />
-                    <KpiCard title="Award Value (All Time)" value={formatCurrency(metrics.awardValue)} subtitle="Total contract value awarded" icon={DollarSign} />
+                    <KpiCard title="Earnings (YTD)" value={formatCurrency(metrics.awardValue)} subtitle="Contracts awarded this year" icon={DollarSign} />
                     <KpiCard title="Total Proposals" value={String(metrics.totalProposals)} subtitle="All time" icon={Target} />
                 </div>
 
@@ -102,15 +103,16 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                     {/* Monthly Trend */}
                     <div className="bg-card rounded-xl border border-border p-5">
                         <h2 className="text-lg font-semibold text-foreground mb-4">Proposal Activity (12 Months)</h2>
-                        <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={metrics.monthlyTrend}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                                <YAxis tick={{ fontSize: 11 }} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="submitted" fill="#3B82F6" name="Submitted" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="awarded" fill="#10B981" name="Awarded" radius={[4, 4, 0, 0]} />
+                        <ResponsiveContainer width="100%" height={260}>
+                            <BarChart data={metrics.monthlyTrend} barGap={6}>
+                                <ChartGradients />
+                                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                                <XAxis dataKey="month" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+                                <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                                <Tooltip cursor={{ fill: 'hsl(var(--muted-foreground))', opacity: 0.08 }} content={<ChartTooltip />} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                                <Bar dataKey="submitted" fill="url(#cg-0)" name="Submitted" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                                <Bar dataKey="awarded" fill="url(#cg-2)" name="Awarded" radius={[6, 6, 0, 0]} maxBarSize={26} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -118,12 +120,13 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                     {/* Proposals by Status */}
                     <div className="bg-card rounded-xl border border-border p-5">
                         <h2 className="text-lg font-semibold text-foreground mb-4">Proposals by Status</h2>
-                        <ResponsiveContainer width="100%" height={250}>
+                        <ResponsiveContainer width="100%" height={260}>
                             <PieChart>
-                                <Pie data={statusChartData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
+                                <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={56} outerRadius={88} paddingAngle={2} cornerRadius={4} dataKey="value"
+                                    label={({ name, value }) => `${name}: ${value}`} labelLine={false} stroke="hsl(var(--card))" strokeWidth={2}>
                                     {statusChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                 </Pie>
-                                <Tooltip />
+                                <Tooltip content={<ChartTooltip nameKey="name" />} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>

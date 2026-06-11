@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
     LayoutDashboard, Target, FileText, Shield, Building2,
     Users, Bell, LogOut, Settings, FileSearch, MessageSquare,
-    DollarSign, BarChart3, Puzzle, Sparkles, ShieldCheck,
-    Menu, X, Sun, Moon, ChevronDown,
+    BarChart3, Puzzle, Sparkles, ShieldCheck, KanbanSquare,
+    Menu, X, Sun, Moon, ChevronDown, TrendingUp, Activity, BookOpen,
+    CalendarDays,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { Logo } from '@/Components/ui/Logo';
+import { GlobalSearch } from '@/Components/layout/GlobalSearch';
+import { PwaControls } from '@/Components/layout/PwaControls';
+import { QuakeAiChat } from '@/Components/layout/QuakeAiChat';
+import { HeaderClock } from '@/Components/layout/HeaderClock';
 
 interface NavItem {
     label: string;
@@ -23,11 +28,15 @@ interface NavSection {
 }
 
 const sections: NavSection[] = [
-    { items: [{ label: 'Dashboard', href: '/', icon: LayoutDashboard }] },
+    { items: [
+        { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+        { label: 'Calendar', href: '/calendar', icon: CalendarDays },
+    ] },
     {
         title: 'Pipeline',
         items: [
             { label: 'Opportunities', href: '/opportunities', icon: Target, permission: 'view opportunities' },
+            { label: 'Applications', href: '/proposals/board', icon: KanbanSquare, permission: 'view proposals' },
             { label: 'Capture', href: '/capture', icon: Shield, permission: 'view capture plans' },
             { label: 'Proposals', href: '/proposals', icon: FileText, permission: 'view proposals' },
             { label: 'Documents', href: '/documents', icon: FileSearch, permission: 'view proposals' },
@@ -36,8 +45,7 @@ const sections: NavSection[] = [
     {
         title: 'Relationships',
         items: [
-            { label: 'Agencies', href: '/agencies', icon: Building2, permission: 'view crm' },
-            { label: 'Companies', href: '/companies', icon: Building2, permission: 'view crm' },
+            { label: 'Companies/Agencies', href: '/companies', icon: Building2, permission: 'view crm' },
             { label: 'Contacts', href: '/contacts', icon: Users, permission: 'view crm' },
             { label: 'Follow-Ups', href: '/follow-ups', icon: MessageSquare, permission: 'view follow ups' },
         ],
@@ -45,18 +53,44 @@ const sections: NavSection[] = [
     {
         title: 'Insights',
         items: [
-            { label: 'Commissions', href: '/commissions', icon: DollarSign, permission: 'view own commissions' },
             { label: 'Reports', href: '/reports', icon: BarChart3, permission: 'view dashboards' },
+            { label: 'Team Performance', href: '/reports/users', icon: Users, permission: 'view dashboards' },
+            { label: 'Market Pricing', href: '/market-pricing', icon: TrendingUp, permission: 'view opportunities' },
             { label: 'Ask QuakeAI', href: '/ai', icon: Sparkles, permission: 'use ai assistant' },
             { label: 'Integrations', href: '/integrations', icon: Puzzle, permission: 'manage integrations' },
         ],
     },
+    {
+        title: 'Help',
+        items: [
+            { label: 'User Guide', href: '/guide', icon: BookOpen },
+        ],
+    },
 ];
 
-function isActive(currentUrl: string, href: string): boolean {
-    const path = currentUrl.split('?')[0];
+function matchesHref(path: string, href: string): boolean {
     if (href === '/') return path === '/';
     return path === href || path.startsWith(href + '/');
+}
+
+// All nav destinations, so we can highlight only the most specific match
+// (e.g. /proposals/board highlights "Applications", not also "Proposals").
+const ALL_HREFS = [
+    ...sections.flatMap(s => s.items.map(i => i.href)),
+    '/admin/team',
+    '/admin/activity',
+    '/admin',
+];
+
+function activeHref(currentUrl: string): string | null {
+    const path = currentUrl.split('?')[0];
+    let best: string | null = null;
+    for (const href of ALL_HREFS) {
+        if (matchesHref(path, href) && (!best || href.length > best.length)) {
+            best = href;
+        }
+    }
+    return best;
 }
 
 function useDarkMode(): [boolean, () => void] {
@@ -74,14 +108,90 @@ function useDarkMode(): [boolean, () => void] {
     return [dark, toggle];
 }
 
+const SIDEBAR_MIN = 184;
+const SIDEBAR_MAX = 400;
+const SIDEBAR_DEFAULT = 256;
+
+function useSidebarWidth(): [number, (e: React.MouseEvent) => void, boolean, () => void] {
+    const [width, setWidth] = useState(SIDEBAR_DEFAULT);
+    const [resizing, setResizing] = useState(false);
+    const widthRef = useRef(width);
+
+    useEffect(() => {
+        const saved = Number(localStorage.getItem('sidebar-width'));
+        if (saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX) {
+            setWidth(saved);
+            widthRef.current = saved;
+        }
+    }, []);
+
+    const startResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = widthRef.current;
+        setResizing(true);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const onMove = (ev: MouseEvent) => {
+            const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + ev.clientX - startX));
+            widthRef.current = w;
+            setWidth(w);
+        };
+        const onUp = () => {
+            setResizing(false);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            try { localStorage.setItem('sidebar-width', String(widthRef.current)); } catch { /* ignore */ }
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    };
+
+    const reset = () => {
+        widthRef.current = SIDEBAR_DEFAULT;
+        setWidth(SIDEBAR_DEFAULT);
+        try { localStorage.setItem('sidebar-width', String(SIDEBAR_DEFAULT)); } catch { /* ignore */ }
+    };
+
+    return [width, startResize, resizing, reset];
+}
+
+function timeAgo(iso: string | null): string {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return days < 7 ? `${days}d ago` : new Date(iso).toLocaleDateString();
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
     const page = usePage<SharedProps>();
-    const { auth, flash, notifications_count } = page.props;
+    const { auth, flash, notifications_count, notifications } = page.props;
     const currentUrl = page.url;
+    const matchedHref = activeHref(currentUrl);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [notifOpen, setNotifOpen] = useState(false);
     const [dark, toggleDark] = useDarkMode();
+    const [sidebarWidth, startResize, resizing, resetSidebarWidth] = useSidebarWidth();
     const user = auth.user;
+    const recentNotifications = notifications ?? [];
+
+    const openNotification = (n: SharedProps['notifications'][number]) => {
+        setNotifOpen(false);
+        if (n.url) {
+            router.post(`/notifications/${n.id}/read`, { follow: true }, { preserveScroll: true });
+        } else if (!n.read) {
+            router.post(`/notifications/${n.id}/read`, {}, { preserveScroll: true });
+        }
+    };
+    const markAllRead = () => router.post('/notifications/read-all', {}, { preserveScroll: true });
 
     const hasPermission = (permission?: string) =>
         !permission || (user?.permissions?.includes(permission) ?? false);
@@ -108,14 +218,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     return (
                         <div key={si}>
                             {section.title && (
-                                <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-muted-foreground/70">
+                                <p className="truncate px-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
                                     {section.title}
                                 </p>
                             )}
                             <div className="space-y-0.5">
                                 {items.map(item => {
                                     const Icon = item.icon;
-                                    const active = isActive(currentUrl, item.href);
+                                    const active = item.href === matchedHref;
                                     return (
                                         <Link
                                             key={item.href}
@@ -128,8 +238,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                                             )}
                                         >
-                                            <Icon className={cn('h-[18px] w-[18px]', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
-                                            {item.label}
+                                            <Icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
+                                            <span className="min-w-0 truncate" title={item.label}>{item.label}</span>
                                         </Link>
                                     );
                                 })}
@@ -140,20 +250,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                 {isSuperAdmin && (
                     <div>
-                        <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.13em] text-muted-foreground/70">System</p>
-                        <Link
-                            href="/admin"
-                            onClick={() => mobile && setSidebarOpen(false)}
-                            className={cn(
-                                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                                isActive(currentUrl, '/admin')
-                                    ? 'bg-brand-gradient text-white shadow-sm'
-                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                            )}
-                        >
-                            <Settings className={cn('h-[18px] w-[18px]', isActive(currentUrl, '/admin') ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
-                            Admin
-                        </Link>
+                        <p className="px-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">System</p>
+                        <div className="space-y-0.5">
+                            {[
+                                { label: 'Team Activity', href: '/admin/team', icon: BarChart3 },
+                                { label: 'Activity Log', href: '/admin/activity', icon: Activity },
+                                { label: 'Admin', href: '/admin', icon: Settings },
+                            ].map(item => {
+                                const Icon = item.icon;
+                                const active = item.href === matchedHref;
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={() => mobile && setSidebarOpen(false)}
+                                        className={cn(
+                                            'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                                            active ? 'bg-brand-gradient text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                                        )}
+                                    >
+                                        <Icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
+                                        <span className="min-w-0 truncate" title={item.label}>{item.label}</span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
             </nav>
@@ -191,10 +312,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <SidebarBody mobile />
             </aside>
 
-            {/* Desktop sidebar */}
-            <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block">
+            {/* Desktop sidebar — drag the right edge to resize */}
+            <aside className="hidden shrink-0 border-r border-border bg-card lg:block" style={{ width: sidebarWidth }}>
                 <div className="sticky top-0 h-screen">
                     <SidebarBody />
+                    <div
+                        onMouseDown={startResize}
+                        onDoubleClick={resetSidebarWidth}
+                        title="Drag to resize · double-click to reset"
+                        className={cn(
+                            'absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize transition-colors',
+                            resizing ? 'bg-primary/50' : 'hover:bg-primary/30',
+                        )}
+                    />
                 </div>
             </aside>
 
@@ -205,7 +335,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <Menu className="h-6 w-6 text-muted-foreground" />
                     </button>
 
+                    <GlobalSearch />
+
                     <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+                        <HeaderClock />
+                        <PwaControls />
+
+                        {hasPermission('use ai assistant') && (
+                            <QuakeAiChat active={matchedHref === '/ai'} />
+                        )}
+
                         <button
                             onClick={toggleDark}
                             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -214,14 +353,63 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             {dark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
                         </button>
 
-                        <button className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" title="Notifications">
-                            <Bell className="h-[18px] w-[18px]" />
-                            {notifications_count > 0 && (
-                                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white ring-2 ring-card">
-                                    {notifications_count > 9 ? '9+' : notifications_count}
-                                </span>
+                        <div className="relative">
+                            <button
+                                onClick={() => setNotifOpen(v => !v)}
+                                className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                                title="Notifications"
+                            >
+                                <Bell className="h-[18px] w-[18px]" />
+                                {notifications_count > 0 && (
+                                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white ring-2 ring-card">
+                                        {notifications_count > 9 ? '9+' : notifications_count}
+                                    </span>
+                                )}
+                            </button>
+
+                            {notifOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
+                                    <div className="absolute right-0 top-11 z-20 w-80 overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                                            <p className="text-sm font-semibold text-foreground">Notifications</p>
+                                            {notifications_count > 0 && (
+                                                <button onClick={markAllRead} className="text-xs font-medium text-primary hover:underline">Mark all read</button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto">
+                                            {recentNotifications.length === 0 ? (
+                                                <div className="px-4 py-8 text-center">
+                                                    <Bell className="mx-auto mb-2 h-6 w-6 text-muted-foreground/50" />
+                                                    <p className="text-sm text-muted-foreground">You're all caught up</p>
+                                                </div>
+                                            ) : (
+                                                recentNotifications.map(n => (
+                                                    <button
+                                                        key={n.id}
+                                                        onClick={() => openNotification(n)}
+                                                        className={cn(
+                                                            'flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-secondary last:border-0',
+                                                            !n.read && 'bg-primary/[0.04]'
+                                                        )}
+                                                    >
+                                                        <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', n.read ? 'bg-transparent' : 'bg-primary')} />
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block truncate text-sm font-medium text-foreground">{n.title}</span>
+                                                            {n.message && <span className="block truncate text-xs text-muted-foreground">{n.message}</span>}
+                                                            <span className="mt-0.5 block text-[11px] text-muted-foreground/70">{timeAgo(n.created_at)}</span>
+                                                        </span>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                        <Link href="/notifications" onClick={() => setNotifOpen(false)} className="block border-t border-border px-4 py-2.5 text-center text-sm font-medium text-primary transition-colors hover:bg-secondary">
+                                            View all
+                                        </Link>
+                                    </div>
+                                </>
                             )}
-                        </button>
+                        </div>
 
                         <div className="relative">
                             <button
@@ -277,8 +465,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </main>
 
                 <footer className="border-t border-border py-4 text-center text-xs text-muted-foreground">
-                    QuakeLogic Enterprise — © {new Date().getFullYear()}{' '}
-                    <a href="https://quakelogic.net" target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">QuakeLogic Inc.</a>
+                    <Link href="/legal" className="transition-colors hover:text-foreground hover:underline" title="Terms, copyright & legal notice">
+                        QuakeLogic Enterprise — © {new Date().getFullYear()} QuakeLogic Inc.
+                    </Link>
                 </footer>
             </div>
         </div>

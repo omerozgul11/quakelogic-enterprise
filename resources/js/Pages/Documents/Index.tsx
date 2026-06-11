@@ -3,8 +3,10 @@ import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
+import { FilePreviewModal, PreviewFile } from '@/Components/ui/FilePreviewModal';
 import { formatDate } from '@/Lib/utils';
-import { FileText, FileSpreadsheet, FileImage, File, Download } from 'lucide-react';
+import { FileText, FileSpreadsheet, FileImage, File, Download, Eye } from 'lucide-react';
+import { useState } from 'react';
 
 interface ProposalFile {
     id: number;
@@ -39,6 +41,7 @@ const MIME_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
 };
 
 export default function DocumentsIndex({ files }: Props) {
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
     return (
         <AppLayout>
             <Head title="Documents" />
@@ -106,10 +109,25 @@ export default function DocumentsIndex({ files }: Props) {
                                             <td className="td text-muted-foreground">{file.uploaded_by_user?.name ?? '—'}</td>
                                             <td className="td">
                                                 {file.proposal && (
-                                                    <a href={`/proposals/${file.proposal.id}/files/${file.id}/download`}
-                                                        className="text-muted-foreground transition-colors hover:text-primary">
-                                                        <Download className="h-4 w-4" />
-                                                    </a>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreview({
+                                                                name: file.display_name,
+                                                                mimeType: file.mime_type,
+                                                                previewUrl: `/proposals/${file.proposal!.id}/files/${file.id}/preview`,
+                                                                downloadUrl: `/proposals/${file.proposal!.id}/files/${file.id}/download`,
+                                                            })}
+                                                            title="Preview"
+                                                            className="text-muted-foreground transition-colors hover:text-primary"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </button>
+                                                        <a href={`/proposals/${file.proposal.id}/files/${file.id}/download`} title="Download"
+                                                            className="text-muted-foreground transition-colors hover:text-primary">
+                                                            <Download className="h-4 w-4" />
+                                                        </a>
+                                                    </div>
                                                 )}
                                             </td>
                                         </tr>
@@ -120,6 +138,7 @@ export default function DocumentsIndex({ files }: Props) {
                     </div>
                 </Card>
             </div>
+            <FilePreviewModal file={preview} onClose={() => setPreview(null)} />
         </AppLayout>
     );
 }

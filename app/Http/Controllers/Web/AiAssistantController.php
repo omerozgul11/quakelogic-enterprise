@@ -7,6 +7,7 @@ use App\Models\AiAnalysis;
 use App\Models\Opportunity;
 use App\Models\ProposalSubmission;
 use App\Services\Ai\AiProviderInterface;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,6 +16,38 @@ use Inertia\Response;
 class AiAssistantController extends Controller
 {
     public function __construct(private readonly AiProviderInterface $ai) {}
+
+    public function chat(Request $request): JsonResponse
+    {
+        $this->authorize('use ai assistant');
+
+        $validated = $request->validate([
+            'message' => 'required|string|max:2000',
+            'history' => 'nullable|array',
+            'history.*.role' => 'required|string|in:user,assistant',
+            'history.*.content' => 'required|string',
+        ]);
+
+        $system = "You are QuakeAI, the assistant for QuakeLogic's government bid and proposal platform. "
+            . 'Be concise, helpful, and professional. Help with proposals, opportunities, agencies, contacts and deadlines.';
+
+        $conversation = '';
+        foreach (array_slice($validated['history'] ?? [], -8) as $m) {
+            $conversation .= ($m['role'] === 'user' ? 'User: ' : 'Assistant: ') . $m['content'] . "\n";
+        }
+        $conversation .= 'User: ' . $validated['message'];
+
+        try {
+            $reply = $this->ai->complete($system, $conversation);
+        } catch (\Throwable $e) {
+            return response()->json(['reply' => 'Sorry — I had trouble responding just now. Please try again.'], 200);
+        }
+
+        return response()->json([
+            'reply' => $reply,
+            'provider' => $this->ai->getName(),
+        ]);
+    }
 
     public function index(Request $request): Response
     {
