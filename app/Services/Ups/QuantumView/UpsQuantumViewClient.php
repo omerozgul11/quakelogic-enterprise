@@ -42,7 +42,7 @@ class UpsQuantumViewClient implements QuantumViewClient
 
             $response = Http::withToken($this->accessToken())
                 ->acceptJson()
-                ->post(rtrim($this->baseUrl, '/').'/quantumview/v3/events', $body);
+                ->post(rtrim($this->baseUrl, '/').'/api/quantumview/v3/events', $body);
 
             if ($response->failed()) {
                 throw new TrackingException("Quantum View request failed ({$response->status()}).");
