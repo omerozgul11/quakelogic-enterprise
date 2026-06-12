@@ -25,7 +25,7 @@ interface Props {
  */
 export function Select({ value, options, onChange, placeholder, className, size = 'md' }: Props) {
     const [open, setOpen] = useState(false);
-    const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+    const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number; origin: 'top' | 'bottom' } | null>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -38,8 +38,9 @@ export function Select({ value, options, onChange, placeholder, className, size 
         const below = window.innerHeight - rect.bottom - 12;
         const maxHeight = Math.min(288, Math.max(below, 160));
         // Flip above the button when there's clearly more room there.
-        const top = below < 160 && rect.top > 300 ? rect.top - maxHeight - 4 : rect.bottom + 4;
-        setPos({ top, left: rect.left, width: rect.width, maxHeight });
+        const flip = below < 160 && rect.top > 300;
+        const top = flip ? rect.top - maxHeight - 4 : rect.bottom + 4;
+        setPos({ top, left: rect.left, width: rect.width, maxHeight, origin: flip ? 'bottom' : 'top' });
         setOpen(true);
     };
 
@@ -93,7 +94,10 @@ export function Select({ value, options, onChange, placeholder, className, size 
                     <div className="fixed inset-0 z-[129]" onClick={() => setOpen(false)} />
                     <div
                         ref={menuRef}
-                        className="animate-scale-in fixed z-[130] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10"
+                        className={cn(
+                            'animate-dropdown fixed z-[130] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10',
+                            pos.origin === 'bottom' ? 'origin-bottom' : 'origin-top',
+                        )}
                         style={{ top: pos.top, left: pos.left, minWidth: pos.width, maxHeight: pos.maxHeight }}
                     >
                         {items.map(o => {

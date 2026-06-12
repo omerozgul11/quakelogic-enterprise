@@ -22,7 +22,7 @@ class MonthlyProposalFollowUpCommand extends Command
     protected $description = 'Create (and optionally send) a monthly status follow-up for each open proposal.';
 
     /** Proposal statuses that are awaiting a decision and warrant a monthly nudge. */
-    private const OPEN = ['submitted', 'pending', 'clarification_requested', 'negotiation', 'under_evaluation'];
+    private const OPEN = ['submitted', 'pending', 'clarification_requested'];
 
     public function handle(MailGatewayFactory $gateways): int
     {

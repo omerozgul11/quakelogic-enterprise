@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title inertia>{{ config('app.name', 'QuakeLogic Enterprise') }}</title>
+    <title inertia>{{ config('app.name', 'QuakeLogic Proposals') }}</title>
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">

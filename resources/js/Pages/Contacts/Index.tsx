@@ -48,7 +48,7 @@ export default function ContactsIndex({ contacts, filters, companies, can }: Pro
     return (
         <AppLayout>
             <Head title="Contacts" />
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
                 <PageHeader
                     icon={Users}
                     title="Contacts"
@@ -64,8 +64,8 @@ export default function ContactsIndex({ contacts, filters, companies, can }: Pro
 
                 {/* Filters */}
                 <Card className="mb-4 p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative min-w-[18rem] flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
                             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 type="text"
@@ -90,8 +90,8 @@ export default function ContactsIndex({ contacts, filters, companies, can }: Pro
                             <thead className="border-b border-border bg-secondary/40">
                                 <tr>
                                     <th className="th">Name</th>
-                                    <th className="th">Title</th>
-                                    <th className="th">Organization</th>
+                                    <th className="th hidden sm:table-cell">Title</th>
+                                    <th className="th hidden md:table-cell">Organization</th>
                                     <th className="th">Contact</th>
                                     <th className="th" />
                                 </tr>
@@ -129,8 +129,8 @@ export default function ContactsIndex({ contacts, filters, companies, can }: Pro
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="td text-muted-foreground">{contact.title ?? '—'}</td>
-                                            <td className="td text-muted-foreground">
+                                            <td className="td hidden text-muted-foreground sm:table-cell">{contact.title ?? '—'}</td>
+                                            <td className="td hidden text-muted-foreground md:table-cell">
                                                 {contact.agency?.name ?? contact.company?.name ?? '—'}
                                             </td>
                                             <td className="td">

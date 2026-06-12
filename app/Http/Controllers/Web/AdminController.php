@@ -8,6 +8,7 @@ use App\Models\FollowUp;
 use App\Models\Opportunity;
 use App\Models\ProposalSubmission;
 use App\Models\User;
+use App\Services\Mail\MailboxConnectionService;
 use App\Support\Currency;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,12 +34,21 @@ class AdminController extends Controller implements HasMiddleware
         return ['role:Super Admin'];
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request, MailboxConnectionService $mailboxes): Response
     {
         $users = User::where('organization_id', $request->user()->organization_id)
-            ->with('roles')
+            ->with('roles', 'emailAccount')
             ->orderBy('name')
-            ->paginate(25);
+            ->paginate(25)
+            ->through(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'is_active' => $u->is_active,
+                'created_at' => $u->created_at?->toIso8601String(),
+                'roles' => $u->roles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values(),
+                'mailbox' => $mailboxes->state($u->emailAccount),
+            ]);
 
         $roles = Role::orderBy('name')->get(['id', 'name']);
 
@@ -48,9 +58,9 @@ class AdminController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function users(Request $request): Response
+    public function users(Request $request, MailboxConnectionService $mailboxes): Response
     {
-        return $this->index($request);
+        return $this->index($request, $mailboxes);
     }
 
     /**
@@ -60,8 +70,8 @@ class AdminController extends Controller implements HasMiddleware
     {
         $orgId = $request->user()->organization_id;
 
-        $active = ['draft', 'in_progress', 'under_review'];
-        $submitted = ['submitted', 'pending', 'clarification_requested', 'negotiation', 'awarded', 'completed', 'lost'];
+        $active = ['in_progress'];
+        $submitted = ['submitted', 'pending', 'clarification_requested', 'awarded', 'completed', 'lost'];
         $won = \App\Enums\ProposalStatus::wonValues();
 
         $users = User::where('organization_id', $orgId)
@@ -209,7 +219,15 @@ class AdminController extends Controller implements HasMiddleware
 
         $proposalsCreated = $by($range(ProposalSubmission::query(), 'created_at'), 'created_by');
         $proposalsSubmitted = $by($range(ProposalSubmission::whereNotNull('submission_date'), 'submission_date'), 'owner_id');
-        $followups = $by($range(FollowUp::query(), 'created_at'), 'created_by');
+
+        // Workload distribution: proposals a user was *given* (owns but someone
+        // else created — i.e. an admin assigned it) vs. *picked up* (created and
+        // owns themselves). Counted by the owner over the period.
+        $pickedUp = $by($range(ProposalSubmission::whereColumn('created_by', 'owner_id'), 'created_at'), 'owner_id');
+        $assigned = $by(
+            $range(ProposalSubmission::query()->where(fn ($q) => $q->whereColumn('created_by', '!=', 'owner_id')->orWhereNull('created_by')), 'created_at'),
+            'owner_id'
+        );
 
         // Same activity, but in dollars: value of proposals created / submitted /
         // awarded in the period, per user.
@@ -224,17 +242,18 @@ class AdminController extends Controller implements HasMiddleware
         $team = User::where('organization_id', $orgId)
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(function ($u) use ($proposalsCreated, $proposalsSubmitted, $followups, $valueCreated, $valueSubmitted, $valueAwarded) {
+            ->map(function ($u) use ($proposalsCreated, $proposalsSubmitted, $assigned, $pickedUp, $valueCreated, $valueSubmitted, $valueAwarded) {
                 $row = [
                     'user' => $u->name,
                     'proposals' => (int) ($proposalsCreated[$u->id] ?? 0),
                     'submitted' => (int) ($proposalsSubmitted[$u->id] ?? 0),
-                    'followups' => (int) ($followups[$u->id] ?? 0),
+                    'assigned' => (int) ($assigned[$u->id] ?? 0),
+                    'picked_up' => (int) ($pickedUp[$u->id] ?? 0),
                     'value_created' => (float) ($valueCreated[$u->id] ?? 0),
                     'value_submitted' => (float) ($valueSubmitted[$u->id] ?? 0),
                     'value_awarded' => (float) ($valueAwarded[$u->id] ?? 0),
                 ];
-                $row['total'] = $row['proposals'] + $row['submitted'] + $row['followups'];
+                $row['total'] = $row['proposals'] + $row['submitted'];
                 return $row;
             })
             ->sortByDesc('total')
@@ -248,7 +267,8 @@ class AdminController extends Controller implements HasMiddleware
             'totals' => [
                 'proposals' => array_sum($proposalsCreated),
                 'submitted' => array_sum($proposalsSubmitted),
-                'followups' => array_sum($followups),
+                'assigned' => array_sum($assigned),
+                'picked_up' => array_sum($pickedUp),
                 'value_created' => (float) array_sum($valueCreated),
                 'value_submitted' => (float) array_sum($valueSubmitted),
                 'value_awarded' => (float) array_sum($valueAwarded),
@@ -303,6 +323,48 @@ class AdminController extends Controller implements HasMiddleware
         $user->syncRoles([$roleName]);
 
         return back()->with('success', 'User updated.');
+    }
+
+    /**
+     * Connect (or update) a teammate's work email on their behalf. Mirrors the
+     * self-service Settings flow, but an admin supplies the user's SMTP host and
+     * app password so they don't have to set it up themselves.
+     */
+    public function connectUserMailbox(Request $request, User $user, MailboxConnectionService $mailboxes): RedirectResponse
+    {
+        abort_unless($user->organization_id === $request->user()->organization_id, 403);
+
+        $validated = $request->validate(\App\Http\Controllers\Web\SettingsController::mailboxRules());
+
+        $account = $mailboxes->connect($user, $validated);
+        if ($account === null) {
+            return back()->withErrors(['smtp_password' => "An app password is required to connect {$user->name}'s email."]);
+        }
+
+        return back()->with('success', "Work email saved for {$user->name}. Send a test email to confirm it can send.");
+    }
+
+    /** Send a verification email to the teammate's own address. */
+    public function testUserMailbox(Request $request, User $user, MailboxConnectionService $mailboxes): RedirectResponse
+    {
+        abort_unless($user->organization_id === $request->user()->organization_id, 403);
+
+        if (!$mailboxes->mailbox($user)?->isConnected()) {
+            return back()->with('error', "Connect {$user->name}'s work email first.");
+        }
+
+        return $mailboxes->test($user, $request->user()->name)
+            ? back()->with('success', "Test email sent to {$user->email}.")
+            : back()->with('error', 'Could not send — double-check the host, port, encryption and app password.');
+    }
+
+    public function disconnectUserMailbox(Request $request, User $user, MailboxConnectionService $mailboxes): RedirectResponse
+    {
+        abort_unless($user->organization_id === $request->user()->organization_id, 403);
+
+        $mailboxes->disconnect($user);
+
+        return back()->with('success', "Work email disconnected for {$user->name}.");
     }
 
     /**

@@ -45,7 +45,7 @@ export function ExportMenu({ urlTemplate, label = 'Export' }: Props) {
             {open && (
                 <>
                     <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-                    <div className="animate-scale-in absolute right-0 top-12 z-20 w-64 overflow-hidden rounded-xl border border-border bg-card py-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                    <div className="animate-dropdown origin-top-right absolute right-0 top-12 z-20 w-64 overflow-hidden rounded-xl border border-border bg-card py-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                         <p className="px-4 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">
                             Download as
                         </p>

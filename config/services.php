@@ -51,4 +51,15 @@ return [
         'redirect' => env('MICROSOFT_REDIRECT_URI'),
     ],
 
+    /*
+    | Shipments — UPS Tracking API. When sync_enabled is false (default) or
+    | credentials are missing, the FakeUpsTrackingClient is bound (no API calls).
+    */
+    'ups' => [
+        'sync_enabled' => env('UPS_SYNC_ENABLED', false),
+        'client_id' => env('UPS_CLIENT_ID'),
+        'client_secret' => env('UPS_CLIENT_SECRET'),
+        'base_url' => env('UPS_BASE_URL', 'https://onlinetools.ups.com'),
+    ],
+
 ];

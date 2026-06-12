@@ -16,8 +16,11 @@ interface Props {
         solicitation_number: string | null;
         company: string;
         proposal_value: string | number | null;
+        award_value: string | number | null;
         currency: string;
         due_date: string | null;
+        submission_date: string | null;
+        award_date: string | null;
         status: string;
         owner_id: number | null;
         owner_name: string | null;
@@ -37,8 +40,6 @@ const SUBMISSION_METHODS: Array<{ value: string; label: string }> = [
     { value: 'email', label: 'Email' },
     { value: 'portal', label: 'Portal' },
     { value: 'mail', label: 'Mail' },
-    { value: 'fax', label: 'Fax' },
-    { value: 'hand_delivery', label: 'Hand delivery' },
 ];
 
 export default function ProposalEdit({ proposal, users, currencies, statusOptions, isAdmin }: Props) {
@@ -47,15 +48,18 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
         solicitation_number: proposal.solicitation_number ?? '',
         company: proposal.company ?? '',
         proposal_value: proposal.proposal_value != null ? String(proposal.proposal_value) : '',
+        award_value: proposal.award_value != null ? String(proposal.award_value) : '',
         currency: proposal.currency ?? 'USD',
         status: proposal.status ?? '',
         due_date: proposal.due_date ?? '',
+        submission_date: proposal.submission_date ?? '',
+        award_date: proposal.award_date ?? '',
         owner_id: proposal.owner_id ? String(proposal.owner_id) : '',
         team_member_ids: proposal.team_member_ids ?? [],
         scope_summary: proposal.scope_summary ?? '',
         description: proposal.description ?? '',
         notes: proposal.notes ?? '',
-        submission_methods: proposal.submission_methods ?? [],
+        submission_methods: (proposal.submission_methods ?? []).filter(m => SUBMISSION_METHODS.some(s => s.value === m)),
     });
 
     const ownerId = Number(data.owner_id);
@@ -126,8 +130,23 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
                                     {errors.proposal_value && <p className="mt-1 text-xs text-destructive">{errors.proposal_value}</p>}
                                 </div>
                                 <div>
+                                    <label className="label">Award Value ({symbol})</label>
+                                    <input type="number" value={data.award_value} onChange={e => setData('award_value', e.target.value)} className="input" min="0" step="0.01" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                <div>
                                     <label className="label">Due Date</label>
                                     <input type="date" value={data.due_date} onChange={e => setData('due_date', e.target.value)} className="input" />
+                                </div>
+                                <div>
+                                    <label className="label">Submission Date</label>
+                                    <input type="date" value={data.submission_date} onChange={e => setData('submission_date', e.target.value)} className="input" />
+                                </div>
+                                <div>
+                                    <label className="label">Award Date</label>
+                                    <input type="date" value={data.award_date} onChange={e => setData('award_date', e.target.value)} className="input" />
                                 </div>
                             </div>
 
@@ -139,7 +158,7 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
                                     options={statusOptions.map(s => ({ value: s.value, label: s.label }))}
                                     className="w-full sm:w-72"
                                 />
-                                <p className="mt-1 text-xs text-muted-foreground">Only the statuses you can move to next are shown.</p>
+                                <p className="mt-1 text-xs text-muted-foreground">You can set the status to any stage.</p>
                                 {errors.status && <p className="mt-1 text-xs text-destructive">{errors.status}</p>}
                             </div>
 

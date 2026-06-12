@@ -12,4 +12,15 @@ return [
     | populated either way.
     */
     'monthly_send_enabled' => env('FOLLOWUPS_MONTHLY_SEND', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Daily opportunity digest emails
+    |--------------------------------------------------------------------------
+    | When true, `inbox:opportunity-digest` emails each user a morning summary
+    | of the opportunities matching their personal keywords. Left OFF until a
+    | work mailbox is connected — the digest still lands in the in-app Inbox and
+    | notifications regardless of this flag.
+    */
+    'digest_send_enabled' => env('FOLLOWUPS_DIGEST_SEND', false),
 ];

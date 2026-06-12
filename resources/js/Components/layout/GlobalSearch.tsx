@@ -79,7 +79,7 @@ export function GlobalSearch() {
                 </button>
             )}
             {open && q.trim().length >= 2 && (
-                <div className="absolute left-0 right-0 top-11 z-40 max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                <div className="animate-dropdown origin-top absolute left-0 right-0 top-11 z-40 max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                     {loading && !hasResults && <p className="px-4 py-3 text-sm text-muted-foreground">Searching…</p>}
                     {!loading && !hasResults && <p className="px-4 py-3 text-sm text-muted-foreground">No results for “{q}”.</p>}
                     {groups.map(g => {

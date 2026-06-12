@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Web\AiAssistantController;
 use App\Http\Controllers\Web\CalendarController;
-use App\Http\Controllers\Web\CaptureController;
 use App\Http\Controllers\Web\CommissionController;
 use App\Http\Controllers\Web\CrmController;
 use App\Http\Controllers\Web\DashboardController;
@@ -38,6 +37,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Calendar (auto-populated from proposals + opportunities)
     Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
 
+    // Shipments — UPS tracking for mailed proposals (gated by `access shipments`).
+    Route::prefix('shipments')->name('shipments.')->middleware('permission:access shipments')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'dashboard'])->name('dashboard');
+        Route::get('/carriers', [\App\Http\Controllers\Web\CarriersController::class, 'index'])->name('carriers');
+        Route::prefix('mailings')->name('mailings.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Web\MailingController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\Web\MailingController::class, 'store'])->name('store');
+            Route::get('/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'show'])->name('show');
+            Route::post('/{ulid}/refresh', [\App\Http\Controllers\Web\MailingController::class, 'refresh'])->name('refresh');
+        });
+    });
+
     // Opportunities
     Route::prefix('opportunities')->name('opportunities.')->group(function () {
         Route::get('/', [OpportunityController::class, 'index'])->name('index');
@@ -51,6 +63,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/{opportunity}', [OpportunityController::class, 'update'])->name('update');
         Route::delete('/{opportunity}', [OpportunityController::class, 'destroy'])->name('destroy');
         Route::post('/{opportunity}/pursue', [OpportunityController::class, 'pursue'])->name('pursue');
+        Route::post('/{opportunity}/save', [OpportunityController::class, 'toggleSave'])->name('save');
+        // Solicitation documents pulled live from the SAM.gov record.
+        Route::get('/{opportunity}/documents/{index}', [OpportunityController::class, 'document'])->whereNumber('index')->name('documents.show');
         Route::post('/import/sam-gov', [OpportunityController::class, 'importSamGov'])->name('import.sam-gov');
     });
 
@@ -73,15 +88,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{proposalSubmission}/files/{file}', [DocumentController::class, 'destroyProposalFile'])->name('files.destroy');
         Route::get('/{proposalSubmission}/files/{file}/download', [DocumentController::class, 'downloadProposalFile'])->name('files.download');
         Route::get('/{proposalSubmission}/files/{file}/preview', [DocumentController::class, 'previewProposalFile'])->name('files.preview');
-    });
-
-    // Capture
-    Route::prefix('capture')->name('capture.')->group(function () {
-        Route::get('/', [CaptureController::class, 'index'])->name('index');
-        Route::post('/', [CaptureController::class, 'store'])->name('store');
-        Route::get('/{capturePlan}', [CaptureController::class, 'show'])->name('show');
-        Route::put('/{capturePlan}', [CaptureController::class, 'update'])->name('update');
-        Route::post('/{capturePlan}/transition', [CaptureController::class, 'transition'])->name('transition');
+        // Solicitation documents pulled live from the linked SAM.gov opportunity.
+        Route::get('/{proposalSubmission}/sam-documents/{index}', [DocumentController::class, 'samDocument'])->whereNumber('index')->name('sam-documents.show');
+        Route::post('/{proposalSubmission}/sam-documents/{index}/extract', [DocumentController::class, 'extractSamDocument'])->whereNumber('index')->name('sam-documents.extract');
     });
 
     // Documents
@@ -182,6 +191,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/users', [AdminController::class, 'storeUser'])->name('users.store');
         Route::match(['put', 'patch'], '/users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
         Route::delete('/users/{user}', [AdminController::class, 'deleteUser'])->name('users.delete');
+        // Admin-managed work email (SMTP) for a teammate.
+        Route::match(['put', 'patch', 'post'], '/users/{user}/mailbox', [AdminController::class, 'connectUserMailbox'])->name('users.mailbox');
+        Route::post('/users/{user}/mailbox/test', [AdminController::class, 'testUserMailbox'])->name('users.mailbox.test');
+        Route::delete('/users/{user}/mailbox', [AdminController::class, 'disconnectUserMailbox'])->name('users.mailbox.disconnect');
         Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('audit-logs');
     });
 
@@ -193,5 +206,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::match(['put', 'patch', 'post'], '/profile', [SettingsController::class, 'updateProfile'])->name('profile');
         Route::match(['put', 'patch', 'post'], '/password', [SettingsController::class, 'updatePassword'])->name('password');
         Route::match(['put', 'patch', 'post'], '/preferences', [SettingsController::class, 'updatePreferences'])->name('preferences');
+        // Per-user work email (SMTP) connection.
+        Route::match(['put', 'patch', 'post'], '/mailbox', [SettingsController::class, 'connectMailbox'])->name('mailbox');
+        Route::post('/mailbox/test', [SettingsController::class, 'testMailbox'])->name('mailbox.test');
+        Route::delete('/mailbox', [SettingsController::class, 'disconnectMailbox'])->name('mailbox.disconnect');
     });
 });

@@ -31,6 +31,7 @@ class FollowUp extends Model
 
     public function organization(): BelongsTo { return $this->belongsTo(Organization::class); }
     public function assignedTo(): BelongsTo { return $this->belongsTo(User::class, 'assigned_to'); }
+    public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function proposal(): BelongsTo { return $this->belongsTo(ProposalSubmission::class, 'proposal_submission_id'); }
     public function opportunity(): BelongsTo { return $this->belongsTo(Opportunity::class); }
     public function contact(): BelongsTo { return $this->belongsTo(Contact::class); }

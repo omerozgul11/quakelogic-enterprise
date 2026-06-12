@@ -5,21 +5,25 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
 import { formatCurrency, formatDate, sourceLabel } from '@/Lib/utils';
-import { Opportunity, CapturePlan } from '@/Types';
-import { ArrowLeft, Edit, Target, Building, ExternalLink, Plus, Rocket, Users, Mail, Phone } from 'lucide-react';
+import { Opportunity } from '@/Types';
+import { ArrowLeft, Edit, Target, Building, ExternalLink, Rocket, Users, Mail, Phone, FileText, Eye, Download } from 'lucide-react';
+import { FilePreviewModal, PreviewFile } from '@/Components/ui/FilePreviewModal';
+import { useState } from 'react';
 
 interface OppContact { id: number; name: string; title: string | null; email: string | null; phone: string | null }
+
+interface SamDocument { index: number; name: string; preview_url: string; download_url: string }
 
 interface Props {
     opportunity: Opportunity & {
         company?: { id: number; name: string } | null;
-        capture_plan?: CapturePlan;
         assignments?: Array<{ id: number; user: { id: number; name: string } }>;
         competitors?: Array<{ id: number; company: { id: number; name: string } }>;
         proposals?: Array<{ id: number; proposal_number: string; status: string }>;
     };
     contacts: OppContact[];
-    can: { edit: boolean; delete: boolean; createCapture: boolean; pursue: boolean };
+    samDocuments: SamDocument[];
+    can: { edit: boolean; delete: boolean; pursue: boolean };
 }
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -31,8 +35,9 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
-export default function OpportunityShow({ opportunity, contacts, can }: Props) {
+export default function OpportunityShow({ opportunity, contacts, samDocuments, can }: Props) {
     const application = opportunity.proposals?.[0];
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
 
     const handleDelete = () => {
         if (confirm('Delete this opportunity? This cannot be undone.')) {
@@ -58,11 +63,6 @@ export default function OpportunityShow({ opportunity, contacts, can }: Props) {
                             {can.edit && (
                                 <Button variant="secondary" icon={Edit} href={`/opportunities/${opportunity.id}/edit`}>
                                     Edit
-                                </Button>
-                            )}
-                            {!opportunity.capture_plan && can.createCapture && (
-                                <Button variant="secondary" icon={Plus} href={`/capture/create?opportunity_id=${opportunity.id}`}>
-                                    Capture Plan
                                 </Button>
                             )}
                             {application ? (
@@ -119,11 +119,52 @@ export default function OpportunityShow({ opportunity, contacts, can }: Props) {
                                 </CardContent>
                             </Card>
                         )}
+
+                        {/* Solicitation documents pulled live from the SAM.gov record */}
+                        <Card className="animate-rise">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-muted-foreground" /> Solicitation Documents
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {samDocuments.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground">
+                                        <p>This SAM.gov notice has no downloadable attachments — the details are in the description, or behind the notice's portal link.</p>
+                                        {opportunity.source_url && (
+                                            <a href={opportunity.source_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                                View the full notice on SAM.gov <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {samDocuments.map(d => (
+                                            <div key={d.index} className="flex items-center gap-2 rounded-lg border border-border p-2.5 transition-colors hover:bg-secondary/50">
+                                                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={d.name}>{d.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreview({ name: d.name, mimeType: 'application/pdf', previewUrl: d.preview_url, downloadUrl: d.download_url })}
+                                                    title="Preview"
+                                                    className="text-muted-foreground transition-colors hover:text-primary"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </button>
+                                                <a href={d.download_url} title="Download" className="text-muted-foreground transition-colors hover:text-primary">
+                                                    <Download className="h-4 w-4" />
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* Sidebar */}
                     <div className="space-y-4">
-                        {/* Contacts — shown above the status/capture-plan bubbles */}
+                        {/* Contacts — shown above the status bubbles */}
                         <Card className="animate-rise">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-sm">
@@ -163,30 +204,6 @@ export default function OpportunityShow({ opportunity, contacts, can }: Props) {
                             </CardHeader>
                             <CardContent>
                                 <StatusBadge status={opportunity.status} />
-                            </CardContent>
-                        </Card>
-
-                        {/* Capture Plan */}
-                        <Card className="animate-rise">
-                            <CardHeader>
-                                <CardTitle className="text-sm">Capture Plan</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {opportunity.capture_plan ? (
-                                    <div>
-                                        <StatusBadge status={
-                                            typeof opportunity.capture_plan.stage === 'string'
-                                                ? opportunity.capture_plan.stage
-                                                : (opportunity.capture_plan.stage as any)?.value ?? 'discovery'
-                                        } />
-                                        <Link href={`/capture/${opportunity.capture_plan.id}`}
-                                            className="mt-3 block text-sm font-medium text-primary hover:underline">
-                                            View capture plan →
-                                        </Link>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground">No capture plan yet.</p>
-                                )}
                             </CardContent>
                         </Card>
 
@@ -238,6 +255,7 @@ export default function OpportunityShow({ opportunity, contacts, can }: Props) {
                     </div>
                 </div>
             </div>
+            <FilePreviewModal file={preview} onClose={() => setPreview(null)} />
         </AppLayout>
     );
 }

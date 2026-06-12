@@ -21,14 +21,13 @@ class ProposalSubmissionPolicy
     {
         if (!$this->isSameOrg($user, $proposal)) return false;
 
-        // Users with 'view all proposals' can see any proposal
+        // Admins (holders of "view all proposals") see every proposal.
         if ($user->can('view all proposals')) return true;
 
-        // Users can see their own proposals (owner/team member/manager)
+        // Everyone else sees only proposals they're involved in: the creator,
+        // the owner, the manager, or an attached team member.
         if ($user->can('view proposals')) {
-            return $proposal->owner_id === $user->id
-                || $proposal->proposal_manager_id === $user->id
-                || $proposal->teamMembers()->where('user_id', $user->id)->exists();
+            return $this->isInvolved($user, $proposal);
         }
 
         return false;
@@ -44,13 +43,26 @@ class ProposalSubmissionPolicy
         if (!$this->isSameOrg($user, $proposal)) return false;
         if (!$user->can('update proposals')) return false;
 
-        // Restrict writers to their assigned proposals
-        if ($user->hasRole('Proposal Writer')) {
-            return $proposal->teamMembers()->where('user_id', $user->id)->exists()
-                || $proposal->owner_id === $user->id;
-        }
+        // Admins may edit any proposal in their organization (they also assign
+        // ownership). Everyone else may edit only the proposals they own or are
+        // an attached team member of — others are read-only.
+        if ($user->hasRole('Super Admin')) return true;
 
-        return true;
+        return $proposal->owner_id === $user->id
+            || $proposal->proposal_manager_id === $user->id
+            || $proposal->teamMembers()->where('user_id', $user->id)->exists();
+    }
+
+    /**
+     * Whether the user is involved with the proposal in any capacity — creator,
+     * owner, manager, or team member. Drives who can see a proposal.
+     */
+    private function isInvolved(User $user, ProposalSubmission $proposal): bool
+    {
+        return $proposal->created_by === $user->id
+            || $proposal->owner_id === $user->id
+            || $proposal->proposal_manager_id === $user->id
+            || $proposal->teamMembers()->where('user_id', $user->id)->exists();
     }
 
     public function delete(User $user, ProposalSubmission $proposal): bool

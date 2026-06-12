@@ -35,7 +35,7 @@ export default function ForgotPassword({ status }: Props) {
                             Reset your password and pick up right where you left off.
                         </p>
                         <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-slate-300">
-                            {['Opportunity intelligence', 'Capture workflow', 'Proposal management', 'Commission tracking'].map(f => (
+                            {['Opportunity intelligence', 'Proposal management', 'Commission tracking'].map(f => (
                                 <span key={f} className="inline-flex items-center gap-2">
                                     <ShieldCheck className="h-4 w-4 text-indigo-400" />
                                     {f}
@@ -44,7 +44,7 @@ export default function ForgotPassword({ status }: Props) {
                         </div>
                     </div>
 
-                    <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} QuakeLogic Enterprise. All rights reserved.</p>
+                    <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} QuakeLogic Proposals. All rights reserved.</p>
                 </div>
 
                 {/* Right form panel */}

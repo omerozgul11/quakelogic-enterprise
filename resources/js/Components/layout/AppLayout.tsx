@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Target, FileText, Shield, Building2,
+    LayoutDashboard, Target, FileText, Building2,
     Users, Bell, LogOut, Settings, FileSearch, MessageSquare,
     BarChart3, Puzzle, Sparkles, ShieldCheck, KanbanSquare,
     Menu, X, Sun, Moon, ChevronDown, TrendingUp, Activity, BookOpen,
-    CalendarDays,
+    CalendarDays, Inbox,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
-import { Logo } from '@/Components/ui/Logo';
+import { AppSwitcher } from '@/Components/layout/AppSwitcher';
 import { GlobalSearch } from '@/Components/layout/GlobalSearch';
 import { PwaControls } from '@/Components/layout/PwaControls';
 import { QuakeAiChat } from '@/Components/layout/QuakeAiChat';
@@ -37,7 +37,6 @@ const sections: NavSection[] = [
         items: [
             { label: 'Opportunities', href: '/opportunities', icon: Target, permission: 'view opportunities' },
             { label: 'Applications', href: '/proposals/board', icon: KanbanSquare, permission: 'view proposals' },
-            { label: 'Capture', href: '/capture', icon: Shield, permission: 'view capture plans' },
             { label: 'Proposals', href: '/proposals', icon: FileText, permission: 'view proposals' },
             { label: 'Documents', href: '/documents', icon: FileSearch, permission: 'view proposals' },
         ],
@@ -47,7 +46,7 @@ const sections: NavSection[] = [
         items: [
             { label: 'Companies/Agencies', href: '/companies', icon: Building2, permission: 'view crm' },
             { label: 'Contacts', href: '/contacts', icon: Users, permission: 'view crm' },
-            { label: 'Follow-Ups', href: '/follow-ups', icon: MessageSquare, permission: 'view follow ups' },
+            { label: 'Inbox', href: '/follow-ups', icon: Inbox, permission: 'view follow ups' },
         ],
     },
     {
@@ -200,10 +199,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
     const SidebarBody = ({ mobile = false }: { mobile?: boolean }) => (
         <div className="flex h-full flex-col">
-            <div className="flex h-16 items-center justify-between px-5">
-                <Link href="/" onClick={() => mobile && setSidebarOpen(false)}>
-                    <Logo />
-                </Link>
+            <div className="flex h-16 items-center justify-between px-3">
+                <AppSwitcher onNavigate={() => mobile && setSidebarOpen(false)} />
                 {mobile && (
                     <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
                         <X className="h-5 w-5" />
@@ -370,7 +367,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             {notifOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
-                                    <div className="absolute right-0 top-11 z-20 w-80 overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                                    <div className="animate-dropdown origin-top-right absolute right-0 top-11 z-20 w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                                         <div className="flex items-center justify-between border-b border-border px-4 py-3">
                                             <p className="text-sm font-semibold text-foreground">Notifications</p>
                                             {notifications_count > 0 && (
@@ -420,13 +417,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                     {getInitials(user?.name)}
                                 </span>
                                 <span className="hidden text-sm font-medium text-foreground sm:inline">{user?.name?.split(' ')[0]}</span>
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', menuOpen && 'rotate-180')} />
                             </button>
 
                             {menuOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                                    <div className="absolute right-0 top-11 z-20 w-60 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                                    <div className="animate-dropdown origin-top-right absolute right-0 top-11 z-20 w-60 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                                         <div className="border-b border-border px-4 py-3">
                                             <p className="text-sm font-semibold text-foreground">{user?.name}</p>
                                             <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
@@ -466,7 +463,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                 <footer className="border-t border-border py-4 text-center text-xs text-muted-foreground">
                     <Link href="/legal" className="transition-colors hover:text-foreground hover:underline" title="Terms, copyright & legal notice">
-                        QuakeLogic Enterprise — © {new Date().getFullYear()} QuakeLogic Inc.
+                        QuakeLogic Proposals — © {new Date().getFullYear()} QuakeLogic Inc.
                     </Link>
                 </footer>
             </div>

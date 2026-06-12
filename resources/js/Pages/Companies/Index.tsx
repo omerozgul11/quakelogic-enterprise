@@ -47,7 +47,7 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
     return (
         <AppLayout>
             <Head title="Companies" />
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
                 <PageHeader
                     icon={Building2}
                     title="Companies"
@@ -63,8 +63,8 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
 
                 {/* Filters */}
                 <Card className="mb-4 p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative min-w-[18rem] flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
                             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 type="text"
@@ -79,7 +79,7 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                             onChange={v => handleFilter('type', v)}
                             options={TYPES.map(t => ({ value: t, label: t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }))}
                             placeholder="All Types"
-                            className="w-44"
+                            className="w-full sm:w-44"
                         />
                         {Object.keys(filters).length > 0 && (
                             <button onClick={() => router.get('/companies')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
@@ -97,8 +97,8 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                                 <tr>
                                     <th className="th">Company</th>
                                     <th className="th">Type</th>
-                                    <th className="th">Contacts</th>
-                                    <th className="th">Location</th>
+                                    <th className="th hidden sm:table-cell">Contacts</th>
+                                    <th className="th hidden md:table-cell">Location</th>
                                     <th className="th" />
                                 </tr>
                             </thead>
@@ -131,8 +131,8 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                                                 <span className="chip capitalize">{company.company_type.replace(/_/g, ' ')}</span>
                                             )}
                                         </td>
-                                        <td className="td text-muted-foreground">{company.contacts_count}</td>
-                                        <td className="td text-muted-foreground">
+                                        <td className="td hidden text-muted-foreground sm:table-cell">{company.contacts_count}</td>
+                                        <td className="td hidden text-muted-foreground md:table-cell">
                                             {[company.city, company.state].filter(Boolean).join(', ') || '—'}
                                         </td>
                                         <td className="td">

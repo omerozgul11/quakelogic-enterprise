@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Contact;
 use App\Models\FollowUp;
 use App\Models\ProposalSubmission;
+use App\Models\User;
+use App\Notifications\ActivityNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,48 +19,92 @@ class FollowUpController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
+        $viewerId = $user->id;
 
         // Gmail-style: each proposal the user is involved with is a "conversation"
         // holding its follow-up thread. Only an admin sees everyone's proposals.
         $proposalsQuery = ProposalSubmission::forOrganization($user->organization_id)
             ->with(['followUps' => fn ($q) => $q
-                ->with(['assignedTo:id,name', 'contact:id,first_name,last_name,email'])
+                ->with(['assignedTo:id,name', 'createdBy:id,name', 'contact:id,first_name,last_name,email'])
                 ->orderBy('scheduled_date')->orderBy('id')]);
 
         if (!$user->hasRole('Super Admin')) {
             $proposalsQuery->where(fn ($q) => $q
-                ->where('owner_id', $user->id)
+                ->where('created_by', $user->id)
+                ->orWhere('owner_id', $user->id)
                 ->orWhere('proposal_manager_id', $user->id)
                 ->orWhereHas('teamMembers', fn ($tm) => $tm->where('user_id', $user->id)));
         }
 
         $proposals = $proposalsQuery->get(['id', 'proposal_number', 'project_name', 'status']);
 
-        $threads = $proposals->map(function ($p) {
-            $messages = $p->followUps->map(fn ($f) => [
-                'id' => $f->id,
-                'subject' => $f->subject,
-                'message' => $f->message,
-                'type' => $f->type,
-                'status' => $f->status instanceof \BackedEnum ? $f->status->value : $f->status,
-                'scheduled_date' => $f->scheduled_date?->format('Y-m-d'),
-                'sent_at' => $f->sent_at?->toIso8601String(),
-                'created_at' => $f->created_at?->toIso8601String(),
-                'author' => $f->assignedTo?->name,
-                'contact' => $f->contact ? trim($f->contact->first_name . ' ' . $f->contact->last_name) : null,
-                'automated' => (bool) $f->is_automated,
-            ])->values();
+        $threads = $proposals->map(fn ($p) => [
+            'key' => 'proposal-' . $p->id,
+            'kind' => 'proposal',
+            'proposal_id' => $p->id,
+            'recipient_id' => null,
+            'proposal_number' => $p->proposal_number,
+            'project_name' => $p->project_name,
+            'status' => $p->status instanceof \BackedEnum ? $p->status->value : $p->status,
+            'messages' => $p->followUps->map(fn ($f) => $this->presentMessage($f, $viewerId))->values(),
+            'count' => $p->followUps->count(),
+            'last_at' => $p->followUps->max('created_at')?->toIso8601String(),
+        ]);
 
-            return [
-                'id' => $p->id,
-                'proposal_number' => $p->proposal_number,
-                'project_name' => $p->project_name,
-                'status' => $p->status instanceof \BackedEnum ? $p->status->value : $p->status,
-                'messages' => $messages,
-                'count' => $messages->count(),
-                'last_at' => $p->followUps->max('created_at')?->toIso8601String(),
-            ];
-        })
+        // Proposal-less follow-ups the user is a participant in: direct messages
+        // to/from coworkers, plus self/system notes (digests, general notes).
+        // These stay private to the two participants — even admins don't see
+        // other people's direct messages here.
+        $general = FollowUp::where('organization_id', $user->organization_id)
+            ->whereNull('proposal_submission_id')
+            ->where(fn ($q) => $q->where('assigned_to', $user->id)->orWhere('created_by', $user->id))
+            ->with(['assignedTo:id,name', 'createdBy:id,name', 'contact:id,first_name,last_name,email'])
+            ->orderBy('created_at')->orderBy('id')
+            ->get();
+
+        $selfMessages = collect();
+        $byUser = []; // other user id => FollowUp[]
+        foreach ($general as $f) {
+            $a = $f->created_by;
+            $b = $f->assigned_to;
+            $other = (!$b || $a === $b) ? null : ($a === $viewerId ? $b : ($b === $viewerId ? $a : null));
+            if ($other === null) {
+                $selfMessages->push($f);
+            } else {
+                $byUser[$other][] = $f;
+            }
+        }
+
+        foreach ($byUser as $otherId => $msgs) {
+            $col = collect($msgs);
+            $name = $col->map(fn ($f) => $f->created_by === $otherId ? $f->createdBy?->name : $f->assignedTo?->name)
+                ->filter()->first() ?? 'Teammate';
+            $threads->push([
+                'key' => 'direct-' . $otherId,
+                'kind' => 'direct',
+                'proposal_id' => null,
+                'recipient_id' => $otherId,
+                'proposal_number' => null,
+                'project_name' => $name,
+                'status' => null,
+                'messages' => $col->map(fn ($f) => $this->presentMessage($f, $viewerId))->values(),
+                'count' => $col->count(),
+                'last_at' => $col->max('created_at')?->toIso8601String(),
+            ]);
+        }
+
+        $threads = $threads->push([
+            'key' => 'general',
+            'kind' => 'general',
+            'proposal_id' => null,
+            'recipient_id' => null,
+            'proposal_number' => null,
+            'project_name' => 'General',
+            'status' => null,
+            'messages' => $selfMessages->map(fn ($f) => $this->presentMessage($f, $viewerId))->values(),
+            'count' => $selfMessages->count(),
+            'last_at' => $selfMessages->max('created_at')?->toIso8601String(),
+        ])
             ->sortByDesc(fn ($t) => $t['last_at'] ?? '')
             ->values();
 
@@ -70,11 +117,37 @@ class FollowUpController extends Controller
                 'proposal_number' => $p->proposal_number,
                 'project_name' => $p->project_name,
             ])->values(),
+            // Coworkers you can message directly.
+            'users' => User::where('organization_id', $user->organization_id)
+                ->where('is_active', true)
+                ->where('id', '!=', $user->id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'mailbox' => [
                 'connected' => (bool) $mailbox?->isConnected(),
                 'email' => $mailbox?->email,
             ],
         ]);
+    }
+
+    /** Shape one follow-up record for the inbox thread view. */
+    private function presentMessage(FollowUp $f, int $viewerId): array
+    {
+        return [
+            'id' => $f->id,
+            'subject' => $f->subject,
+            'message' => $f->message,
+            'type' => $f->type,
+            'status' => $f->status instanceof \BackedEnum ? $f->status->value : $f->status,
+            'scheduled_date' => $f->scheduled_date?->format('Y-m-d'),
+            'sent_at' => $f->sent_at?->toIso8601String(),
+            'created_at' => $f->created_at?->toIso8601String(),
+            'author' => $f->createdBy?->name ?? $f->assignedTo?->name,
+            'to' => ($f->assigned_to && $f->assigned_to !== $f->created_by) ? $f->assignedTo?->name : null,
+            'mine' => $f->created_by === $viewerId,
+            'contact' => $f->contact ? trim($f->contact->first_name . ' ' . $f->contact->last_name) : null,
+            'automated' => (bool) $f->is_automated,
+        ];
     }
 
     /**
@@ -111,7 +184,8 @@ class FollowUpController extends Controller
         return ProposalSubmission::where('id', $proposalId)
             ->where('organization_id', $user->organization_id)
             ->where(fn ($q) => $q
-                ->where('owner_id', $user->id)
+                ->where('created_by', $user->id)
+                ->orWhere('owner_id', $user->id)
                 ->orWhere('proposal_manager_id', $user->id)
                 ->orWhereHas('teamMembers', fn ($tm) => $tm->where('user_id', $user->id)))
             ->exists();
@@ -149,14 +223,24 @@ class FollowUpController extends Controller
         ]);
 
         $user = $request->user();
+        $proposalId = $validated['proposal_submission_id'] ?? null;
         // Can't post a message onto a proposal you're not attached to.
-        abort_unless($this->canAccessProposal($user, $validated['proposal_submission_id'] ?? null), 403);
+        abort_unless($this->canAccessProposal($user, $proposalId), 403);
+
+        // Direct message: the recipient must be an active coworker in the org.
+        $recipient = null;
+        if (!empty($validated['assigned_to'])) {
+            $recipient = User::where('id', $validated['assigned_to'])
+                ->where('organization_id', $user->organization_id)
+                ->first();
+            abort_unless($recipient !== null, 403);
+        }
 
         FollowUp::create([
             'organization_id' => $user->organization_id,
             'created_by' => $user->id,
-            'assigned_to' => $validated['assigned_to'] ?? $user->id,
-            'proposal_submission_id' => $validated['proposal_submission_id'] ?? null,
+            'assigned_to' => $recipient?->id ?? $user->id,
+            'proposal_submission_id' => $proposalId,
             'opportunity_id' => $validated['opportunity_id'] ?? null,
             'contact_id' => $validated['contact_id'] ?? null,
             'type' => $validated['type'] ?? 'note',
@@ -165,6 +249,19 @@ class FollowUpController extends Controller
             'scheduled_date' => $validated['scheduled_date'] ?? now()->toDateString(),
             'status' => 'scheduled',
         ]);
+
+        // Ping the coworker when this is a direct message to them.
+        if (!$proposalId && $recipient && $recipient->id !== $user->id) {
+            $recipient->notify(new ActivityNotification([
+                'type' => 'message',
+                'title' => 'New message from ' . $user->name,
+                'message' => Str::limit($validated['message'], 90),
+                'url' => route('follow-ups.index'),
+                'icon' => 'message-square',
+            ]));
+
+            return back()->with('success', 'Message sent to ' . $recipient->name . '.');
+        }
 
         return back()->with('success', 'Message added to the thread.');
     }

@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Opportunity;
 use App\Models\ProposalFile;
 use App\Models\ProposalSubmission;
+use App\Services\BidSources\OpportunityDocumentService;
 use App\Services\Documents\DocumentTextExtractionService;
 use App\Services\Proposals\ProposalIntakeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -195,5 +198,88 @@ HTML;
         $file->delete();
 
         return back()->with('success', 'File deleted.');
+    }
+
+    /**
+     * Proxy a solicitation document pulled from the linked SAM.gov opportunity.
+     * The file lives on SAM's servers — we stream it through so the API key
+     * stays server-side and access is gated by the proposal's view policy.
+     * Append ?dl=1 to force a download instead of an inline preview.
+     */
+    public function samDocument(Request $request, ProposalSubmission $proposalSubmission, int $index, OpportunityDocumentService $docs): mixed
+    {
+        $this->authorize('view', $proposalSubmission);
+
+        $opportunity = $this->linkedOpportunity($proposalSubmission);
+        abort_if($opportunity === null, 404, 'This proposal is not linked to a SAM.gov opportunity.');
+
+        $url = $docs->urlAt($opportunity, $index);
+        abort_if($url === null, 404, 'Document not found.');
+
+        $fetched = $docs->fetch($url);
+        abort_if($fetched === null, 502, 'Could not retrieve the document from SAM.gov.');
+
+        $disposition = $request->boolean('dl') ? 'attachment' : 'inline';
+
+        return response($fetched['body'], 200, [
+            'Content-Type' => $fetched['mime'],
+            'Content-Disposition' => $disposition . '; filename="' . addslashes($fetched['filename']) . '"',
+            'X-Frame-Options' => 'SAMEORIGIN',
+        ]);
+    }
+
+    /**
+     * Read a SAM.gov solicitation document and use it to fill in any blank
+     * proposal fields (same QuakeAI extraction used for uploads).
+     */
+    public function extractSamDocument(Request $request, ProposalSubmission $proposalSubmission, int $index, OpportunityDocumentService $docs): RedirectResponse
+    {
+        $this->authorize('update', $proposalSubmission);
+
+        $opportunity = $this->linkedOpportunity($proposalSubmission);
+        abort_if($opportunity === null, 404, 'This proposal is not linked to a SAM.gov opportunity.');
+
+        $url = $docs->urlAt($opportunity, $index);
+        abort_if($url === null, 404, 'Document not found.');
+
+        $fetched = $docs->fetch($url);
+        if ($fetched === null) {
+            return back()->with('error', 'Could not retrieve the document from SAM.gov.');
+        }
+
+        // Only PDFs carry extractable text; anything else just isn't useful here.
+        if (!str_contains($fetched['mime'], 'pdf')) {
+            return back()->with('warning', 'That document is not a PDF, so there was nothing to extract.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'sam_');
+        try {
+            file_put_contents($tmp, $fetched['body']);
+            $name = Str::endsWith(strtolower($fetched['filename']), '.pdf') ? $fetched['filename'] : $fetched['filename'] . '.pdf';
+            $uploaded = new UploadedFile($tmp, $name, 'application/pdf', null, true);
+
+            $analysis = $this->intake->extract($proposalSubmission, $uploaded, $request->user());
+            if (!$analysis) {
+                return back()->with('warning', 'No readable text was found in that document.');
+            }
+            $summary = $this->intake->autoApply($proposalSubmission->fresh(), $analysis, $request->user(), fillBlanksOnly: true);
+            $records = count($summary['created'] ?? []) + count($summary['linked'] ?? []);
+
+            return back()->with('success', 'Read by QuakeAI — ' . count($summary['fields'] ?? []) . ' field(s) filled, ' . $records . ' record(s) created/linked.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not read that document.');
+        } finally {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
+    }
+
+    private function linkedOpportunity(ProposalSubmission $proposal): ?Opportunity
+    {
+        if (!$proposal->opportunity_id) {
+            return null;
+        }
+        return Opportunity::select('id', 'title', 'source', 'raw_source_data')->find($proposal->opportunity_id);
     }
 }

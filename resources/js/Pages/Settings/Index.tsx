@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
@@ -17,8 +17,22 @@ interface Props {
     user: { id: number; name: string; email: string; commission_rate_override: number | null };
     preferences: Preferences;
     twoFactor: { enabled: boolean; confirmed: boolean };
-    mailbox: { connected: boolean; email: string | null; configurable: boolean };
+    mailbox: {
+        connected: boolean;
+        provider: string | null;
+        email: string | null;
+        from_name: string | null;
+        smtp_host: string | null;
+        smtp_port: number | null;
+        smtp_encryption: string | null;
+        smtp_username: string | null;
+    };
 }
+
+const SMTP_PRESETS: Record<string, { host: string; port: string; enc: string }> = {
+    gmail: { host: 'smtp.gmail.com', port: '587', enc: 'tls' },
+    office365: { host: 'smtp.office365.com', port: '587', enc: 'tls' },
+};
 
 function applyTheme(theme: string) {
     try {
@@ -50,6 +64,26 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
 export default function SettingsIndex({ user, preferences, twoFactor, mailbox }: Props) {
     const profileForm = useForm({ name: user.name, email: user.email });
     const passwordForm = useForm({ current_password: '', password: '', password_confirmation: '' });
+
+    const mailboxForm = useForm({
+        email: mailbox.email ?? user.email,
+        from_name: mailbox.from_name ?? user.name,
+        smtp_host: mailbox.smtp_host ?? '',
+        smtp_port: mailbox.smtp_port ? String(mailbox.smtp_port) : '587',
+        smtp_encryption: mailbox.smtp_encryption ?? 'tls',
+        smtp_username: mailbox.smtp_username ?? '',
+        smtp_password: '',
+    });
+    const applyPreset = (k: string) => {
+        const p = SMTP_PRESETS[k];
+        if (p) mailboxForm.setData(d => ({ ...d, smtp_host: p.host, smtp_port: p.port, smtp_encryption: p.enc }));
+    };
+    const saveMailbox = (e: React.FormEvent) => {
+        e.preventDefault();
+        mailboxForm.post('/settings/mailbox', { preserveScroll: true, onSuccess: () => mailboxForm.setData('smtp_password', '') });
+    };
+    const testMailbox = () => router.post('/settings/mailbox/test', {}, { preserveScroll: true });
+    const disconnectMailbox = () => { if (confirm('Disconnect your work email?')) router.delete('/settings/mailbox', { preserveScroll: true }); };
     const prefs = useForm<Preferences>(preferences);
 
     const handleProfileSubmit = (e: React.FormEvent) => { e.preventDefault(); profileForm.patch('/settings/profile'); };
@@ -198,29 +232,74 @@ export default function SettingsIndex({ user, preferences, twoFactor, mailbox }:
                             {mailbox.connected && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600">Connected</span>}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                        {mailbox.connected ? (
-                            <p className="flex items-center gap-2 text-sm text-foreground">
+                    <CardContent>
+                        {mailbox.connected && (
+                            <p className="mb-4 flex items-center gap-2 text-sm text-foreground">
                                 <Check className="h-4 w-4 text-emerald-600" />
-                                Connected as <span className="font-semibold">{mailbox.email}</span>. Proposal follow-ups send from your work address.
+                                Connected as <span className="font-semibold">{mailbox.email}</span> — follow-ups &amp; your daily digest send from this address.
                             </p>
-                        ) : (
-                            <>
-                                <p className="text-sm text-muted-foreground">
-                                    Connect your Google Workspace account to send proposal follow-up emails from your own work
-                                    address. Until then, follow-ups are tracked as threads in the Follow-Ups view.
-                                </p>
-                                <button
-                                    type="button"
-                                    disabled
-                                    title={mailbox.configurable ? 'Connection flow is being finalized' : 'Available once your administrator configures Google Workspace'}
-                                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-border bg-secondary/60 px-4 py-2 text-sm font-medium text-muted-foreground"
-                                >
-                                    <Mail className="h-4 w-4" />
-                                    {mailbox.configurable ? 'Connect Google Workspace (coming soon)' : 'Connect work email (set up by admin)'}
-                                </button>
-                            </>
                         )}
+                        <p className="mb-4 text-sm text-muted-foreground">
+                            Connect your own work email so proposal follow-ups and your daily opportunity digest send from your
+                            address (replies come back to you). Most providers need an <span className="font-medium text-foreground">app password</span>,
+                            not your normal login password.
+                        </p>
+
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                            <span className="self-center text-xs font-medium text-muted-foreground">Quick setup:</span>
+                            <button type="button" onClick={() => applyPreset('gmail')} className="rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-secondary">Gmail / Workspace</button>
+                            <button type="button" onClick={() => applyPreset('office365')} className="rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-secondary">Microsoft 365</button>
+                        </div>
+
+                        <form onSubmit={saveMailbox} className="space-y-4">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="label">From email *</label>
+                                    <input type="email" value={mailboxForm.data.email} onChange={e => mailboxForm.setData('email', e.target.value)} className="input" required />
+                                    {mailboxForm.errors.email && <p className="mt-1 text-xs text-destructive">{mailboxForm.errors.email}</p>}
+                                </div>
+                                <div>
+                                    <label className="label">From name</label>
+                                    <input type="text" value={mailboxForm.data.from_name} onChange={e => mailboxForm.setData('from_name', e.target.value)} className="input" />
+                                </div>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-3">
+                                <div className="sm:col-span-2">
+                                    <label className="label">SMTP host *</label>
+                                    <input type="text" value={mailboxForm.data.smtp_host} onChange={e => mailboxForm.setData('smtp_host', e.target.value)} className="input" placeholder="smtp.gmail.com" required />
+                                    {mailboxForm.errors.smtp_host && <p className="mt-1 text-xs text-destructive">{mailboxForm.errors.smtp_host}</p>}
+                                </div>
+                                <div>
+                                    <label className="label">Port *</label>
+                                    <input type="number" value={mailboxForm.data.smtp_port} onChange={e => mailboxForm.setData('smtp_port', e.target.value)} className="input" required />
+                                </div>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="label">Encryption</label>
+                                    <Select
+                                        value={mailboxForm.data.smtp_encryption}
+                                        onChange={v => mailboxForm.setData('smtp_encryption', v)}
+                                        options={[{ value: 'tls', label: 'TLS / STARTTLS (587)' }, { value: 'ssl', label: 'SSL (465)' }, { value: 'none', label: 'None' }]}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Username <span className="font-normal text-muted-foreground">(defaults to your email)</span></label>
+                                    <input type="text" value={mailboxForm.data.smtp_username} onChange={e => mailboxForm.setData('smtp_username', e.target.value)} className="input" placeholder={mailboxForm.data.email} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="label">App password {mailbox.connected ? <span className="font-normal text-muted-foreground">(leave blank to keep current)</span> : '*'}</label>
+                                <input type="password" value={mailboxForm.data.smtp_password} onChange={e => mailboxForm.setData('smtp_password', e.target.value)} className="input" autoComplete="new-password" placeholder="••••••••••••••••" />
+                                {mailboxForm.errors.smtp_password && <p className="mt-1 text-xs text-destructive">{mailboxForm.errors.smtp_password}</p>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button type="submit" disabled={mailboxForm.processing}>{mailboxForm.processing ? 'Saving…' : mailbox.connected ? 'Update' : 'Connect'}</Button>
+                                {mailbox.connected && <Button type="button" variant="secondary" onClick={testMailbox}>Send test email</Button>}
+                                {mailbox.connected && <Button type="button" variant="danger" onClick={disconnectMailbox}>Disconnect</Button>}
+                            </div>
+                        </form>
                     </CardContent>
                 </Card>
             </div>

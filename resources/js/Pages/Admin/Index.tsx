@@ -6,8 +6,19 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { StatCard } from '@/Components/ui/StatCard';
 import { Select } from '@/Components/ui/Select';
 import { formatDate, generatePassword } from '@/Lib/utils';
-import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check, Mail } from 'lucide-react';
 import { useState } from 'react';
+
+interface MailboxState {
+    connected: boolean;
+    provider: string | null;
+    email: string | null;
+    from_name: string | null;
+    smtp_host: string | null;
+    smtp_port: number | null;
+    smtp_encryption: string | null;
+    smtp_username: string | null;
+}
 
 interface User {
     id: number;
@@ -16,6 +27,121 @@ interface User {
     is_active: boolean;
     created_at: string;
     roles: Array<{ id: number; name: string }>;
+    mailbox: MailboxState;
+}
+
+const SMTP_PRESETS: Record<string, { host: string; port: string; enc: string }> = {
+    gmail: { host: 'smtp.gmail.com', port: '587', enc: 'tls' },
+    office365: { host: 'smtp.office365.com', port: '587', enc: 'tls' },
+};
+
+/**
+ * Admin-managed work email for a teammate. Mirrors the self-service form on the
+ * Settings page so an admin can connect, test or disconnect a user's SMTP
+ * mailbox on their behalf. Keyed by user id so switching users resets the form.
+ */
+function AdminMailbox({ user }: { user: User }) {
+    const mailbox = user.mailbox;
+    const form = useForm({
+        email: mailbox.email ?? user.email,
+        from_name: mailbox.from_name ?? user.name,
+        smtp_host: mailbox.smtp_host ?? '',
+        smtp_port: mailbox.smtp_port ? String(mailbox.smtp_port) : '587',
+        smtp_encryption: mailbox.smtp_encryption ?? 'tls',
+        smtp_username: mailbox.smtp_username ?? '',
+        smtp_password: '',
+    });
+
+    const applyPreset = (k: string) => {
+        const p = SMTP_PRESETS[k];
+        if (p) form.setData(d => ({ ...d, smtp_host: p.host, smtp_port: p.port, smtp_encryption: p.enc }));
+    };
+    const save = (e: React.FormEvent) => {
+        e.preventDefault();
+        form.post(`/admin/users/${user.id}/mailbox`, { preserveScroll: true, onSuccess: () => form.setData('smtp_password', '') });
+    };
+    const test = () => router.post(`/admin/users/${user.id}/mailbox/test`, {}, { preserveScroll: true });
+    const disconnect = () => {
+        if (confirm(`Disconnect ${user.name}'s work email?`)) router.delete(`/admin/users/${user.id}/mailbox`, { preserveScroll: true });
+    };
+
+    return (
+        <Card className="animate-panel origin-top mb-6 ring-1 ring-primary/20">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-muted-foreground" /> Work email — {user.name}
+                    {mailbox.connected && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600">Connected</span>}
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                    Connect this teammate's outgoing email so their follow-ups and daily digest send from their own address.
+                    {mailbox.connected && <> Currently connected as <span className="font-semibold">{mailbox.email}</span>.</>}
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                    <span className="self-center text-xs text-muted-foreground">Quick setup:</span>
+                    <button type="button" onClick={() => applyPreset('gmail')} className="rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-secondary">Gmail / Workspace</button>
+                    <button type="button" onClick={() => applyPreset('office365')} className="rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-secondary">Microsoft 365</button>
+                </div>
+
+                <form onSubmit={save} className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label className="label">From address</label>
+                            <input type="email" value={form.data.email} onChange={e => form.setData('email', e.target.value)} className="input" required />
+                            {form.errors.email && <p className="mt-1 text-xs text-destructive">{form.errors.email}</p>}
+                        </div>
+                        <div>
+                            <label className="label">From name</label>
+                            <input type="text" value={form.data.from_name} onChange={e => form.setData('from_name', e.target.value)} className="input" />
+                        </div>
+                        <div>
+                            <label className="label">SMTP host</label>
+                            <input type="text" value={form.data.smtp_host} onChange={e => form.setData('smtp_host', e.target.value)} className="input" placeholder="smtp.gmail.com" required />
+                            {form.errors.smtp_host && <p className="mt-1 text-xs text-destructive">{form.errors.smtp_host}</p>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="label">Port</label>
+                                <input type="number" value={form.data.smtp_port} onChange={e => form.setData('smtp_port', e.target.value)} className="input" required />
+                            </div>
+                            <div>
+                                <label className="label">Encryption</label>
+                                <Select
+                                    value={form.data.smtp_encryption}
+                                    onChange={v => form.setData('smtp_encryption', v)}
+                                    options={[
+                                        { value: 'tls', label: 'TLS / STARTTLS' },
+                                        { value: 'ssl', label: 'SSL' },
+                                        { value: 'none', label: 'None' },
+                                    ]}
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="label">Username</label>
+                            <input type="text" value={form.data.smtp_username} onChange={e => form.setData('smtp_username', e.target.value)} className="input" placeholder={form.data.email} />
+                        </div>
+                        <div>
+                            <label className="label">App password {mailbox.connected ? <span className="font-normal text-muted-foreground">(leave blank to keep current)</span> : '*'}</label>
+                            <input type="password" value={form.data.smtp_password} onChange={e => form.setData('smtp_password', e.target.value)} className="input" autoComplete="new-password" placeholder="••••••••••••••••" />
+                            {form.errors.smtp_password && <p className="mt-1 text-xs text-destructive">{form.errors.smtp_password}</p>}
+                        </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">Use an app password (not the account login password). The user can change this later under their own Settings.</p>
+
+                    <div className="flex flex-wrap gap-2">
+                        <Button type="submit" disabled={form.processing}>{form.processing ? 'Saving…' : mailbox.connected ? 'Update' : 'Connect'}</Button>
+                        {mailbox.connected && <Button type="button" variant="secondary" onClick={test}>Send test email</Button>}
+                        {mailbox.connected && <Button type="button" variant="danger" onClick={disconnect}>Disconnect</Button>}
+                    </div>
+                </form>
+            </CardContent>
+        </Card>
+    );
 }
 
 interface Props {
@@ -108,7 +234,7 @@ export default function AdminIndex({ users, roles }: Props) {
                 {/* Create user */}
                 {showCreate && (
                     <form onSubmit={handleCreate}>
-                        <Card className="mb-6 ring-1 ring-primary/30">
+                        <Card className="animate-panel origin-top mb-6 ring-1 ring-primary/30">
                             <CardHeader>
                                 <CardTitle>Add a new user</CardTitle>
                                 <button type="button" onClick={() => setShowCreate(false)} className="text-muted-foreground transition-colors hover:text-foreground">
@@ -204,7 +330,7 @@ export default function AdminIndex({ users, roles }: Props) {
                 {/* Edit user */}
                 {editingUser && (
                     <form onSubmit={handleSave}>
-                        <Card className="mb-6 ring-1 ring-primary/30">
+                        <Card className="animate-panel origin-top mb-6 ring-1 ring-primary/30">
                             <CardHeader>
                                 <CardTitle>Edit user: {editingUser.email}</CardTitle>
                                 <button type="button" onClick={() => setEditingUser(null)} className="text-muted-foreground transition-colors hover:text-foreground">
@@ -270,6 +396,8 @@ export default function AdminIndex({ users, roles }: Props) {
                     </form>
                 )}
 
+                {editingUser && <AdminMailbox key={editingUser.id} user={editingUser} />}
+
                 <Card className="overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
@@ -287,7 +415,14 @@ export default function AdminIndex({ users, roles }: Props) {
                                 {users.data.map(user => (
                                     <tr key={user.id} className="row-link">
                                         <td className="td font-medium text-foreground">{user.name}</td>
-                                        <td className="td text-muted-foreground">{user.email}</td>
+                                        <td className="td text-muted-foreground">
+                                            <span className="inline-flex items-center gap-1.5">
+                                                {user.email}
+                                                {user.mailbox?.connected && (
+                                                    <Mail className="h-3.5 w-3.5 text-emerald-500" aria-label="Work email connected" />
+                                                )}
+                                            </span>
+                                        </td>
                                         <td className="td">
                                             <div className="flex flex-wrap gap-1">
                                                 {user.roles.map(r => (

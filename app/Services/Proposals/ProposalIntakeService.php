@@ -52,13 +52,13 @@ class ProposalIntakeService
                 'owner_id' => $user->id,
                 'proposal_number' => $this->numberService->generate($user->organization_id),
                 'project_name' => $this->defaultName($file),
-                'status' => 'draft',
+                'status' => 'in_progress',
             ]);
 
             $proposal->statusHistory()->create([
                 'changed_by' => $user->id,
                 'from_status' => null,
-                'to_status' => 'draft',
+                'to_status' => 'in_progress',
                 'changed_at' => now(),
             ]);
 

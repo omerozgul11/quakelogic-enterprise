@@ -8,9 +8,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { formatCurrency, formatDate } from '@/Lib/utils';
 import { ProposalSubmission, SharedProps } from '@/Types';
-import { ArrowLeft, FileText, Upload, Download, Users, ChevronRight, ChevronLeft, Sparkles, Building2, MessageSquare, Pencil, Eye, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileText, Upload, Download, Users, ChevronRight, ChevronLeft, Sparkles, Building2, MessageSquare, Pencil, Eye, Trash2, Lock, ExternalLink } from 'lucide-react';
 import { FilePreviewModal, PreviewFile } from '@/Components/ui/FilePreviewModal';
 import { SubmitCelebration } from '@/Components/ui/SubmitCelebration';
+import { MailTrackingPanel, MailTracking } from '@/Components/proposal/MailTrackingPanel';
 import { useState, useEffect } from 'react';
 
 interface ProposalFile {
@@ -45,6 +46,22 @@ interface Step {
     color: string;
 }
 
+interface SamDocument {
+    index: number;
+    name: string;
+    preview_url: string;
+    download_url: string;
+    extract_url: string;
+}
+
+interface SamDocuments {
+    linked: boolean;
+    opportunity_title?: string;
+    documents: SamDocument[];
+    can_extract: boolean;
+    notice_url?: string | null;
+}
+
 interface Props {
     proposal: ProposalSubmission & {
         agency?: { id: number; name: string; email?: string | null } | null;
@@ -58,9 +75,11 @@ interface Props {
     };
     stepNav: { previous: Step | null; next: Step | null };
     allowedTransitions: Step[];
+    samDocuments: SamDocuments;
     currencies: Array<{ value: string; label: string; symbol: string; name: string }>;
     extraction: Extraction | null;
     can: { edit: boolean; upload: boolean; transition: boolean; delete: boolean };
+    mailTracking?: MailTracking;
 }
 
 function formatSize(bytes: number): string {
@@ -69,7 +88,7 @@ function formatSize(bytes: number): string {
     return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-export default function ProposalShow({ proposal, stepNav, allowedTransitions, currencies, extraction, can }: Props) {
+export default function ProposalShow({ proposal, stepNav, allowedTransitions, samDocuments, currencies, extraction, can, mailTracking }: Props) {
     const [showUpload, setShowUpload] = useState(false);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
     const [editing, setEditing] = useState(false);
@@ -132,7 +151,13 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, cu
         });
     };
 
-    const statusValue = typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'draft';
+    const extractSam = (url: string) => {
+        if (confirm('Read this SAM.gov document and use it to fill in any blank proposal fields?')) {
+            router.post(url, {}, { preserveScroll: true });
+        }
+    };
+
+    const statusValue = typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'in_progress';
 
     return (
         <AppLayout>
@@ -160,6 +185,17 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, cu
                         </>
                     }
                 />
+
+                {!can.edit && (
+                    <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                        <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>
+                            You're not the owner of this document
+                            {proposal.owner?.name ? <> — it's currently owned by <span className="font-semibold">{proposal.owner.name}</span></> : ''}.
+                            You have read-only access.
+                        </p>
+                    </div>
+                )}
 
                 <div className="mb-6 flex flex-wrap items-center gap-3">
                     <StatusBadge status={statusValue} />
@@ -192,7 +228,7 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, cu
                             </CardHeader>
                             <CardContent>
                                 {editing ? (
-                                    <form onSubmit={saveDetails} className="space-y-4">
+                                    <form onSubmit={saveDetails} className="animate-panel space-y-4">
                                         <div>
                                             <label className="label">Project Name *</label>
                                             <input type="text" value={detailsForm.data.project_name} onChange={e => detailsForm.setData('project_name', e.target.value)} className="input" required />
@@ -256,7 +292,7 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, cu
                                                 ['Submission Date', proposal.submission_date ? formatDate(proposal.submission_date) : null],
                                                 ['Submission Method', ((proposal as { submission_methods?: string[] }).submission_methods ?? []).length
                                                     ? ((proposal as { submission_methods?: string[] }).submission_methods ?? [])
-                                                        .map(m => ({ email: 'Email', portal: 'Portal', mail: 'Mail', fax: 'Fax', hand_delivery: 'Hand delivery' }[m] ?? m)).join(', ')
+                                                        .map(m => ({ email: 'Email', portal: 'Portal', mail: 'Mail' }[m] ?? m)).join(', ')
                                                     : null],
                                                 ['Owner', proposal.owner?.name],
                                             ] as Array<[string, string | null | undefined]>).map(([label, value]) => (
@@ -365,6 +401,7 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, cu
 
                     {/* Sidebar */}
                     <div className="space-y-6">
+                        <MailTrackingPanel tracking={mailTracking} proposalId={proposal.id} />
                         {proposal.company && (
                             <Card>
                                 <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Building2 className="h-4 w-4 text-muted-foreground" /> Company</CardTitle></CardHeader>
@@ -437,6 +474,55 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, cu
                                 </CardContent>
                             </Card>
                         )}
+
+                        {/* Solicitation documents pulled live from the linked SAM.gov opportunity */}
+                        <Card>
+                            <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><FileText className="h-4 w-4 text-muted-foreground" /> Solicitation Documents</CardTitle></CardHeader>
+                            <CardContent>
+                                {!samDocuments.linked ? (
+                                    <p className="text-sm text-muted-foreground">Not linked to a SAM.gov opportunity, so there are no solicitation documents to pull.</p>
+                                ) : samDocuments.documents.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground">
+                                        <p>This SAM.gov notice has no downloadable attachments — the details are in the description, or behind the notice's portal link.</p>
+                                        {samDocuments.notice_url && (
+                                            <a href={samDocuments.notice_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                                View the full notice on SAM.gov <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {samDocuments.documents.map(d => (
+                                            <div key={d.index} className="flex items-center gap-2 rounded-lg border border-border p-2.5">
+                                                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={d.name}>{d.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreview({ name: d.name, mimeType: 'application/pdf', previewUrl: d.preview_url, downloadUrl: d.download_url })}
+                                                    title="Preview"
+                                                    className="text-muted-foreground transition-colors hover:text-primary"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </button>
+                                                <a href={d.download_url} title="Download" className="text-muted-foreground transition-colors hover:text-primary">
+                                                    <Download className="h-4 w-4" />
+                                                </a>
+                                                {samDocuments.can_extract && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => extractSam(d.extract_url)}
+                                                        title="Use to fill in proposal details"
+                                                        className="text-muted-foreground transition-colors hover:text-primary"
+                                                    >
+                                                        <Sparkles className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </div>

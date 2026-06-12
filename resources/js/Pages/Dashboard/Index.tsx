@@ -56,16 +56,17 @@ const colorMap: Record<string, string> = {
     red: 'from-rose-500 to-red-500',
 };
 
-function StatCard({ title, value, subtitle, icon: Icon, color = 'indigo', href }: {
+function StatCard({ title, value, subtitle, icon: Icon, color = 'indigo', href, hint }: {
     title: string;
     value: string | number;
     subtitle?: string;
     icon: React.ComponentType<{ className?: string }>;
     color?: string;
     href?: string;
+    hint?: string;
 }) {
     const card = (
-        <div className="card-surface card-hover group h-full p-5">
+        <div className="card-surface card-hover group h-full p-5" title={hint}>
             <div className="mb-4 flex items-start justify-between">
                 <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${colorMap[color] ?? colorMap.indigo} text-white shadow-soft`}>
                     <Icon className="h-5 w-5" />
@@ -119,18 +120,28 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
                     </div>
                 </div>
 
-                {/* Stats */}
-                <div className="stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
-                    <StatCard title="My Submissions" value={metrics.mySubmitted} icon={FileText} color="indigo" href="/proposals" />
-                    <StatCard title="My Awards" value={metrics.myAwarded} icon={Trophy} color="green" />
-                    <StatCard title="Pipeline Value" value={formatCurrency(metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle="Projected, open proposals" href="/proposals" />
-                    <StatCard title="My Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" />
-                    <StatCard title="Total Submitted Value" value={formatCurrency(metrics.companySubmittedValue)} icon={DollarSign} color="teal" subtitle={`${metrics.companySubmittedCount} submitted · org-wide`} />
-                    <StatCard title="My Earnings (YTD)" value={formatCurrency(metrics.myAwardValue)} icon={CheckCircle} color="green" subtitle="My awards this year" />
-                    <StatCard title="Company Earnings (YTD)" value={formatCurrency(metrics.companyAwardValue)} icon={Trophy} color="green" subtitle="All contracts awarded this year" href="/proposals/board" />
-                    <StatCard title="Active Proposals" value={metrics.myPending} icon={Target} color="orange" href="/proposals" />
-                    <StatCard title="Open Tasks" value={metrics.myTasks} icon={Clock} color="indigo" />
-                    <StatCard title="Follow-ups Due" value={metrics.myFollowUps} icon={AlertCircle} color={metrics.myFollowUps > 0 ? 'red' : 'green'} href="/follow-ups" />
+                {/* Stats — every card links to the list its number is drawn from */}
+                <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <StatCard title="My Submissions" value={metrics.mySubmitted} icon={FileText} color="indigo" subtitle="Proposals you've submitted"
+                        href="/proposals/board" hint="Your proposals that have been submitted (have a submission date). Opens the Applications board." />
+                    <StatCard title="My Awards" value={metrics.myAwarded} icon={Trophy} color="green" subtitle="Bids you've won"
+                        href="/proposals/board?status=awarded,completed" hint="Proposals you've won — awarded or completed. Opens the Applications board filtered to those." />
+                    <StatCard title="Pipeline Value" value={formatCurrency(metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle="Projected value, open bids"
+                        href="/proposals/board?status=in_progress,submitted,pending,clarification_requested" hint="Projected value (USD) of your open proposals. Opens the Applications board filtered to open work." />
+                    <StatCard title="My Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" subtitle="Total value you've submitted"
+                        href="/proposals/board" hint="Total value (USD) of everything you've submitted. Opens the Applications board." />
+                    <StatCard title="Total Submitted Value" value={formatCurrency(metrics.companySubmittedValue)} icon={DollarSign} color="teal" subtitle={`${metrics.companySubmittedCount} submitted · org-wide`}
+                        href="/proposals/board?status=submitted,pending,clarification_requested,awarded,completed,lost" hint="Org-wide value (USD) of every proposal past the submit stage. Opens the Applications board filtered to those." />
+                    <StatCard title="My Earnings (YTD)" value={formatCurrency(metrics.myAwardValue)} icon={CheckCircle} color="green" subtitle="Your awards this year"
+                        href="/proposals/board?status=awarded,completed" hint="Value (USD) of contracts awarded to you this year. Opens the Applications board filtered to won work." />
+                    <StatCard title="Company Earnings (YTD)" value={formatCurrency(metrics.companyAwardValue)} icon={Trophy} color="green" subtitle="All wins this year, org-wide"
+                        href="/proposals/board?status=awarded,completed" hint="Value (USD) of all contracts the company has won this year. Opens the Applications board filtered to won work." />
+                    <StatCard title="Active Proposals" value={metrics.myPending} icon={Target} color="orange" subtitle="Still in progress"
+                        href="/proposals/board?status=in_progress" hint="Your proposals still in progress. Opens the Applications board filtered to In Progress." />
+                    <StatCard title="Open Tasks" value={metrics.myTasks} icon={Clock} color="indigo" subtitle="Assigned to you, not done"
+                        href="/calendar" hint="Tasks assigned to you that aren't completed yet. Opens your calendar." />
+                    <StatCard title="Follow-ups Due" value={metrics.myFollowUps} icon={AlertCircle} color={metrics.myFollowUps > 0 ? 'red' : 'green'} subtitle="Scheduled or overdue"
+                        href="/follow-ups" hint="Follow-ups assigned to you that are scheduled or overdue. Opens your inbox." />
                 </div>
 
                 {/* Panels */}

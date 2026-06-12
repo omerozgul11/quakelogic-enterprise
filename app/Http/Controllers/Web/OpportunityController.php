@@ -13,6 +13,7 @@ use App\Services\Proposals\ProposalNumberService;
 use App\Services\BidSources\SamGov\SamGovImportService;
 use App\Services\BidSources\BidPrime\FakeBidPrimeClient;
 use App\Services\BidSources\OpportunityDeduplicationService;
+use App\Services\BidSources\OpportunityDocumentService;
 use App\Services\BidSources\OpportunityPipelineService;
 use App\Services\Notifications\Notifier;
 use Illuminate\Http\RedirectResponse;
@@ -41,34 +42,58 @@ class OpportunityController extends Controller
             // Pipeline maintenance must never break the page.
         }
 
-        $query = Opportunity::forOrganization($user->organization_id)
+        // Base query: organization scope + the shared filters (status, source,
+        // NAICS, free-text search, keyword chips). The For You / Saved / All
+        // tabs all build on this same filtered base.
+        $base = Opportunity::forOrganization($user->organization_id)
             ->with(['agency', 'assignedTo:id,name', 'owner:id,name']);
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $base->where('status', $request->status);
         }
         if ($request->filled('source')) {
-            $query->where('source', $request->source);
+            $base->where('source', $request->source);
         }
         if ($request->filled('naics')) {
-            $query->where('naics_code', $request->naics);
+            $base->where('naics_code', $request->naics);
         }
-
-        // Free-text keyword search: each typed word/keyword broadens the match
-        // (OR) across the title, number, agency, description, scope, etc.
         if ($request->filled('search')) {
             $terms = preg_split('/[\s,]+/', (string) $request->search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-            $this->applyKeywordMatch($query, $terms);
+            $this->applyKeywordMatch($base, $terms);
         }
-
-        // Keyword filter chips: narrow to opportunities mentioning any of the
-        // selected keywords (combined with the search above as an AND group).
         $selectedKeywords = array_values(array_filter(array_map(
             fn ($k) => trim((string) $k),
             (array) $request->input('keywords', [])
         )));
         if ($selectedKeywords) {
-            $this->applyKeywordMatch($query, $selectedKeywords);
+            $this->applyKeywordMatch($base, $selectedKeywords);
+        }
+
+        // The user's personal keywords power the "For You" feed; the watchlist
+        // (manual stars) powers "Saved".
+        $personalKeywords = array_values(array_filter(array_map('trim', (array) ($user->pipeline_keywords ?? []))));
+        $savedIds = \Illuminate\Support\Facades\DB::table('opportunity_watchlists')
+            ->where('user_id', $user->id)
+            ->pluck('opportunity_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        // Tab counts (reflect the active filters, ignoring the tab itself).
+        $counts = [
+            'all' => (clone $base)->count(),
+            'saved' => $savedIds ? (clone $base)->whereIn('id', $savedIds)->count() : 0,
+            'foryou' => $personalKeywords ? (clone $base)->where(fn ($q) => $this->applyKeywordMatch($q, $personalKeywords))->count() : 0,
+        ];
+
+        // Apply the chosen tab.
+        $view = in_array($request->input('view'), ['foryou', 'saved'], true) ? $request->input('view') : 'all';
+        $query = clone $base;
+        if ($view === 'saved') {
+            $query->whereIn('id', $savedIds ?: [0]);
+        } elseif ($view === 'foryou') {
+            $personalKeywords
+                ? $query->where(fn ($q) => $this->applyKeywordMatch($q, $personalKeywords))
+                : $query->whereRaw('1 = 0'); // no keywords yet → empty feed
         }
 
         // Sorting (price, name, due date, agency, status, recency).
@@ -97,11 +122,15 @@ class OpportunityController extends Controller
             'filters' => [
                 ...$request->only(['status', 'source', 'search', 'naics']),
                 'keywords' => $selectedKeywords,
+                'view' => $view,
                 'sort' => array_search($sort, $sortable, true) ?: 'created_at',
                 'direction' => $direction,
             ],
+            'view' => $view,
+            'counts' => $counts,
+            'savedIds' => $savedIds,
             'keywordOptions' => config('pipeline.keywords', []),
-            'personalKeywords' => array_values($user->pipeline_keywords ?? []),
+            'personalKeywords' => $personalKeywords,
             'statuses' => collect(OpportunityStatus::cases())->map(fn($s) => ['value' => $s->value, 'label' => $s->label(), 'color' => $s->color()]),
             'sources' => collect(OpportunitySource::cases())->map(fn($s) => ['value' => $s->value, 'label' => $s->label()]),
             'can' => [
@@ -109,6 +138,30 @@ class OpportunityController extends Controller
                 'import' => $user->can('import opportunities'),
             ],
         ]);
+    }
+
+    /** Star/unstar an opportunity for the current user (the Saved tab). */
+    public function toggleSave(Request $request, Opportunity $opportunity): RedirectResponse
+    {
+        $this->authorize('view', $opportunity);
+        $user = $request->user();
+
+        $table = \Illuminate\Support\Facades\DB::table('opportunity_watchlists')
+            ->where('opportunity_id', $opportunity->id)
+            ->where('user_id', $user->id);
+
+        if ($table->exists()) {
+            $table->delete();
+        } else {
+            \Illuminate\Support\Facades\DB::table('opportunity_watchlists')->insert([
+                'opportunity_id' => $opportunity->id,
+                'user_id' => $user->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back(303);
     }
 
     /**
@@ -237,7 +290,6 @@ class OpportunityController extends Controller
         $opportunity->load([
             'agency', 'company.contacts:id,company_id,first_name,last_name,email,phone,title',
             'assignedTo:id,name,email', 'owner:id,name,email',
-            'capturePlan.captureManager:id,name',
             'proposals:id,proposal_number,project_name,status,due_date,proposal_value',
             'amendments',
             'competitors',
@@ -256,12 +308,57 @@ class OpportunityController extends Controller
         return Inertia::render('Opportunities/Show', [
             'opportunity' => $opportunity,
             'contacts' => $contacts,
+            'samDocuments' => $this->samDocuments($opportunity),
             'can' => [
                 'update' => $request->user()->can('update', $opportunity),
                 'delete' => $request->user()->can('delete', $opportunity),
                 'makeGoNoGo' => $request->user()->can('makeGoNoGoDecision', $opportunity),
                 'pursue' => $request->user()->can('create proposals'),
             ],
+        ]);
+    }
+
+    /**
+     * Solicitation documents this opportunity carries from SAM.gov, with proxied
+     * preview/download URLs. Empty when the source feed has no resource links
+     * (e.g. SAM sync disabled) — the UI shows an empty state.
+     *
+     * @return array<int,array{index:int,name:string,preview_url:string,download_url:string}>
+     */
+    private function samDocuments(Opportunity $opportunity): array
+    {
+        return collect(app(OpportunityDocumentService::class)->list($opportunity))
+            ->map(fn ($d) => [
+                'index' => $d['index'],
+                'name' => $d['name'],
+                'preview_url' => route('opportunities.documents.show', [$opportunity, $d['index']]),
+                'download_url' => route('opportunities.documents.show', [$opportunity, $d['index']]) . '?dl=1',
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Proxy a solicitation document from the opportunity's SAM.gov record. The
+     * file lives on SAM's servers — streamed through so the API key stays
+     * server-side. Append ?dl=1 to download instead of preview inline.
+     */
+    public function document(Request $request, Opportunity $opportunity, int $index, OpportunityDocumentService $docs): mixed
+    {
+        $this->authorize('view', $opportunity);
+
+        $url = $docs->urlAt($opportunity, $index);
+        abort_if($url === null, 404, 'Document not found.');
+
+        $fetched = $docs->fetch($url);
+        abort_if($fetched === null, 502, 'Could not retrieve the document from SAM.gov.');
+
+        $disposition = $request->boolean('dl') ? 'attachment' : 'inline';
+
+        return response($fetched['body'], 200, [
+            'Content-Type' => $fetched['mime'],
+            'Content-Disposition' => $disposition . '; filename="' . addslashes($fetched['filename']) . '"',
+            'X-Frame-Options' => 'SAMEORIGIN',
         ]);
     }
 
@@ -295,13 +392,13 @@ class OpportunityController extends Controller
             'solicitation_number' => $opportunity->solicitation_number,
             'proposal_value' => $opportunity->estimated_value,
             'due_date' => $opportunity->due_date,
-            'status' => 'draft',
+            'status' => 'in_progress',
         ]);
 
         $proposal->statusHistory()->create([
             'changed_by' => $user->id,
             'from_status' => null,
-            'to_status' => 'draft',
+            'to_status' => 'in_progress',
             'changed_at' => now(),
         ]);
 

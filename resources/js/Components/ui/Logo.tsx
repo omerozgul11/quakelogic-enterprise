@@ -15,7 +15,7 @@ export function LogoMark({ className, size = 36 }: { className?: string; size?: 
     );
 }
 
-export function Logo({ className, dark = false }: { className?: string; dark?: boolean }) {
+export function Logo({ className, dark = false, subtitle = 'Proposals' }: { className?: string; dark?: boolean; subtitle?: string }) {
     return (
         <span className={cn('inline-flex items-center gap-2.5', className)}>
             <LogoMark size={34} />
@@ -24,7 +24,7 @@ export function Logo({ className, dark = false }: { className?: string; dark?: b
                     QuakeLogic
                 </span>
                 <span className={cn('text-[10px] font-semibold uppercase tracking-[0.15em]', dark ? 'text-orange-100/90' : 'text-muted-foreground')}>
-                    Enterprise
+                    {subtitle}
                 </span>
             </span>
         </span>

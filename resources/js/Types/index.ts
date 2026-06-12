@@ -30,7 +30,6 @@ export interface Opportunity {
     source: string;
     external_id?: string;
     status: string;
-    capture_stage?: string;
     agency_name?: string;
     naics_code?: string;
     estimated_value?: number;
@@ -67,20 +66,6 @@ export interface ProposalSubmission {
     company?: Company;
     created_at: string;
     updated_at: string;
-}
-
-export interface CapturePlan {
-    id: number;
-    ulid: string;
-    stage: string;
-    probability_of_win?: number;
-    estimated_value?: number;
-    strategy?: string;
-    win_themes?: string;
-    discriminators?: string;
-    opportunity?: Opportunity;
-    capture_manager?: User;
-    created_at: string;
 }
 
 export interface Agency {
@@ -181,10 +166,19 @@ export interface NotificationItem {
     created_at: string | null;
 }
 
+export interface AppLink {
+    key: string;
+    name: string;
+    description: string;
+    icon: string;
+    url: string;
+    current: boolean;
+}
+
 export interface SharedProps {
     auth: { user: User | null };
     flash: FlashMessages;
-    app: { name: string; version: string };
+    app: { name: string; version: string; switcher: AppLink[] };
     notifications_count: number;
     notifications: NotificationItem[];
 }

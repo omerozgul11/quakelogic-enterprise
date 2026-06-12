@@ -10,31 +10,26 @@ use Illuminate\Validation\ValidationException;
 class ProposalWorkflowService
 {
     public const ALLOWED_TRANSITIONS = [
-        'draft' => ['in_progress', 'cancelled'],
-        'in_progress' => ['under_review', 'draft', 'cancelled'],
-        'under_review' => ['in_progress', 'submitted', 'cancelled'],
-        'submitted' => ['pending', 'under_evaluation', 'clarification_requested', 'awarded', 'lost', 'cancelled'],
+        'in_progress' => ['submitted', 'cancelled'],
+        'submitted' => ['pending', 'clarification_requested', 'awarded', 'lost', 'cancelled'],
         'pending' => ['submitted', 'clarification_requested', 'awarded', 'lost', 'cancelled'],
-        'under_evaluation' => ['clarification_requested', 'negotiation', 'awarded', 'lost'],
-        'clarification_requested' => ['submitted', 'under_evaluation', 'lost', 'cancelled'],
-        'negotiation' => ['awarded', 'lost', 'cancelled'],
+        'clarification_requested' => ['submitted', 'lost', 'cancelled'],
         'awarded' => ['completed', 'submitted'],
         'completed' => ['awarded'],
         // A lost or cancelled proposal can be reopened — it must never be a
         // dead-end the user can't move out of.
-        'lost' => ['submitted', 'awarded', 'draft'],
-        'cancelled' => ['draft', 'in_progress'],
+        'lost' => ['submitted', 'awarded', 'in_progress'],
+        'cancelled' => ['in_progress'],
     ];
 
     /**
      * The linear happy-path order used to derive the single Previous / Next
-     * step buttons on the proposal header. Off-path outcomes (lost, cancelled,
-     * and the legacy under_evaluation) are intentionally excluded — they're
-     * still reachable from the board.
+     * step buttons on the proposal header. Off-path outcomes (lost, cancelled)
+     * are intentionally excluded — they're still reachable from the board.
      */
     public const MAIN_PIPELINE = [
-        'draft', 'in_progress', 'under_review', 'submitted',
-        'pending', 'clarification_requested', 'negotiation', 'awarded', 'completed',
+        'in_progress', 'submitted',
+        'pending', 'clarification_requested', 'awarded', 'completed',
     ];
 
     /**
@@ -76,7 +71,16 @@ class ProposalWorkflowService
         return ['previous' => $toStep($previous), 'next' => $toStep($next)];
     }
 
-    public function transition(ProposalSubmission $proposal, ProposalStatus $newStatus, User $user, ?string $notes = null): ProposalSubmission
+    /**
+     * Move a proposal to a new status, recording history and applying any side
+     * effects (submission/award stamping).
+     *
+     * When $force is true the FSM guard is skipped — the user explicitly chose a
+     * status and may move to any stage. The Previous/Next step buttons still use
+     * ALLOWED_TRANSITIONS for their suggestions, but an explicit status pick is
+     * never blocked.
+     */
+    public function transition(ProposalSubmission $proposal, ProposalStatus $newStatus, User $user, ?string $notes = null, bool $force = false): ProposalSubmission
     {
         $currentStatus = $proposal->status;
 
@@ -84,11 +88,13 @@ class ProposalWorkflowService
             throw ValidationException::withMessages(['status' => 'Proposal is already in this status.']);
         }
 
-        $allowed = self::ALLOWED_TRANSITIONS[$currentStatus->value] ?? [];
-        if (!in_array($newStatus->value, $allowed)) {
-            throw ValidationException::withMessages([
-                'status' => "Cannot transition from {$currentStatus->label()} to {$newStatus->label()}.",
-            ]);
+        if (!$force) {
+            $allowed = self::ALLOWED_TRANSITIONS[$currentStatus->value] ?? [];
+            if (!in_array($newStatus->value, $allowed)) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot transition from {$currentStatus->label()} to {$newStatus->label()}.",
+                ]);
+            }
         }
 
         $proposal->update(['status' => $newStatus->value]);

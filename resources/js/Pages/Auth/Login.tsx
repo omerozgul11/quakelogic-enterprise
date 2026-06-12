@@ -31,7 +31,7 @@ export default function Login() {
                         </div>
                         <h1 className="text-[28px] font-bold tracking-tight text-foreground">Welcome back</h1>
                         <p className="mt-1.5 text-[15px] text-muted-foreground">
-                            Sign in to <span className="font-semibold text-foreground">QuakeLogic</span> Enterprise
+                            Sign in to <span className="font-semibold text-foreground">QuakeLogic</span> Proposals
                         </p>
                     </div>
 
@@ -98,7 +98,7 @@ export default function Login() {
                     </div>
 
                     <p className="mt-6 text-center text-xs text-muted-foreground">
-                        © {new Date().getFullYear()} QuakeLogic Enterprise. All rights reserved.
+                        © {new Date().getFullYear()} QuakeLogic Proposals. All rights reserved.
                     </p>
                 </div>
             </div>

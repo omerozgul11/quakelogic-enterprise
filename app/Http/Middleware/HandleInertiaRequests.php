@@ -30,7 +30,12 @@ class HandleInertiaRequests extends Middleware
                     'organization_id' => $user->organization_id,
                     'roles' => $user->getRoleNames(),
                     'permissions' => $user->getAllPermissions()->pluck('name'),
-                    'preferences' => \App\Http\Controllers\Web\SettingsController::mergedPreferences($user->notification_preferences),
+                    // Guard against a partially-hydrated user model (e.g. a test
+                    // factory user that never loaded this nullable column) so
+                    // strict mode doesn't throw on a missing attribute.
+                    'preferences' => \App\Http\Controllers\Web\SettingsController::mergedPreferences(
+                        array_key_exists('notification_preferences', $user->getAttributes()) ? $user->notification_preferences : null
+                    ),
                 ] : null,
             ],
             'flash' => [
@@ -42,6 +47,7 @@ class HandleInertiaRequests extends Middleware
             'app' => [
                 'name' => config('app.name'),
                 'version' => config('app.version', '1.0.0'),
+                'switcher' => config('apps.switcher'),
             ],
             'notifications_count' => fn() => $user
                 ? $user->unreadNotifications()->count()

@@ -28,7 +28,7 @@ const SECTIONS: Section[] = [
         title: 'Getting Started',
         body: (
             <>
-                <P>QuakeLogic Enterprise tracks the full life of a government bid: finding the opportunity, writing and submitting the proposal, following up, and recording the win.</P>
+                <P>QuakeLogic Proposals tracks the full life of a government bid: finding the opportunity, writing and submitting the proposal, following up, and recording the win.</P>
                 <UL items={[
                     <>Use the <B>sidebar</B> to move between areas. What you see depends on your role — if a section is missing, you don't have permission for it.</>,
                     <>The <B>search bar</B> at the top finds proposals, opportunities, contacts, and companies from anywhere.</>,
@@ -92,7 +92,7 @@ const SECTIONS: Section[] = [
                 <P>Create a proposal from the Proposals page or straight from an opportunity. Each proposal gets a unique number (QL-YYYY-NNNN) automatically.</P>
                 <UL items={[
                     <><B>Upload the proposal document</B> (PDF/Word) and the platform extracts text, key details, and any contacts (names with an email or phone) it finds.</>,
-                    <><B>Submission method</B> — mark how the proposal goes out: email, portal, mail, fax, or hand delivery (multiple allowed).</>,
+                    <><B>Submission method</B> — mark how the proposal goes out: email, portal, or mail (multiple allowed).</>,
                     <><B>Preview</B> — click any file to preview it in the browser; Word documents are shown as extracted text.</>,
                     <>All files are private — downloads go through secure, signed links.</>,
                 ]} />
@@ -200,7 +200,7 @@ export default function GuideIndex() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">User Guide</h1>
-                        <p className="text-sm text-muted-foreground">How to use QuakeLogic Enterprise, section by section.</p>
+                        <p className="text-sm text-muted-foreground">How to use QuakeLogic Proposals, section by section.</p>
                     </div>
                 </div>
 

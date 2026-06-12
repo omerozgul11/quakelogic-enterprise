@@ -1,4 +1,4 @@
-// QuakeLogic Enterprise service worker.
+// QuakeLogic Proposals service worker.
 // Minimal: enables PWA installability and routes notification clicks.
 const VERSION = 'ql-v1';
 

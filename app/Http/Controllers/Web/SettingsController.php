@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Services\Mail\MailboxConnectionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -35,13 +36,60 @@ class SettingsController extends Controller
                 'enabled' => !is_null($user->two_factor_secret),
                 'confirmed' => !is_null($user->two_factor_confirmed_at),
             ],
-            'mailbox' => [
-                'connected' => (bool) $user->emailAccount?->isConnected(),
-                'email' => $user->emailAccount?->email,
-                // True once Google Workspace OAuth credentials are configured.
-                'configurable' => (bool) config('services.google.client_id'),
-            ],
+            'mailbox' => app(MailboxConnectionService::class)->state($user->emailAccount),
         ]);
+    }
+
+    /** Validation rules shared by the connect form (self-service and admin). */
+    public static function mailboxRules(): array
+    {
+        return [
+            'email' => 'required|email',
+            'from_name' => 'nullable|string|max:120',
+            'smtp_host' => 'required|string|max:255',
+            'smtp_port' => 'required|integer|min:1|max:65535',
+            'smtp_encryption' => 'nullable|in:tls,ssl,none',
+            'smtp_username' => 'nullable|string|max:255',
+            'smtp_password' => 'nullable|string|max:255',
+        ];
+    }
+
+    /**
+     * Connect (or update) the current user's own work email over SMTP. The app
+     * password is required to connect and optional on later edits (left blank
+     * keeps the stored one).
+     */
+    public function connectMailbox(Request $request, MailboxConnectionService $mailboxes): RedirectResponse
+    {
+        $validated = $request->validate(self::mailboxRules());
+
+        $account = $mailboxes->connect($request->user(), $validated);
+        if ($account === null) {
+            return back()->withErrors(['smtp_password' => 'An app password is required to connect your email.']);
+        }
+
+        return back()->with('success', 'Work email saved. Send a test email to confirm it can send.');
+    }
+
+    /** Send a test email to the user's own address to verify the SMTP settings. */
+    public function testMailbox(Request $request, MailboxConnectionService $mailboxes): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (!$mailboxes->mailbox($user)?->isConnected()) {
+            return back()->with('error', 'Connect your work email first.');
+        }
+
+        return $mailboxes->test($user)
+            ? back()->with('success', "Test email sent to {$user->email}. Check your inbox.")
+            : back()->with('error', 'Could not send — double-check the host, port, encryption and app password.');
+    }
+
+    public function disconnectMailbox(Request $request, MailboxConnectionService $mailboxes): RedirectResponse
+    {
+        $mailboxes->disconnect($request->user());
+
+        return back()->with('success', 'Work email disconnected.');
     }
 
     public static function mergedPreferences(?array $stored): array

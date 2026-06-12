@@ -1,4 +1,4 @@
 {{ $body }}
 
 —
-Sent via QuakeLogic Enterprise
+Sent via QuakeLogic Proposals

@@ -22,9 +22,6 @@ class RolesPermissionsSeeder extends Seeder
             'view opportunities', 'create opportunities', 'update opportunities', 'delete opportunities',
             'import opportunities', 'assign opportunities', 'qualify opportunities', 'make go no go decision',
 
-            // Capture
-            'view capture plans', 'manage capture plans', 'manage capture risks', 'manage capture decisions',
-
             // Proposals
             'view proposals', 'view all proposals', 'create proposals', 'update proposals', 'delete proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
@@ -44,6 +41,12 @@ class RolesPermissionsSeeder extends Seeder
 
             // AI
             'use ai assistant', 'run document extraction', 'review ai extraction', 'manage ai settings',
+
+            // Shipments (sibling app — UPS tracking for mailed proposals).
+            // Gating the whole Shipments app. Super Admin gets it via the
+            // Permission::all() sync below; grant to additional roles here when
+            // they should be able to reach Shipments (no Shipments deploy needed).
+            'access shipments', 'manage mailings',
         ];
 
         foreach ($permissions as $permission) {
@@ -59,7 +62,6 @@ class RolesPermissionsSeeder extends Seeder
         $ceo->syncPermissions([
             'view opportunities', 'create opportunities', 'update opportunities', 'delete opportunities',
             'import opportunities', 'assign opportunities', 'qualify opportunities', 'make go no go decision',
-            'view capture plans', 'manage capture plans',
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
@@ -74,7 +76,6 @@ class RolesPermissionsSeeder extends Seeder
         $bdm->syncPermissions([
             'view opportunities', 'create opportunities', 'update opportunities', 'import opportunities',
             'assign opportunities', 'qualify opportunities', 'make go no go decision',
-            'view capture plans', 'manage capture plans',
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
             'view follow ups', 'manage follow ups', 'send follow up emails',
@@ -86,7 +87,7 @@ class RolesPermissionsSeeder extends Seeder
         // Proposal Manager
         $pm = Role::firstOrCreate(['name' => 'Proposal Manager']);
         $pm->syncPermissions([
-            'view opportunities', 'view capture plans',
+            'view opportunities',
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
             'view crm', 'view follow ups', 'manage follow ups',
@@ -107,24 +108,10 @@ class RolesPermissionsSeeder extends Seeder
             'use ai assistant',
         ]);
 
-        // Capture Manager
-        $cm = Role::firstOrCreate(['name' => 'Capture Manager']);
-        $cm->syncPermissions([
-            'view opportunities', 'update opportunities', 'qualify opportunities', 'make go no go decision',
-            'view capture plans', 'manage capture plans', 'manage capture risks', 'manage capture decisions',
-            'view proposals',
-            'view crm',
-            'view follow ups', 'manage follow ups',
-            'view own commissions',
-            'view dashboards',
-            'use ai assistant',
-        ]);
-
         // Sales Representative
         $sales = Role::firstOrCreate(['name' => 'Sales Representative']);
         $sales->syncPermissions([
             'view opportunities', 'create opportunities',
-            'view capture plans',
             'view proposals', 'create proposals', 'update proposals',
             'view crm', 'manage contacts', 'manage activities',
             'view follow ups', 'manage follow ups', 'send follow up emails',
@@ -143,7 +130,7 @@ class RolesPermissionsSeeder extends Seeder
         // Read Only
         $readOnly = Role::firstOrCreate(['name' => 'Read Only']);
         $readOnly->syncPermissions([
-            'view opportunities', 'view capture plans', 'view proposals',
+            'view opportunities', 'view proposals',
             'view crm', 'view follow ups', 'view dashboards',
         ]);
     }

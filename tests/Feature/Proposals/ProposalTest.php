@@ -71,18 +71,18 @@ class ProposalTest extends TestCase
     {
         $proposal = ProposalSubmission::factory()->create([
             'organization_id' => $this->organization->id,
-            'status' => 'draft',
+            'status' => 'in_progress',
             'owner_id' => $this->proposalManager->id,
         ]);
 
         $response = $this->actingAs($this->proposalManager)->post("/proposals/{$proposal->id}/transition", [
-            'status' => 'in_progress',
+            'status' => 'submitted',
         ]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('proposal_submissions', [
             'id' => $proposal->id,
-            'status' => 'in_progress',
+            'status' => 'submitted',
         ]);
     }
 

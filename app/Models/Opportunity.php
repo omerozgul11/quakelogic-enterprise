@@ -2,14 +2,12 @@
 
 namespace App\Models;
 
-use App\Enums\CaptureStage;
 use App\Enums\OpportunitySource;
 use App\Enums\OpportunityStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use Laravel\Scout\Searchable;
@@ -21,7 +19,7 @@ class Opportunity extends Model
     protected $fillable = [
         'ulid', 'organization_id', 'created_by', 'updated_by', 'assigned_to', 'owner_id',
         'title', 'solicitation_number', 'opportunity_number', 'source', 'external_id', 'source_url',
-        'status', 'capture_stage', 'set_aside_type', 'contract_type', 'naics_code', 'psc_code',
+        'status', 'set_aside_type', 'contract_type', 'naics_code', 'psc_code',
         'agency_name', 'sub_agency_name', 'agency_id', 'company_id',
         'place_of_performance_city', 'place_of_performance_state', 'place_of_performance_country',
         'estimated_value', 'estimated_value_low', 'estimated_value_high', 'currency', 'probability_of_win',
@@ -37,7 +35,6 @@ class Opportunity extends Model
         return [
             'status' => OpportunityStatus::class,
             'source' => OpportunitySource::class,
-            'capture_stage' => CaptureStage::class,
             'posted_date' => 'date',
             'due_date' => 'date',
             'response_deadline' => 'date',
@@ -89,11 +86,6 @@ class Opportunity extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
-    }
-
-    public function capturePlan(): HasOne
-    {
-        return $this->hasOne(CapturePlan::class);
     }
 
     public function proposals(): HasMany

@@ -32,13 +32,13 @@ export default function LegalIndex() {
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                             <ShieldCheck className="h-3.5 w-3.5" /> Legal &amp; Copyright
                         </span>
-                        <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground">QuakeLogic Enterprise</h1>
+                        <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground">QuakeLogic Proposals</h1>
                         <p className="mt-1 text-sm text-muted-foreground">© {YEAR} QuakeLogic Inc. All rights reserved.</p>
                     </div>
 
                     <Section title="Copyright Notice">
                         <p>
-                            QuakeLogic Enterprise, including its software, source code, design, user interface, text,
+                            QuakeLogic Proposals, including its software, source code, design, user interface, text,
                             graphics, logos, and all related content (collectively, the “Platform”), is the exclusive
                             property of QuakeLogic Inc. and is protected by United States and international copyright,
                             trademark, trade secret, and other intellectual property laws.
@@ -86,13 +86,13 @@ export default function LegalIndex() {
 
                     <Section title="Contact">
                         <p>
-                            Questions about these terms or QuakeLogic Enterprise can be directed to QuakeLogic Inc. at{' '}
+                            Questions about these terms or QuakeLogic Proposals can be directed to QuakeLogic Inc. at{' '}
                             <a href="https://quakelogic.net" target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">quakelogic.net</a>.
                         </p>
                     </Section>
 
                     <p className="mt-8 border-t border-border pt-6 text-xs text-muted-foreground">
-                        QuakeLogic Enterprise — © {YEAR} QuakeLogic Inc. All rights reserved.
+                        QuakeLogic Proposals — © {YEAR} QuakeLogic Inc. All rights reserved.
                     </p>
                 </main>
             </div>

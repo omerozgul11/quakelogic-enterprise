@@ -4,13 +4,10 @@ namespace App\Enums;
 
 enum ProposalStatus: string
 {
-    case Draft = 'draft';
     case InProgress = 'in_progress';
-    case UnderReview = 'under_review';
     case Submitted = 'submitted';
     case Pending = 'pending';
     case ClarificationRequested = 'clarification_requested';
-    case Negotiation = 'negotiation';
     case Awarded = 'awarded';
     case Completed = 'completed';
     case Lost = 'lost';
@@ -19,13 +16,10 @@ enum ProposalStatus: string
     public function label(): string
     {
         return match($this) {
-            self::Draft => 'Draft',
             self::InProgress => 'In Progress',
-            self::UnderReview => 'Under Review',
             self::Submitted => 'Submitted',
             self::Pending => 'Pending',
             self::ClarificationRequested => 'Clarification Requested',
-            self::Negotiation => 'Negotiation',
             self::Awarded => 'Awarded',
             self::Completed => 'Completed',
             self::Lost => 'Lost',
@@ -36,13 +30,10 @@ enum ProposalStatus: string
     public function color(): string
     {
         return match($this) {
-            self::Draft => 'gray',
             self::InProgress => 'blue',
-            self::UnderReview => 'yellow',
             self::Submitted => 'indigo',
             self::Pending => 'orange',
             self::ClarificationRequested => 'amber',
-            self::Negotiation => 'purple',
             self::Awarded => 'green',
             self::Completed => 'teal',
             self::Lost => 'red',
@@ -53,8 +44,8 @@ enum ProposalStatus: string
     public function isActive(): bool
     {
         return in_array($this, [
-            self::Draft, self::InProgress, self::UnderReview,
-            self::Submitted, self::Pending, self::ClarificationRequested, self::Negotiation,
+            self::InProgress,
+            self::Submitted, self::Pending, self::ClarificationRequested,
         ]);
     }
 

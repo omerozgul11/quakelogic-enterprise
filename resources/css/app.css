@@ -164,6 +164,12 @@
   .animate-scale-in { animation: scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
   .animate-float { animation: float 8s ease-in-out infinite; }
 
+  /* Apple-like menu open: a quick, soft scale + settle. Pair with a Tailwind
+     origin-* utility so it grows from the edge nearest its trigger. */
+  .animate-dropdown { animation: dropdown-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  /* Gentle reveal for inline edit forms / expanding panels. */
+  .animate-panel { animation: panel-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
   .stagger > * { opacity: 0; animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
   .stagger > *:nth-child(1) { animation-delay: 0.03s; }
   .stagger > *:nth-child(2) { animation-delay: 0.07s; }
@@ -178,6 +184,8 @@
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes scale-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes dropdown-in { from { opacity: 0; transform: scale(0.95) translateY(-6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes panel-in { from { opacity: 0; transform: translateY(-6px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes float { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-16px) translateX(8px); } }
 
 @media (prefers-reduced-motion: reduce) {

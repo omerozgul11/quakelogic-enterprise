@@ -14,7 +14,8 @@ interface Row {
     user: string;
     proposals: number;
     submitted: number;
-    followups: number;
+    assigned: number;
+    picked_up: number;
     value_created: number;
     value_submitted: number;
     value_awarded: number;
@@ -27,7 +28,7 @@ interface Props {
     from: string | null;
     to: string | null;
     totals: {
-        proposals: number; submitted: number; followups: number;
+        proposals: number; submitted: number; assigned: number; picked_up: number;
         value_created: number; value_submitted: number; value_awarded: number;
     };
 }
@@ -42,7 +43,8 @@ const PERIODS: Array<{ value: Exclude<Props['period'], 'custom'>; label: string 
 const COUNT_SERIES = [
     { key: 'proposals', label: 'Proposals created', color: '#6366f1' },
     { key: 'submitted', label: 'Proposals submitted', color: '#10b981' },
-    { key: 'followups', label: 'Follow-ups', color: '#06b6d4' },
+    { key: 'assigned', label: 'Assigned (given)', color: '#06b6d4' },
+    { key: 'picked_up', label: 'Picked up', color: '#8b5cf6' },
 ] as const;
 
 const VALUE_SERIES = [
@@ -64,7 +66,8 @@ export default function AdminActivity({ team, period, from, to, totals }: Props)
     const chips = [
         { label: 'Proposals created', color: '#6366f1', value: totals.proposals },
         { label: 'Proposals submitted', color: '#10b981', value: totals.submitted },
-        { label: 'Follow-ups', color: '#06b6d4', value: totals.followups },
+        { label: 'Assigned (given)', color: '#06b6d4', value: totals.assigned },
+        { label: 'Picked up', color: '#8b5cf6', value: totals.picked_up },
         { label: 'Value created', color: '#6366f1', value: formatCurrency(totals.value_created) },
         { label: 'Value submitted', color: '#10b981', value: formatCurrency(totals.value_submitted) },
         { label: 'Value awarded', color: '#f59e0b', value: formatCurrency(totals.value_awarded) },
@@ -106,7 +109,7 @@ export default function AdminActivity({ team, period, from, to, totals }: Props)
                 />
 
                 {/* Summary chips */}
-                <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
                     {chips.map(c => (
                         <div key={c.label} className="rounded-2xl border border-border bg-card p-4">
                             <div className="flex items-center gap-2">
@@ -187,7 +190,8 @@ export default function AdminActivity({ team, period, from, to, totals }: Props)
                                             <th className="th">User</th>
                                             <th className="th text-right">Proposals</th>
                                             <th className="th text-right">Submitted</th>
-                                            <th className="th text-right">Follow-ups</th>
+                                            <th className="th text-right">Assigned</th>
+                                            <th className="th text-right">Picked up</th>
                                             <th className="th text-right">$ Created</th>
                                             <th className="th text-right">$ Submitted</th>
                                             <th className="th text-right">$ Awarded</th>
@@ -200,7 +204,8 @@ export default function AdminActivity({ team, period, from, to, totals }: Props)
                                                 <td className="td font-medium text-foreground">{r.user}</td>
                                                 <td className="td text-right text-muted-foreground">{r.proposals}</td>
                                                 <td className="td text-right text-muted-foreground">{r.submitted}</td>
-                                                <td className="td text-right text-muted-foreground">{r.followups}</td>
+                                                <td className="td text-right text-muted-foreground">{r.assigned}</td>
+                                                <td className="td text-right text-muted-foreground">{r.picked_up}</td>
                                                 <td className="td text-right text-muted-foreground">{formatCurrency(r.value_created)}</td>
                                                 <td className="td text-right text-muted-foreground">{formatCurrency(r.value_submitted)}</td>
                                                 <td className="td text-right text-muted-foreground">{formatCurrency(r.value_awarded)}</td>

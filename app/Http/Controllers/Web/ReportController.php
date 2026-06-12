@@ -179,7 +179,7 @@ class ReportController extends Controller
         [$period, $start, $end, $from, $to] = $this->resolveRange($request);
 
         $won = \App\Enums\ProposalStatus::wonValues();
-        $openStatuses = ['draft', 'in_progress', 'under_review', 'submitted', 'pending', 'clarification_requested', 'negotiation'];
+        $openStatuses = ['in_progress', 'submitted', 'pending', 'clarification_requested'];
 
         $by = function ($query, string $col, string $agg = 'count(*)') use ($orgId) {
             return $query->where('organization_id', $orgId)
@@ -203,14 +203,17 @@ class ReportController extends Controller
             'owner_id',
             'COALESCE(SUM(COALESCE(NULLIF(award_value, 0), proposal_value)), 0)'
         );
-        // Pipeline value is a "right now" number, not period-scoped.
+        // Pipeline value, active project count, and cancelled count are all
+        // "right now" numbers (not period-scoped).
         $pipelineValue = $by(ProposalSubmission::whereIn('status', $openStatuses), 'owner_id', 'COALESCE(SUM(proposal_value), 0)');
+        $activeCount = $by(ProposalSubmission::whereIn('status', $openStatuses), 'owner_id');
+        $cancelledCount = $by(ProposalSubmission::where('status', 'cancelled'), 'owner_id');
 
         $team = \App\Models\User::where('organization_id', $orgId)
             ->with('roles:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'is_active'])
-            ->map(function ($u) use ($created, $submitted, $awarded, $lost, $submittedValue, $earnings, $pipelineValue) {
+            ->map(function ($u) use ($created, $submitted, $awarded, $lost, $submittedValue, $earnings, $pipelineValue, $activeCount, $cancelledCount) {
                 $aw = (int) ($awarded[$u->id] ?? 0);
                 $lo = (int) ($lost[$u->id] ?? 0);
                 return [
@@ -221,6 +224,8 @@ class ReportController extends Controller
                     'submitted' => (int) ($submitted[$u->id] ?? 0),
                     'awarded' => $aw,
                     'lost' => $lo,
+                    'active' => (int) ($activeCount[$u->id] ?? 0),
+                    'cancelled' => (int) ($cancelledCount[$u->id] ?? 0),
                     'win_rate' => ($aw + $lo) > 0 ? round($aw / ($aw + $lo) * 100, 1) : null,
                     'submitted_value' => (float) ($submittedValue[$u->id] ?? 0),
                     'earnings' => (float) ($earnings[$u->id] ?? 0),

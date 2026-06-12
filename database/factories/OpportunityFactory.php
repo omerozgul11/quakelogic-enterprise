@@ -29,7 +29,6 @@ class OpportunityFactory extends Factory
             'naics_code' => $this->faker->randomElement(['541512', '541330', '541519', '336411']),
             'estimated_value' => $this->faker->randomFloat(2, 100000, 50000000),
             'status' => $this->faker->randomElement(['new', 'qualified', 'pursuing', 'proposal_in_progress']),
-            'capture_stage' => 'discovery',
             'due_date' => $this->faker->dateTimeBetween('+30 days', '+180 days')->format('Y-m-d'),
             'posted_date' => $this->faker->dateTimeBetween('-60 days', 'now')->format('Y-m-d'),
             'canonical_hash' => hash('sha256', $solNum . $title),

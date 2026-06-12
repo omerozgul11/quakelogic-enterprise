@@ -36,9 +36,6 @@ Handled entirely in `CommissionCalculationService`. The `computeCommission()` me
 ### Proposal Numbers
 Generated in `ProposalNumberService` inside a `DB::transaction` with `lockForUpdate()`. Format: `QL-YYYY-NNNN`. Never bypass this service.
 
-### Capture Stages
-`CaptureStage` enum enforces FSM transitions via `canTransitionTo()`. Use `CaptureWorkflowService::transitionStage()` — never update `stage` directly.
-
 ## Code Conventions
 
 - Controllers: thin, delegate to Services. No business logic.

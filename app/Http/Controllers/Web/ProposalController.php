@@ -17,6 +17,7 @@ use App\Services\Notifications\Notifier;
 use App\Support\Currency;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -24,6 +25,9 @@ use Inertia\Response;
 
 class ProposalController extends Controller
 {
+    /** Date filters are entered/displayed in Pacific time. */
+    private const APP_TZ = 'America/Los_Angeles';
+
     public function __construct(
         private readonly ProposalNumberService $numberService,
         private readonly ProposalWorkflowService $workflow,
@@ -39,17 +43,22 @@ class ProposalController extends Controller
         $query = ProposalSubmission::forOrganization($user->organization_id)
             ->with(['owner:id,name', 'company:id,name', 'agency:id,name']);
 
-        // Non-admin users see only their proposals unless they have 'view all proposals'
+        // Non-admin users see only proposals they're involved in (creator,
+        // owner, manager, or team member) unless they have 'view all proposals'.
         if (!$user->can('view all proposals')) {
             $query->where(fn($q) => $q
-                ->where('owner_id', $user->id)
+                ->where('created_by', $user->id)
+                ->orWhere('owner_id', $user->id)
                 ->orWhere('proposal_manager_id', $user->id)
                 ->orWhereHas('teamMembers', fn($tm) => $tm->where('user_id', $user->id))
             );
         }
 
+        // `status` accepts a single value or a comma-separated set, so dashboard
+        // cards can deep-link to the exact status group their number counts.
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $statuses = array_values(array_filter(array_map('trim', explode(',', (string) $request->status))));
+            $query->whereIn('status', $statuses);
         }
         if ($request->filled('search')) {
             $s = $request->search;
@@ -59,6 +68,7 @@ class ProposalController extends Controller
                 ->orWhere('solicitation_number', 'like', "%{$s}%")
             );
         }
+        $this->applyDateFilter($query, $request);
 
         // Sorting by name, company, owner, status, value, due date, or recency.
         $sortable = [
@@ -87,7 +97,7 @@ class ProposalController extends Controller
         return Inertia::render('Proposals/Index', [
             'proposals' => $query->paginate(25)->withQueryString(),
             'filters' => [
-                ...$request->only(['status', 'search']),
+                ...$request->only(['status', 'search', 'date_field', 'from', 'to']),
                 'sort' => $sortKey,
                 'direction' => $direction,
             ],
@@ -104,18 +114,50 @@ class ProposalController extends Controller
         $this->authorize('viewAny', ProposalSubmission::class);
         $user = $request->user();
 
-        $query = ProposalSubmission::forOrganization($user->organization_id)
-            ->with(['owner:id,name', 'company:id,name'])
-            ->orderByDesc('updated_at');
-
+        // Base set this user may see; reused for the filter dropdown options so
+        // they only list owners/companies actually present in that set.
+        $base = ProposalSubmission::forOrganization($user->organization_id);
         if (!$user->can('view all proposals')) {
-            $query->where(fn ($q) => $q
-                ->where('owner_id', $user->id)
+            $base->where(fn ($q) => $q
+                ->where('created_by', $user->id)
+                ->orWhere('owner_id', $user->id)
                 ->orWhere('proposal_manager_id', $user->id)
                 ->orWhereHas('teamMembers', fn ($tm) => $tm->where('user_id', $user->id)));
         }
 
-        $proposals = $query->get()->map(fn ($p) => [
+        $ownerOptions = User::whereIn('id', (clone $base)->distinct()->pluck('owner_id')->filter())
+            ->orderBy('name')->get(['id', 'name'])
+            ->map(fn ($o) => ['value' => (string) $o->id, 'label' => $o->name])->values();
+        $companyOptions = Company::whereIn('id', (clone $base)->whereNotNull('company_id')->distinct()->pluck('company_id'))
+            ->orderBy('name')->get(['id', 'name'])
+            ->map(fn ($c) => ['value' => (string) $c->id, 'label' => $c->name])->values();
+
+        $query = (clone $base)->with(['owner:id,name', 'company:id,name'])->withCount('files')->orderByDesc('updated_at');
+
+        if ($request->filled('status')) {
+            $query->whereIn('status', array_values(array_filter(array_map('trim', explode(',', (string) $request->status)))));
+        }
+        if ($request->filled('owner_id')) {
+            $query->where('owner_id', $request->owner_id);
+        }
+        if ($request->filled('company_id')) {
+            $query->where('company_id', $request->company_id);
+        }
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(fn ($q) => $q
+                ->where('project_name', 'like', "%{$s}%")
+                ->orWhere('proposal_number', 'like', "%{$s}%")
+                ->orWhere('solicitation_number', 'like', "%{$s}%"));
+        }
+        $this->applyDateFilter($query, $request);
+
+        // Single query for the filtered set; total value is summed in USD across
+        // each proposal's native currency so the figure is comparable.
+        $models = $query->get();
+        $totalValue = $models->reduce(fn ($carry, $p) => $carry + Currency::toUsd((float) $p->proposal_value, $p->currency), 0.0);
+
+        $proposals = $models->map(fn ($p) => [
             'id' => $p->id,
             'proposal_number' => $p->proposal_number,
             'project_name' => $p->project_name,
@@ -123,13 +165,19 @@ class ProposalController extends Controller
             'value' => (float) $p->proposal_value,
             'currency' => $p->currency ?? Currency::DEFAULT,
             'due_date' => $p->due_date?->format('Y-m-d'),
+            'submission_date' => $p->submission_date?->format('Y-m-d'),
+            'documents' => (int) $p->files_count,
             'company' => $p->company?->name,
             'owner' => $p->owner?->name,
-        ]);
+        ])->values();
 
         return Inertia::render('Proposals/Board', [
             'proposals' => $proposals,
             'statuses' => collect(ProposalStatus::cases())->map(fn ($s) => ['value' => $s->value, 'label' => $s->label(), 'color' => $s->color()]),
+            'owners' => $ownerOptions,
+            'companies' => $companyOptions,
+            'filters' => $request->only(['status', 'owner_id', 'company_id', 'search', 'date_field', 'from', 'to']),
+            'totals' => ['count' => $models->count(), 'value' => round($totalValue, 2)],
             'can' => ['create' => $user->can('create proposals'), 'move' => $user->can('create proposals')],
         ]);
     }
@@ -186,13 +234,13 @@ class ProposalController extends Controller
             'company_id' => $this->resolveCompanyId($validated['company'] ?? null, $user),
             'currency' => Currency::normalize($validated['currency'] ?? Currency::DEFAULT),
             'proposal_number' => $this->numberService->generate($user->organization_id),
-            'status' => 'draft',
+            'status' => 'in_progress',
         ]);
 
         $proposal->statusHistory()->create([
             'changed_by' => $user->id,
             'from_status' => null,
-            'to_status' => 'draft',
+            'to_status' => 'in_progress',
             'changed_at' => now(),
         ]);
 
@@ -208,6 +256,11 @@ class ProposalController extends Controller
         }
 
         $this->notifier->proposalCreated($proposal, $user);
+
+        // If an admin created this on someone else's behalf, let the new owner know.
+        if ($ownerId !== $user->id && ($newOwner = User::find($ownerId))) {
+            $this->notifier->proposalAssigned($proposal, $newOwner, $user);
+        }
 
         return redirect()->route('proposals.show', $proposal)->with('success', 'Proposal created.');
     }
@@ -340,6 +393,7 @@ class ProposalController extends Controller
             'followUps' => fn ($q) => $q->with('contact:id,first_name,last_name,email,title')->latest('scheduled_date'),
             'notes.user:id,name',
             'complianceMatrices.items',
+            'mailing',
         ]);
 
         $user = $request->user();
@@ -352,11 +406,32 @@ class ProposalController extends Controller
             ->latest()
             ->first();
 
+        $mailing = $proposalSubmission->mailing;
+
         return Inertia::render('Proposals/Show', [
             'proposal' => $proposalSubmission,
             'stepNav' => $stepNav,
             'currencies' => Currency::options(),
+            // Shipments two-way link: surface the mailed-proposal delivery status.
+            'mailTracking' => [
+                'canAccess' => $user->can('access shipments'),
+                'isMailed' => in_array('mail', (array) $proposalSubmission->submission_methods, true),
+                'mailing' => $mailing ? [
+                    'ulid' => $mailing->ulid,
+                    'ups_tracking_number' => $mailing->ups_tracking_number,
+                    'status_label' => $mailing->status->label(),
+                    'status_color' => $mailing->status->color(),
+                    'risk_label' => $mailing->risk()->label(),
+                    'risk_color' => $mailing->risk()->color(),
+                    'deadline' => optional($mailing->deadline)->toDateString(),
+                    'scheduled_delivery' => optional($mailing->scheduled_delivery)->toDateString(),
+                    'delivered_at' => optional($mailing->delivered_at)->toIso8601String(),
+                    'received_by' => $mailing->received_by,
+                    'proof_url' => $mailing->proof_url,
+                ] : null,
+            ],
             'allowedTransitions' => $this->allowedTransitionList($proposalSubmission->status),
+            'samDocuments' => $this->samDocuments($proposalSubmission, $canUpdate),
             'extraction' => $extraction ? [
                 'output' => $extraction->output,
                 'provider' => $extraction->ai_provider,
@@ -377,20 +452,23 @@ class ProposalController extends Controller
         ]);
     }
 
-    public function edit(Request $request, ProposalSubmission $proposalSubmission): Response
+    public function edit(Request $request, ProposalSubmission $proposalSubmission): Response|RedirectResponse
     {
-        $this->authorize('update', $proposalSubmission);
+        $this->authorize('view', $proposalSubmission);
         $user = $request->user();
+
+        // Read-only users (not the owner / not a team member) can't open the
+        // editor — send them back with a clear message naming the owner.
+        if ($user->cannot('update', $proposalSubmission)) {
+            return redirect()->route('proposals.show', $proposalSubmission)
+                ->with('error', $this->notOwnerMessage($proposalSubmission));
+        }
+
         $proposalSubmission->load('company:id,name', 'owner:id,name', 'teamMembers:id,proposal_submission_id,user_id');
 
-        // Status choices for the edit form: the current status plus every status
-        // it may legally transition to. tryFrom() drops any legacy transition
-        // value that isn't a real enum case (e.g. 'under_evaluation').
-        $statusOptions = collect([$proposalSubmission->status->value])
-            ->merge(ProposalWorkflowService::ALLOWED_TRANSITIONS[$proposalSubmission->status->value] ?? [])
-            ->unique()
-            ->map(fn ($v) => ProposalStatus::tryFrom($v))
-            ->filter()
+        // The status is freely settable to any stage — the user picks whatever
+        // they want and we record the change. Offer the full set of statuses.
+        $statusOptions = collect(ProposalStatus::cases())
             ->map(fn ($s) => ['value' => $s->value, 'label' => $s->label()])
             ->values();
 
@@ -402,9 +480,12 @@ class ProposalController extends Controller
                 'solicitation_number' => $proposalSubmission->solicitation_number,
                 'company' => $proposalSubmission->company?->name ?? '',
                 'proposal_value' => $proposalSubmission->proposal_value,
+                'award_value' => $proposalSubmission->award_value,
                 'currency' => $proposalSubmission->currency ?? Currency::DEFAULT,
                 'status' => $proposalSubmission->status->value,
                 'due_date' => $proposalSubmission->due_date?->format('Y-m-d'),
+                'submission_date' => $proposalSubmission->submission_date?->format('Y-m-d'),
+                'award_date' => $proposalSubmission->award_date?->format('Y-m-d'),
                 'owner_id' => $proposalSubmission->owner_id,
                 'owner_name' => $proposalSubmission->owner?->name,
                 'team_member_ids' => $proposalSubmission->teamMembers->pluck('user_id')->values(),
@@ -441,11 +522,12 @@ class ProposalController extends Controller
             'team_member_ids' => 'nullable|array',
             'team_member_ids.*' => 'integer|exists:users,id',
             'submission_methods' => 'nullable|array',
-            'submission_methods.*' => 'string|in:mail,email,portal,fax,hand_delivery',
+            'submission_methods.*' => 'string|in:mail,email,portal',
             'status' => ['nullable', Rule::in(collect(ProposalStatus::cases())->map(fn ($s) => $s->value)->all())],
         ]);
 
         $user = $request->user();
+        $originalOwnerId = $proposalSubmission->owner_id;
 
         // Status changes go through the workflow (FSM), never a direct column write.
         $updates = collect($validated)->except(['company', 'currency', 'owner_id', 'team_member_ids', 'status'])->all();
@@ -467,12 +549,18 @@ class ProposalController extends Controller
         $this->syncTeamMembers($proposalSubmission, $validated['team_member_ids'] ?? [], $user, replace: true);
         $this->ensureOwnerOnTeam($proposalSubmission, $user);
 
+        // Notify the new owner when ownership changed hands (admin reassignment).
+        if ($proposalSubmission->owner_id && $proposalSubmission->owner_id !== $originalOwnerId
+            && ($newOwner = User::find($proposalSubmission->owner_id))) {
+            $this->notifier->proposalAssigned($proposalSubmission, $newOwner, $user);
+        }
+
         // Apply a status change through the workflow if the form set one.
         $celebrate = null;
         $newStatus = $validated['status'] ?? null;
         if ($newStatus && $newStatus !== $proposalSubmission->status->value) {
             try {
-                $this->workflow->transition($proposalSubmission, ProposalStatus::from($newStatus), $user, null);
+                $this->workflow->transition($proposalSubmission, ProposalStatus::from($newStatus), $user, null, force: true);
                 if ($newStatus === ProposalStatus::Submitted->value) {
                     $celebrate = $proposalSubmission->proposal_number;
                 }
@@ -494,12 +582,12 @@ class ProposalController extends Controller
         $this->authorize('update', $proposalSubmission);
 
         $validated = $request->validate([
-            'status' => 'required|string',
+            'status' => ['required', Rule::in(collect(ProposalStatus::cases())->map(fn ($s) => $s->value)->all())],
             'notes' => 'nullable|string',
         ]);
 
         try {
-            $this->workflow->transition($proposalSubmission, ProposalStatus::from($validated['status']), $request->user(), $validated['notes'] ?? null);
+            $this->workflow->transition($proposalSubmission, ProposalStatus::from($validated['status']), $request->user(), $validated['notes'] ?? null, force: true);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors());
         }
@@ -524,9 +612,9 @@ class ProposalController extends Controller
         $validated = $request->validate(['status' => 'required|string']);
 
         try {
-            $this->workflow->transition($proposalSubmission, ProposalStatus::from($validated['status']), $request->user(), null);
+            $this->workflow->transition($proposalSubmission, ProposalStatus::from($validated['status']), $request->user(), null, force: true);
         } catch (\Illuminate\Validation\ValidationException | \ValueError $e) {
-            return back()->with('error', "That status change isn't allowed from the current stage.");
+            return back()->with('error', "That status change couldn't be applied.");
         }
 
         return back()->with('success', 'Status updated.');
@@ -540,16 +628,85 @@ class ProposalController extends Controller
     }
 
     /**
-     * The full set of statuses this proposal may transition to next, for the
-     * status dropdown on the detail page.
+     * Solicitation documents for the proposal's linked SAM.gov opportunity, with
+     * proxied preview/download URLs. Empty when there's no linked opportunity or
+     * the source feed carries no resource links (e.g. SAM sync disabled).
+     */
+    private function samDocuments(ProposalSubmission $proposal, bool $canUpdate): array
+    {
+        $opportunity = $proposal->opportunity_id
+            ? Opportunity::select('id', 'title', 'source', 'source_url', 'raw_source_data')->find($proposal->opportunity_id)
+            : null;
+
+        if (!$opportunity) {
+            return ['linked' => false, 'documents' => [], 'can_extract' => false, 'notice_url' => null];
+        }
+
+        $documents = collect(app(\App\Services\BidSources\OpportunityDocumentService::class)->list($opportunity))
+            ->map(fn ($d) => [
+                'index' => $d['index'],
+                'name' => $d['name'],
+                'preview_url' => route('proposals.sam-documents.show', [$proposal, $d['index']]),
+                'download_url' => route('proposals.sam-documents.show', [$proposal, $d['index']]) . '?dl=1',
+                'extract_url' => route('proposals.sam-documents.extract', [$proposal, $d['index']]),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'linked' => true,
+            'opportunity_id' => $opportunity->id,
+            'opportunity_title' => $opportunity->title,
+            'documents' => $documents,
+            'can_extract' => $canUpdate,
+            'notice_url' => $opportunity->source_url,
+        ];
+    }
+
+    /**
+     * Every status the detail-page dropdown offers. The status is freely
+     * settable, so this is all statuses except the current one.
      *
      * @return array<int,array{value:string,label:string,color:string}>
      */
+    /**
+     * Apply the selectable date-range filter (due / submission / created) to a
+     * proposals query. The picked days are read in Pacific time; due_date and
+     * submission_date are plain date columns, created_at is a UTC datetime.
+     */
+    private function applyDateFilter($query, Request $request): void
+    {
+        $valid = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : null;
+        $from = $valid($request->input('from'));
+        $to = $valid($request->input('to'));
+        if (!$from && !$to) {
+            return;
+        }
+
+        $field = in_array($request->input('date_field'), ['due_date', 'submission_date', 'created_at'], true)
+            ? $request->input('date_field') : 'due_date';
+
+        if ($field === 'created_at') {
+            if ($from) {
+                $query->where('created_at', '>=', Carbon::parse($from, self::APP_TZ)->startOfDay()->utc());
+            }
+            if ($to) {
+                $query->where('created_at', '<=', Carbon::parse($to, self::APP_TZ)->endOfDay()->utc());
+            }
+        } else {
+            if ($from) {
+                $query->whereDate($field, '>=', $from);
+            }
+            if ($to) {
+                $query->whereDate($field, '<=', $to);
+            }
+        }
+    }
+
     private function allowedTransitionList(ProposalStatus $current): array
     {
-        $allowed = ProposalWorkflowService::ALLOWED_TRANSITIONS[$current->value] ?? [];
         return collect(ProposalStatus::cases())
-            ->filter(fn ($s) => in_array($s->value, $allowed, true))
+            ->reject(fn ($s) => $s->value === $current->value)
             ->map(fn ($s) => ['value' => $s->value, 'label' => $s->label(), 'color' => $s->color()])
             ->values()
             ->all();
@@ -570,6 +727,18 @@ class ProposalController extends Controller
     private function userInOrg(int $userId, User $actor): bool
     {
         return User::where('id', $userId)->where('organization_id', $actor->organization_id)->exists();
+    }
+
+    /**
+     * Friendly message shown when a non-owner tries to edit a proposal,
+     * naming whoever currently owns it.
+     */
+    private function notOwnerMessage(ProposalSubmission $proposal): string
+    {
+        $owner = $proposal->owner?->name;
+        return $owner
+            ? "You're not the owner of this document — it's currently owned by {$owner}, so it's read-only for you."
+            : "You're not the owner of this document, so it's read-only for you.";
     }
 
     /**

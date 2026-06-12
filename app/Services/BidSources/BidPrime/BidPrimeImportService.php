@@ -101,7 +101,6 @@ class BidPrimeImportService
                         'source_url' => $dto->sourceUrl,
                         'raw_source_data' => $dto->rawData,
                         'status' => 'new',
-                        'capture_stage' => 'discovery',
                     ]);
                     $import->increment('total_created');
                     $action = 'created';

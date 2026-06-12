@@ -5,6 +5,7 @@ import { Select } from '@/Components/ui/Select';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
+import { DateFilter, DateFilterValue } from '@/Components/ui/DateFilter';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
 import { cn, formatCurrency, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
@@ -31,8 +32,8 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
         router.get('/proposals', { ...filters, sort: field, direction: dir }, { preserveState: true, preserveScroll: true });
     };
 
-    const SortHeader = ({ field, label }: { field: string; label: string }) => (
-        <th className="th cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => setSort(field)}>
+    const SortHeader = ({ field, label, className }: { field: string; label: string; className?: string }) => (
+        <th className={cn('th cursor-pointer select-none transition-colors hover:text-foreground', className)} onClick={() => setSort(field)}>
             <span className="inline-flex items-center gap-1">
                 {label}
                 {sort === field
@@ -46,6 +47,10 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
         router.get('/proposals', { ...filters, [key]: value || undefined }, { preserveState: true });
     };
 
+    const handleDate = (v: DateFilterValue) => {
+        router.get('/proposals', { ...filters, date_field: v.date_field, from: v.from, to: v.to }, { preserveState: true });
+    };
+
     const handleDelete = (e: React.MouseEvent, proposal: ProposalSubmission) => {
         e.preventDefault();
         e.stopPropagation();
@@ -57,7 +62,7 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
     return (
         <AppLayout>
             <Head title="Proposals" />
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
                 <PageHeader
                     icon={FileText}
                     title="Proposals"
@@ -76,8 +81,8 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
 
                 {/* Filters */}
                 <Card className="mb-4 p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative min-w-[18rem] flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
                             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 type="text"
@@ -92,13 +97,17 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                             onChange={v => handleFilter('status', v)}
                             options={statuses.map(s => ({ value: s.value, label: s.label }))}
                             placeholder="All Statuses"
-                            className="w-44"
+                            className="w-full sm:w-44"
                         />
-                        {Object.keys(filters).length > 0 && (
-                            <button onClick={() => router.get('/proposals')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
-                                <X className="h-4 w-4" /> Clear
-                            </button>
-                        )}
+                        <button onClick={() => router.get('/proposals')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
+                            <X className="h-4 w-4" /> Clear
+                        </button>
+                    </div>
+                    <div className="mt-3 border-t border-border pt-3">
+                        <DateFilter
+                            value={{ date_field: filters.date_field, from: filters.from, to: filters.to }}
+                            onChange={handleDate}
+                        />
                     </div>
                 </Card>
 
@@ -110,11 +119,11 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                 <tr>
                                     <th className="th">Proposal #</th>
                                     <SortHeader field="name" label="Project" />
-                                    <SortHeader field="company" label="Company" />
+                                    <SortHeader field="company" label="Company" className="hidden md:table-cell" />
                                     <SortHeader field="status" label="Status" />
                                     <SortHeader field="value" label="Value" />
-                                    <SortHeader field="due_date" label="Due Date" />
-                                    <SortHeader field="owner" label="Owner" />
+                                    <SortHeader field="due_date" label="Due Date" className="hidden sm:table-cell" />
+                                    <SortHeader field="owner" label="Owner" className="hidden lg:table-cell" />
                                     <th className="th" />
                                 </tr>
                             </thead>
@@ -143,21 +152,21 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                                 <p className="mt-0.5 text-xs text-muted-foreground">{proposal.solicitation_number}</p>
                                             )}
                                         </td>
-                                        <td className="td text-muted-foreground">{proposal.company?.name ?? proposal.agency?.name ?? '—'}</td>
+                                        <td className="td hidden text-muted-foreground md:table-cell">{proposal.company?.name ?? proposal.agency?.name ?? '—'}</td>
                                         <td className="td">
-                                            <StatusBadge status={typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'draft'} />
+                                            <StatusBadge status={typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'in_progress'} />
                                         </td>
                                         <td className="td font-medium">
                                             {proposal.award_value ? (
                                                 <span className="text-emerald-600">{formatCurrency(proposal.award_value, proposal.currency)}</span>
                                             ) : formatCurrency(proposal.proposal_value, proposal.currency)}
                                         </td>
-                                        <td className="td">
+                                        <td className="td hidden sm:table-cell">
                                             <span className={`text-sm font-medium ${getDueDateColor(proposal.due_date)}`}>
                                                 {proposal.due_date ? getDueDateLabel(proposal.due_date) : '—'}
                                             </span>
                                         </td>
-                                        <td className="td text-muted-foreground">{proposal.owner?.name ?? '—'}</td>
+                                        <td className="td hidden text-muted-foreground lg:table-cell">{proposal.owner?.name ?? '—'}</td>
                                         <td className="td">
                                             <div className="flex items-center gap-2">
                                                 <Link href={`/proposals/${proposal.id}`} title="Open" className="text-muted-foreground transition-colors hover:text-primary">

@@ -43,7 +43,7 @@ class ProposalSeeder extends Seeder
                 'proposal_number' => 'QL-2024-0002',
                 'project_name' => 'DHS Cybersecurity Assessment Services Response',
                 'solicitation_number' => 'DHS-CAS-2024-0042',
-                'status' => 'under_review',
+                'status' => 'in_progress',
                 'agency_id' => $dhs?->id,
                 'owner_id' => $sales?->id,
                 'proposal_manager_id' => $pm?->id,
@@ -98,7 +98,7 @@ class ProposalSeeder extends Seeder
                 'proposal_number' => 'QL-2024-0005',
                 'project_name' => 'DHS Network Security Operations Center',
                 'solicitation_number' => 'DHS-NSOC-2024-0099',
-                'status' => 'draft',
+                'status' => 'in_progress',
                 'agency_id' => $dhs?->id,
                 'owner_id' => $bdm?->id,
                 'proposal_manager_id' => $pm?->id,
@@ -124,14 +124,14 @@ class ProposalSeeder extends Seeder
             $proposal->statusHistory()->create([
                 'changed_by' => $bdm?->id ?? $org->users()->first()->id,
                 'from_status' => null,
-                'to_status' => 'draft',
+                'to_status' => 'in_progress',
                 'changed_at' => $proposal->created_at,
             ]);
 
-            if ($data['status'] !== 'draft') {
+            if ($data['status'] !== 'in_progress') {
                 $proposal->statusHistory()->create([
                     'changed_by' => $pm?->id ?? $bdm?->id,
-                    'from_status' => 'draft',
+                    'from_status' => 'in_progress',
                     'to_status' => $data['status'],
                     'changed_at' => now()->subDays(rand(1, 10)),
                 ]);

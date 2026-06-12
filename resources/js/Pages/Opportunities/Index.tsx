@@ -9,12 +9,15 @@ import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
 import { cn, formatCurrency, formatDate, formatRelativeDate, formatTime, getDueDateLabel, getDueDateColor, sourceLabel } from '@/Lib/utils';
 import { PaginatedResponse, Opportunity } from '@/Types';
-import { Plus, Upload, Search, X, ExternalLink, Target, Tag, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Plus, Upload, Search, X, ExternalLink, Target, Tag, ChevronUp, ChevronDown, ChevronsUpDown, Star, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface Props {
     opportunities: PaginatedResponse<Opportunity>;
     filters: Record<string, string | string[]>;
+    view: 'foryou' | 'saved' | 'all';
+    counts: { all: number; foryou: number; saved: number };
+    savedIds: number[];
     keywordOptions: string[];
     personalKeywords: string[];
     statuses: Array<{ value: string; label: string; color: string }>;
@@ -22,7 +25,19 @@ interface Props {
     can: { create: boolean; import: boolean };
 }
 
-export default function OpportunitiesIndex({ opportunities, filters, keywordOptions, personalKeywords, statuses, sources, can }: Props) {
+export default function OpportunitiesIndex({ opportunities, filters, view, counts, savedIds, keywordOptions, personalKeywords, statuses, sources, can }: Props) {
+    const savedSet = new Set(savedIds);
+    const setView = (v: string) => router.get('/opportunities', { ...filters, view: v }, { preserveState: true, preserveScroll: true });
+    const toggleSave = (e: React.MouseEvent, id: number) => {
+        e.preventDefault();
+        e.stopPropagation();
+        router.post(`/opportunities/${id}/save`, {}, { preserveScroll: true });
+    };
+    const TABS: Array<{ key: string; label: string; count: number; icon?: typeof Star }> = [
+        { key: 'foryou', label: 'For You', count: counts.foryou, icon: Sparkles },
+        { key: 'saved', label: 'Saved', count: counts.saved, icon: Star },
+        { key: 'all', label: 'All', count: counts.all },
+    ];
     const [showImportModal, setShowImportModal] = useState(false);
     const [newKeyword, setNewKeyword] = useState('');
     const { data, setData, post, processing } = useForm({ naics_codes: [] as string[], keywords: '' });
@@ -70,8 +85,8 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
         const dir = sort === field ? (direction === 'asc' ? 'desc' : 'asc') : (DEFAULT_DIR[field] ?? 'asc');
         router.get('/opportunities', { ...filters, sort: field, direction: dir }, { preserveState: true, preserveScroll: true });
     };
-    const SortHeader = ({ field, label, align = 'left' }: { field: string; label: string; align?: 'left' | 'right' }) => (
-        <th className="th cursor-pointer select-none transition-colors hover:text-foreground" onClick={() => setSort(field)}>
+    const SortHeader = ({ field, label, align = 'left', className }: { field: string; label: string; align?: 'left' | 'right'; className?: string }) => (
+        <th className={cn('th cursor-pointer select-none transition-colors hover:text-foreground', className)} onClick={() => setSort(field)}>
             <span className={cn('inline-flex items-center gap-1', align === 'right' && 'justify-end')}>
                 {label}
                 {sort === field
@@ -89,7 +104,7 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
     return (
         <AppLayout>
             <Head title="Opportunities" />
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
                 <PageHeader
                     icon={Target}
                     title="Opportunities"
@@ -110,10 +125,32 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
                     }
                 />
 
+                {/* For You / Saved / All */}
+                <div className="mb-4 inline-flex w-fit gap-1 rounded-xl border border-border bg-card p-1">
+                    {TABS.map(t => {
+                        const active = view === t.key;
+                        const Icon = t.icon;
+                        return (
+                            <button
+                                key={t.key}
+                                onClick={() => setView(t.key)}
+                                className={cn(
+                                    'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition',
+                                    active ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                                )}
+                            >
+                                {Icon && <Icon className="h-3.5 w-3.5" />}
+                                {t.label}
+                                <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', active ? 'bg-white/20' : 'bg-secondary')}>{t.count}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+
                 {/* Filters */}
                 <Card className="mb-4 p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative min-w-[18rem] flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
                             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 type="text"
@@ -128,14 +165,14 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
                             onChange={v => handleFilter('status', v)}
                             options={statuses.map(s => ({ value: s.value, label: s.label }))}
                             placeholder="All Statuses"
-                            className="w-44"
+                            className="w-full sm:w-44"
                         />
                         <Select
                             value={(filters.source as string) ?? ''}
                             onChange={v => handleFilter('source', v)}
                             options={sources.map(s => ({ value: s.value, label: s.label }))}
                             placeholder="All Sources"
-                            className="w-40"
+                            className="w-full sm:w-40"
                         />
                         {hasFilters && (
                             <button onClick={() => router.get('/opportunities')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
@@ -216,30 +253,55 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
                         <table className="w-full">
                             <thead className="border-b border-border bg-secondary/40">
                                 <tr>
+                                    <th className="th w-8" />
                                     <SortHeader field="title" label="Title" />
-                                    <SortHeader field="agency_name" label="Agency" />
+                                    <SortHeader field="agency_name" label="Agency" className="hidden md:table-cell" />
                                     <SortHeader field="status" label="Status" />
                                     <SortHeader field="estimated_value" label="Value" />
-                                    <SortHeader field="due_date" label="Due Date" />
-                                    <SortHeader field="created_at" label="Added" />
-                                    <th className="th">Source</th>
+                                    <SortHeader field="due_date" label="Due Date" className="hidden sm:table-cell" />
+                                    <SortHeader field="created_at" label="Added" className="hidden lg:table-cell" />
+                                    <th className="th hidden lg:table-cell">Source</th>
                                     <th className="th" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {opportunities.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8}>
-                                            <EmptyState
-                                                icon={Target}
-                                                title="No opportunities found"
-                                                description="Try adjusting your filters, or import fresh opportunities from SAM.gov."
-                                                action={can.import && <Button variant="secondary" icon={Upload} onClick={() => setShowImportModal(true)}>Import from SAM.gov</Button>}
-                                            />
+                                        <td colSpan={9}>
+                                            {view === 'foryou' && personalKeywords.length === 0 ? (
+                                                <EmptyState
+                                                    icon={Sparkles}
+                                                    title="Build your For You feed"
+                                                    description="Add a few keywords below (e.g. cybersecurity, cloud, logistics) and matching opportunities will show up here — refreshed automatically."
+                                                />
+                                            ) : view === 'saved' ? (
+                                                <EmptyState
+                                                    icon={Star}
+                                                    title="No saved opportunities"
+                                                    description="Click the star on any opportunity to save it here for quick access."
+                                                />
+                                            ) : (
+                                                <EmptyState
+                                                    icon={Target}
+                                                    title="No opportunities found"
+                                                    description="Try adjusting your filters, or import fresh opportunities from SAM.gov."
+                                                    action={can.import && <Button variant="secondary" icon={Upload} onClick={() => setShowImportModal(true)}>Import from SAM.gov</Button>}
+                                                />
+                                            )}
                                         </td>
                                     </tr>
                                 ) : opportunities.data.map(opp => (
                                     <tr key={opp.id} className="row-link">
+                                        <td className="td w-8">
+                                            <button
+                                                type="button"
+                                                onClick={e => toggleSave(e, opp.id)}
+                                                title={savedSet.has(opp.id) ? 'Remove from saved' : 'Save to your favorites'}
+                                                className="text-muted-foreground transition-colors hover:text-amber-500"
+                                            >
+                                                <Star className={cn('h-4 w-4', savedSet.has(opp.id) && 'fill-amber-400 text-amber-500')} />
+                                            </button>
+                                        </td>
                                         <td className="td max-w-md">
                                             <Link href={`/opportunities/${opp.id}`} className="font-medium text-foreground hover:text-primary line-clamp-2">
                                                 {opp.title}
@@ -248,16 +310,16 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
                                                 <p className="mt-0.5 text-xs text-muted-foreground">{opp.solicitation_number}</p>
                                             )}
                                         </td>
-                                        <td className="td text-muted-foreground">{opp.agency_name ?? '—'}</td>
+                                        <td className="td hidden text-muted-foreground md:table-cell">{opp.agency_name ?? '—'}</td>
                                         <td className="td"><StatusBadge status={opp.status} /></td>
                                         <td className="td font-medium">{formatCurrency(opp.estimated_value)}</td>
-                                        <td className="td">
+                                        <td className="td hidden sm:table-cell">
                                             <span className={`text-sm font-medium ${getDueDateColor(opp.due_date)}`}>
                                                 {opp.due_date ? getDueDateLabel(opp.due_date) : '—'}
                                             </span>
                                             {opp.due_date && <p className="text-xs text-muted-foreground">{formatDate(opp.due_date)}</p>}
                                         </td>
-                                        <td className="td">
+                                        <td className="td hidden lg:table-cell">
                                             <span className="text-sm text-foreground">{formatRelativeDate(opp.created_at)}</span>
                                             <p className="text-xs text-muted-foreground">
                                                 {formatRelativeDate(opp.created_at) !== formatDate(opp.created_at)
@@ -265,7 +327,7 @@ export default function OpportunitiesIndex({ opportunities, filters, keywordOpti
                                                     : formatTime(opp.created_at)}
                                             </p>
                                         </td>
-                                        <td className="td">
+                                        <td className="td hidden lg:table-cell">
                                             <span className="chip">{sourceLabel(opp.source)}</span>
                                         </td>
                                         <td className="td">

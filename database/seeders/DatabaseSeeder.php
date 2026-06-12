@@ -19,6 +19,6 @@ class DatabaseSeeder extends Seeder
 
         // Demo data seeders (disabled). Re-enable to repopulate sample records:
         // AgencySeeder, CompanySeeder, ContactSeeder, OpportunitySeeder,
-        // ProposalSeeder, CapturePlanSeeder, CommissionSeeder, FollowUpSeeder.
+        // ProposalSeeder, CommissionSeeder, FollowUpSeeder.
     }
 }

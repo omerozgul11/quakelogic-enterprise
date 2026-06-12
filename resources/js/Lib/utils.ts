@@ -5,6 +5,27 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
+/**
+ * The platform presents every date and time in US Pacific time (PST/PDT),
+ * regardless of the viewer's browser timezone. Timestamps are still stored in
+ * UTC — this only affects display and day-difference calculations.
+ */
+export const APP_TZ = 'America/Los_Angeles';
+
+/** [year, month, day] of a Date as it falls in Pacific time. */
+function pstYmd(d: Date): [number, number, number] {
+    const s = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    const [y, m, day] = s.split('-').map(Number);
+    return [y, m, day];
+}
+
+/** The short Pacific timezone label for a given moment, e.g. "PST" or "PDT". */
+export function pacificLabel(d: Date = new Date()): string {
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: APP_TZ, timeZoneName: 'short' })
+        .formatToParts(d).find(p => p.type === 'timeZoneName');
+    return part?.value ?? 'PT';
+}
+
 export function formatCurrency(value?: number | string | null, currency = 'USD'): string {
     if (value == null) return '—';
     return new Intl.NumberFormat('en-US', {
@@ -16,7 +37,13 @@ export function formatCurrency(value?: number | string | null, currency = 'USD')
 
 export function formatDate(date?: string | null): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-US', {
+    // A date-only value (YYYY-MM-DD) is a literal calendar date — render it as-is
+    // (in UTC) so a due/submission date never drifts a day when shown in Pacific
+    // time. Full timestamps are rendered in Pacific time.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : new Date(date);
+    return d.toLocaleDateString('en-US', {
+        timeZone: m ? 'UTC' : APP_TZ,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -26,6 +53,7 @@ export function formatDate(date?: string | null): string {
 export function formatDateTime(date?: string | null): string {
     if (!date) return '—';
     return new Date(date).toLocaleString('en-US', {
+        timeZone: APP_TZ,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -36,12 +64,32 @@ export function formatDateTime(date?: string | null): string {
 
 export function formatTime(date?: string | null): string {
     if (!date) return '—';
-    return new Date(date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return new Date(date).toLocaleTimeString('en-US', { timeZone: APP_TZ, hour: 'numeric', minute: '2-digit' });
+}
+
+/**
+ * Calendar date (as a UTC-midnight timestamp, for stable day-diffing) of an ISO
+ * date/datetime string. Date-only strings (YYYY-MM-DD) are read as the literal
+ * calendar date they encode — ignoring timezone — so a due/added date never
+ * drifts by a day. This is what makes "Yesterday" actually mean yesterday
+ * instead of "less than 24 hours ago".
+ */
+function calendarMs(date: string): number {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    const [y, mo, d] = pstYmd(new Date(date));
+    return Date.UTC(y, mo - 1, d);
+}
+
+/** Today in Pacific time, expressed as a UTC-midnight timestamp for day-diffing. */
+function todayMs(): number {
+    const [y, mo, d] = pstYmd(new Date());
+    return Date.UTC(y, mo - 1, d);
 }
 
 export function formatRelativeDate(date?: string | null): string {
     if (!date) return '—';
-    const days = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
+    const days = Math.round((todayMs() - calendarMs(date)) / 86400000);
     if (days <= 0) return 'Today';
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days} days ago`;
@@ -80,8 +128,9 @@ export function generatePassword(length = 16): string {
 
 export function getDaysUntil(date?: string | null): number | null {
     if (!date) return null;
-    const diff = new Date(date).getTime() - new Date().getTime();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    // Compare calendar dates (not a rolling 24h window) so a deadline that is
+    // "today" stays "Due today" all day, and yesterday reads as overdue.
+    return Math.round((calendarMs(date) - todayMs()) / 86400000);
 }
 
 export function getDueDateLabel(date?: string | null): string {
@@ -100,6 +149,19 @@ export function getDueDateColor(date?: string | null): string {
     if (days <= 7) return 'text-orange-600 font-semibold';
     if (days <= 14) return 'text-yellow-600';
     return 'text-gray-600';
+}
+
+/** Days elapsed since a date (positive once the date is in the past, PST). */
+export function getDaysSince(date?: string | null): number | null {
+    const until = getDaysUntil(date);
+    return until == null ? null : -until;
+}
+
+/** Color for days-since-due on submitted work: 0–30 green, 31–60 yellow, 60+ red. */
+export function getElapsedColor(days: number): string {
+    if (days <= 30) return 'text-emerald-600 font-medium';
+    if (days <= 60) return 'text-yellow-600 font-medium';
+    return 'text-red-600 font-semibold';
 }
 
 const STATUS_COLORS: Record<string, string> = {

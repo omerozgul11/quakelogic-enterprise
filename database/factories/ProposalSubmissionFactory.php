@@ -24,7 +24,7 @@ class ProposalSubmissionFactory extends Factory
             'created_by' => User::factory(),
             'proposal_number' => "QL-{$year}-" . str_pad($num, 4, '0', STR_PAD_LEFT),
             'project_name' => $this->faker->sentence(5),
-            'status' => 'draft',
+            'status' => 'in_progress',
             'proposal_value' => $this->faker->randomFloat(2, 100000, 10000000),
             'owner_id' => User::factory(),
             'due_date' => $this->faker->dateTimeBetween('+30 days', '+120 days')->format('Y-m-d'),
