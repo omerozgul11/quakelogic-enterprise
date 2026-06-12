@@ -33,3 +33,10 @@ Schedule::command('pipeline:sync')->everyFiveMinutes()->withoutOverlapping();
 // Shipments: refresh active mailings from UPS every 30 minutes (delivered/
 // returned are skipped by the command's active() scope).
 Schedule::command('mailings:poll')->everyThirtyMinutes()->withoutOverlapping();
+
+// Auto-ingest account shipments from UPS Quantum View (only when enabled, so the
+// dev simulator never floods the list). New shipments created on the UPS account
+// appear automatically; mailings:poll then enriches each with its full timeline.
+if (config('services.ups.quantum_view.enabled')) {
+    Schedule::command('mailings:ingest')->hourly()->withoutOverlapping();
+}

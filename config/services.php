@@ -60,6 +60,16 @@ return [
         'client_id' => env('UPS_CLIENT_ID'),
         'client_secret' => env('UPS_CLIENT_SECRET'),
         'base_url' => env('UPS_BASE_URL', 'https://onlinetools.ups.com'),
+
+        // Quantum View — account-level auto-ingest of every shipment created on
+        // the UPS account (UPS.com, WorldShip, etc.). Requires the Quantum View
+        // product on the UPS app + an outbound subscription on the account.
+        // Until enabled, a simulator drives dev so the pipeline is testable.
+        'quantum_view' => [
+            'enabled' => env('UPS_QV_ENABLED', false),
+            'subscription' => env('UPS_QV_SUBSCRIPTION'),   // subscription name set up on the UPS account
+            'organization_id' => env('UPS_QV_ORGANIZATION_ID'), // org these account shipments belong to
+        ],
     ],
 
 ];

@@ -26,6 +26,21 @@ class AppServiceProvider extends ServiceProvider
             return AiProviderFactory::default();
         });
 
+        // Shipments: UPS Quantum View account-ingest client — real only when
+        // enabled + credentialed + a subscription is configured; otherwise a
+        // simulator drives dev so the ingest pipeline is testable.
+        $this->app->singleton(\App\Services\Ups\QuantumView\QuantumViewClient::class, function () {
+            $ups = config('services.ups');
+            $qv = $ups['quantum_view'];
+            if ($qv['enabled'] && $ups['client_id'] && $ups['client_secret'] && $qv['subscription']) {
+                return new \App\Services\Ups\QuantumView\UpsQuantumViewClient(
+                    $ups['client_id'], $ups['client_secret'], $ups['base_url'], $qv['subscription']
+                );
+            }
+
+            return new \App\Services\Ups\QuantumView\FakeQuantumViewClient();
+        });
+
         // SAM.gov client: use real if configured, fake otherwise
         $this->app->singleton(SamGovConnector::class, function () {
             $apiKey = config('integrations.sam_gov.api_key');
