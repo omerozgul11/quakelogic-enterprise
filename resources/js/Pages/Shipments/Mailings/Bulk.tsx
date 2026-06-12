@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Layers } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
+import { Select } from '@/Components/ui/Select';
 
 export default function MailingsBulk() {
     const { data, setData, post, processing, errors } = useForm({
@@ -38,12 +39,13 @@ export default function MailingsBulk() {
 
                 <form onSubmit={submit} className="card-surface space-y-5 p-6">
                     <div>
-                        <label htmlFor="carrier" className="label">Carrier</label>
-                        <select id="carrier" value={data.carrier} onChange={e => setData('carrier', e.target.value)} className="input">
-                            <option value="ups">UPS</option>
-                            <option value="fedex" disabled>FedEx (coming soon)</option>
-                            <option value="dhl" disabled>DHL (coming soon)</option>
-                        </select>
+                        <label className="label">Carrier</label>
+                        <Select
+                            value={data.carrier}
+                            onChange={v => setData('carrier', v)}
+                            options={[{ value: 'ups', label: 'UPS' }]}
+                            className="w-full"
+                        />
                     </div>
 
                     <div>

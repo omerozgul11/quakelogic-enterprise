@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Truck } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
+import { Select } from '@/Components/ui/Select';
 
 interface LinkableProposal {
     id: number;
@@ -54,12 +55,13 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
 
                 <form onSubmit={submit} className="card-surface space-y-5 p-6">
                     <div>
-                        <label htmlFor="carrier" className="label">Carrier</label>
-                        <select id="carrier" value={data.carrier} onChange={e => setData('carrier', e.target.value)} className="input">
-                            <option value="ups">UPS</option>
-                            <option value="fedex" disabled>FedEx (coming soon)</option>
-                            <option value="dhl" disabled>DHL (coming soon)</option>
-                        </select>
+                        <label className="label">Carrier</label>
+                        <Select
+                            value={data.carrier}
+                            onChange={v => setData('carrier', v)}
+                            options={[{ value: 'ups', label: 'UPS' }]}
+                            className="w-full"
+                        />
                     </div>
 
                     <div>
@@ -78,13 +80,14 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
 
                     {linkableProposals.length > 0 && (
                         <div>
-                            <label htmlFor="proposal" className="label">Link to proposal <span className="text-muted-foreground">(optional)</span></label>
-                            <select id="proposal" value={data.proposal_submission_id} onChange={e => onPickProposal(e.target.value)} className="input">
-                                <option value="">— none —</option>
-                                {linkableProposals.map(p => (
-                                    <option key={p.id} value={p.id}>{p.label}</option>
-                                ))}
-                            </select>
+                            <label className="label">Link to proposal <span className="text-muted-foreground">(optional)</span></label>
+                            <Select
+                                value={data.proposal_submission_id}
+                                onChange={onPickProposal}
+                                options={linkableProposals.map(p => ({ value: String(p.id), label: p.label }))}
+                                placeholder="— none —"
+                                className="w-full"
+                            />
                             {errors.proposal_submission_id && <p className="mt-1.5 text-sm text-destructive">{errors.proposal_submission_id}</p>}
                         </div>
                     )}
