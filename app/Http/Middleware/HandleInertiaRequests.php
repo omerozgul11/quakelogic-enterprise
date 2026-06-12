@@ -18,6 +18,18 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
+        // Notifications are scoped to the section you're in: Shipments alerts
+        // (data.type = 'shipment') only show under /shipments; everything else
+        // shows in Proposals. So the bell never mixes the two apps.
+        $inShipments = $request->is('shipments') || $request->is('shipments/*');
+        $scopeNotifications = function ($query) use ($inShipments) {
+            return $inShipments
+                ? $query->where('data->type', 'shipment')
+                : $query->where(function ($q) {
+                    $q->where('data->type', '!=', 'shipment')->orWhereNull('data->type');
+                });
+        };
+
         return [
             ...parent::share($request),
             'auth' => [
@@ -50,10 +62,10 @@ class HandleInertiaRequests extends Middleware
                 'switcher' => config('apps.switcher'),
             ],
             'notifications_count' => fn() => $user
-                ? $user->unreadNotifications()->count()
+                ? $scopeNotifications($user->unreadNotifications())->count()
                 : 0,
             'notifications' => fn() => $user
-                ? $user->notifications()->take(8)->get()->map(fn ($n) => [
+                ? $scopeNotifications($user->notifications())->take(8)->get()->map(fn ($n) => [
                     'id' => $n->id,
                     'type' => $n->data['type'] ?? 'info',
                     'title' => $n->data['title'] ?? 'Notification',
