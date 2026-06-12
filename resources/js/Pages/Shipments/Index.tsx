@@ -70,7 +70,9 @@ export default function ShipmentsDashboard({ stats, recent }: Props) {
 
                     {recent.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
-                            <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+                            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
+                                <Package className="h-7 w-7 text-muted-foreground" />
+                            </div>
                             <h3 className="text-lg font-semibold text-foreground">No mailings yet</h3>
                             <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
                                 Create a mailing from a mailed proposal to track its UPS shipment against the deadline.

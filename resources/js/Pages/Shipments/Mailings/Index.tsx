@@ -79,7 +79,9 @@ export default function MailingsIndex({ mailings, filters }: Props) {
                 <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
                     {mailings.data.length === 0 ? (
                         <div className="px-6 py-16 text-center">
-                            <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+                            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-secondary">
+                                <Package className="h-7 w-7 text-muted-foreground" />
+                            </div>
                             <p className="text-sm text-muted-foreground">No mailings match this filter.</p>
                         </div>
                     ) : (
