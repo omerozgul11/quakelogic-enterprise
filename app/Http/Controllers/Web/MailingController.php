@@ -26,8 +26,11 @@ class MailingController extends Controller
     {
         $orgId = $request->user()->organization_id;
 
+        // Resilient to a pending migration: the scope column may not exist yet.
+        $hasScope = \Illuminate\Support\Facades\Schema::hasColumn('proposal_mailings', 'scope');
+
         // Optional domestic/international filter for the whole dashboard.
-        $scope = in_array($request->string('scope')->toString(), ['domestic', 'international'], true)
+        $scope = $hasScope && in_array($request->string('scope')->toString(), ['domestic', 'international'], true)
             ? $request->string('scope')->toString() : null;
 
         $base = fn () => ProposalMailing::query()->forOrganization($orgId)
@@ -37,13 +40,14 @@ class MailingController extends Controller
         $deliveredLate = (clone $base())->where('status', MailingStatus::Delivered->value)->where('on_time', false)->count();
         $totalDelivered = $deliveredOnTime + $deliveredLate;
 
-        $scopeCounts = ProposalMailing::query()->forOrganization($orgId)
-            ->selectRaw('scope, count(*) c')->groupBy('scope')->pluck('c', 'scope');
+        $scopeCounts = $hasScope
+            ? ProposalMailing::query()->forOrganization($orgId)->selectRaw('scope, count(*) c')->groupBy('scope')->pluck('c', 'scope')
+            : collect();
 
         return Inertia::render('Shipments/Index', [
             'scope' => $scope,
             'scopeCounts' => [
-                'all' => (int) $scopeCounts->sum(),
+                'all' => $hasScope ? (int) $scopeCounts->sum() : ProposalMailing::query()->forOrganization($orgId)->count(),
                 'domestic' => (int) ($scopeCounts['domestic'] ?? 0),
                 'international' => (int) ($scopeCounts['international'] ?? 0),
             ],
@@ -62,8 +66,8 @@ class MailingController extends Controller
                     'ulid' => $m->ulid,
                     'ups_tracking_number' => $m->ups_tracking_number,
                     'recipient_name' => $m->recipient_name,
-                    'scope_label' => $m->scope?->label() ?? 'Domestic',
-                    'scope_color' => $m->scope?->color() ?? 'blue',
+                    'scope_label' => $hasScope ? ($m->scope?->label() ?? 'Domestic') : 'Domestic',
+                    'scope_color' => $hasScope ? ($m->scope?->color() ?? 'blue') : 'blue',
                     'status_label' => $m->status->label(),
                     'status_color' => $m->status->color(),
                     'risk_label' => $m->risk()->label(),
