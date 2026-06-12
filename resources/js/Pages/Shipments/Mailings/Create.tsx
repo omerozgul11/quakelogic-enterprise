@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Truck } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Select } from '@/Components/ui/Select';
+import { Combobox } from '@/Components/ui/Combobox';
 
 interface LinkableProposal {
     id: number;
@@ -81,11 +82,11 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
                     {linkableProposals.length > 0 && (
                         <div>
                             <label className="label">Link to proposal <span className="text-muted-foreground">(optional)</span></label>
-                            <Select
+                            <Combobox
                                 value={data.proposal_submission_id}
                                 onChange={onPickProposal}
                                 options={linkableProposals.map(p => ({ value: String(p.id), label: p.label }))}
-                                placeholder="— none —"
+                                placeholder="Type a proposal name or number…"
                                 className="w-full"
                             />
                             {errors.proposal_submission_id && <p className="mt-1.5 text-sm text-destructive">{errors.proposal_submission_id}</p>}
