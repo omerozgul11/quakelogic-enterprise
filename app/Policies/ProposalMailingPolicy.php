@@ -6,9 +6,9 @@ use App\Models\ProposalMailing;
 use App\Models\User;
 
 /**
- * Tenant isolation + permission, mirroring Proposals' policy convention:
- * a user may only touch mailings in their own organization, and writes require
- * the `manage mailings` permission.
+ * Tenant isolation + a single access gate: anyone with `access shipments` (set
+ * per-user from the Shipments admin panel, independent of their proposal role)
+ * gets full use of the Shipments section within their own organization.
  */
 class ProposalMailingPolicy
 {
@@ -24,12 +24,12 @@ class ProposalMailingPolicy
 
     public function create(User $user): bool
     {
-        return $user->can('manage mailings');
+        return $user->can('access shipments');
     }
 
     public function update(User $user, ProposalMailing $mailing): bool
     {
-        return $this->isSameOrg($user, $mailing) && $user->can('manage mailings');
+        return $this->isSameOrg($user, $mailing) && $user->can('access shipments');
     }
 
     public function delete(User $user, ProposalMailing $mailing): bool

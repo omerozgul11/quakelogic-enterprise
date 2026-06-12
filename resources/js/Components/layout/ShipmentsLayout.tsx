@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Truck, Plug, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown,
+    LayoutDashboard, Truck, Plug, ShieldCheck, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
@@ -11,12 +11,14 @@ interface NavItem {
     label: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
+    adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
     { label: 'Dashboard', href: '/shipments', icon: LayoutDashboard },
     { label: 'Mailings', href: '/shipments/mailings', icon: Truck },
     { label: 'Carriers', href: '/shipments/carriers', icon: Plug },
+    { label: 'Access', href: '/shipments/admin', icon: ShieldCheck, adminOnly: true },
 ];
 
 function isActive(path: string, href: string): boolean {
@@ -60,6 +62,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
     const [notifOpen, setNotifOpen] = useState(false);
     const [dark, toggleDark] = useDarkMode();
     const user = auth.user;
+    const isAdmin = user?.roles?.includes('Super Admin') ?? false;
     const recentNotifications = notifications ?? [];
 
     const openNotification = (n: SharedProps['notifications'][number]) => {
@@ -86,7 +89,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-                {navItems.map(item => {
+                {navItems.filter(item => !item.adminOnly || isAdmin).map(item => {
                     const Icon = item.icon;
                     const active = isActive(path, item.href);
                     return (

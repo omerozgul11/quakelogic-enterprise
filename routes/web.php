@@ -52,6 +52,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
     });
 
+    // Shipments admin — admins only. Controls per-user Shipments access
+    // (independent of roles + with no effect on Proposals access). Gated on the
+    // admin role, NOT on `access shipments`, so admins can always manage it.
+    Route::prefix('shipments/admin')->name('shipments.admin.')->middleware('role:Super Admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\ShipmentAccessController::class, 'index'])->name('index');
+        Route::match(['put', 'patch', 'post'], '/users/{user}', [\App\Http\Controllers\Web\ShipmentAccessController::class, 'update'])->name('users.update');
+    });
+
     // Opportunities
     Route::prefix('opportunities')->name('opportunities.')->group(function () {
         Route::get('/', [OpportunityController::class, 'index'])->name('index');
