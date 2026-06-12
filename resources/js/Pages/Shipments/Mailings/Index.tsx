@@ -30,7 +30,6 @@ interface Props {
 
 const STATUS_FILTERS = [
     { value: '', label: 'All' },
-    { value: 'active', label: 'En route' },
     { value: 'label_created', label: 'Label created' },
     { value: 'in_transit', label: 'In transit' },
     { value: 'out_for_delivery', label: 'Out for delivery' },
