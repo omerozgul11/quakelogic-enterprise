@@ -45,6 +45,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Web\MailingController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\Web\MailingController::class, 'store'])->name('store');
+            Route::get('/bulk', [\App\Http\Controllers\Web\MailingController::class, 'bulkCreate'])->name('bulk');
+            Route::post('/bulk', [\App\Http\Controllers\Web\MailingController::class, 'bulkStore'])->name('bulk.store');
             Route::get('/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'show'])->name('show');
             Route::post('/{ulid}/refresh', [\App\Http\Controllers\Web\MailingController::class, 'refresh'])->name('refresh');
         });

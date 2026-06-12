@@ -64,7 +64,9 @@ class MailingController extends Controller
         $mailings = ProposalMailing::query()
             ->forOrganization($orgId)
             ->with('proposalSubmission:id,project_name,proposal_number')
-            ->when($request->string('status')->toString(), fn ($q, $s) => $q->where('status', $s))
+            ->when($request->string('status')->toString(), fn ($q, $s) => $s === 'active'
+                ? $q->active()                       // "En route" — everything not delivered/returned
+                : $q->where('status', $s))
             ->latest()
             ->paginate(20)
             ->withQueryString()
@@ -149,6 +151,82 @@ class MailingController extends Controller
 
         return redirect()->route('shipments.mailings.show', $mailing->ulid)
             ->with('success', 'Mailing created and tracked.');
+    }
+
+    public function bulkCreate(Request $request): Response
+    {
+        $this->authorize('create', ProposalMailing::class);
+
+        return Inertia::render('Shipments/Mailings/Bulk');
+    }
+
+    /**
+     * Load many existing shipments at once by pasting their tracking numbers.
+     * Each is created + fetched from the carrier immediately so it lands in the
+     * list with its real status (delivered = past, in transit = en route).
+     */
+    public function bulkStore(Request $request): RedirectResponse
+    {
+        $this->authorize('create', ProposalMailing::class);
+        $orgId = $request->user()->organization_id;
+
+        $supported = collect(\App\Enums\Carrier::cases())
+            ->filter(fn ($c) => $c->supported())->map(fn ($c) => $c->value)->all();
+
+        $data = $request->validate([
+            'tracking_numbers' => ['required', 'string', 'max:20000'],
+            'carrier' => ['nullable', Rule::in($supported)],
+            'recipient_name' => ['nullable', 'string', 'max:255'],
+            'deadline' => ['nullable', 'date'],
+        ]);
+
+        $carrier = $data['carrier'] ?? 'ups';
+
+        // Split on whitespace/commas, dedupe, cap per submit so the synchronous
+        // carrier lookups stay within the request timeout.
+        $numbers = collect(preg_split('/[\s,]+/', $data['tracking_numbers']))
+            ->map(fn ($n) => trim($n))->filter()->unique()->take(50);
+
+        $added = 0;
+        $existed = 0;
+        $failed = 0;
+
+        foreach ($numbers as $tn) {
+            if (ProposalMailing::where('organization_id', $orgId)->where('ups_tracking_number', $tn)->exists()) {
+                $existed++;
+
+                continue;
+            }
+
+            $mailing = new ProposalMailing([
+                'ups_tracking_number' => $tn,
+                'recipient_name' => $data['recipient_name'] ?? null,
+                'deadline' => $data['deadline'] ?? null,
+            ]);
+            $mailing->organization_id = $orgId;
+            $mailing->created_by = $request->user()->id;
+            $mailing->carrier = $carrier;
+            $mailing->save();
+
+            try {
+                $this->tracking->refresh($mailing, notify: false);
+                $added++;
+            } catch (\Throwable $e) {
+                // Keep the row — the 30-minute poller will retry the lookup.
+                $failed++;
+            }
+        }
+
+        $parts = ["Added {$added} shipment(s)"];
+        if ($existed) {
+            $parts[] = "{$existed} already tracked";
+        }
+        if ($failed) {
+            $parts[] = "{$failed} couldn't be fetched yet (will retry on the next poll)";
+        }
+
+        return redirect()->route('shipments.mailings.index')
+            ->with($failed && ! $added ? 'warning' : 'success', implode(' · ', $parts).'.');
     }
 
     public function show(Request $request, string $ulid): Response

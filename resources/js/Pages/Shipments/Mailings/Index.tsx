@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Package } from 'lucide-react';
+import { Plus, Package, Layers } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Pill } from '@/Components/ui/Pill';
 import { Pagination } from '@/Components/ui/Pagination';
@@ -30,6 +30,7 @@ interface Props {
 
 const STATUS_FILTERS = [
     { value: '', label: 'All' },
+    { value: 'active', label: 'En route' },
     { value: 'label_created', label: 'Label created' },
     { value: 'in_transit', label: 'In transit' },
     { value: 'out_for_delivery', label: 'Out for delivery' },
@@ -50,9 +51,14 @@ export default function MailingsIndex({ mailings, filters }: Props) {
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">Mailings</h1>
                         <p className="mt-1 text-sm text-muted-foreground">{mailings.total} total</p>
                     </div>
-                    <Link href="/shipments/mailings/create" className="bg-brand-gradient shadow-glow inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5">
-                        <Plus className="h-4 w-4" /> New mailing
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <Link href="/shipments/mailings/bulk" className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary">
+                            <Layers className="h-4 w-4" /> Bulk add
+                        </Link>
+                        <Link href="/shipments/mailings/create" className="bg-brand-gradient shadow-glow inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+                            <Plus className="h-4 w-4" /> New mailing
+                        </Link>
+                    </div>
                 </div>
 
                 <div className="mb-4 flex flex-wrap gap-1.5">
