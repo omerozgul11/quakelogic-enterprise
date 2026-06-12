@@ -9,6 +9,8 @@ interface MailingRow {
     ulid: string;
     ups_tracking_number: string;
     recipient_name: string | null;
+    scope_label: string;
+    scope_color: string;
     status_label: string;
     status_color: string;
     risk_label: string;
@@ -90,6 +92,7 @@ export default function MailingsIndex({ mailings, filters }: Props) {
                                 <thead className="border-b border-border bg-secondary/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
                                     <tr>
                                         <th className="px-4 py-3 font-semibold">Recipient / Tracking</th>
+                                        <th className="hidden px-4 py-3 font-semibold sm:table-cell">Category</th>
                                         <th className="px-4 py-3 font-semibold">Status</th>
                                         <th className="px-4 py-3 font-semibold">On-time</th>
                                         <th className="hidden px-4 py-3 font-semibold md:table-cell">Proposal</th>
@@ -107,6 +110,7 @@ export default function MailingsIndex({ mailings, filters }: Props) {
                                                 <div className="font-medium text-foreground">{m.recipient_name ?? '—'}</div>
                                                 <div className="font-mono text-xs text-muted-foreground">{m.ups_tracking_number}</div>
                                             </td>
+                                            <td className="hidden px-4 py-3 sm:table-cell"><Pill color={m.scope_color} label={m.scope_label} /></td>
                                             <td className="px-4 py-3"><Pill color={m.status_color} label={m.status_label} /></td>
                                             <td className="px-4 py-3"><Pill color={m.risk_color} label={m.risk_label} /></td>
                                             <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">

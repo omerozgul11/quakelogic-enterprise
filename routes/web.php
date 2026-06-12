@@ -48,7 +48,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/bulk', [\App\Http\Controllers\Web\MailingController::class, 'bulkCreate'])->name('bulk');
             Route::post('/bulk', [\App\Http\Controllers\Web\MailingController::class, 'bulkStore'])->name('bulk.store');
             Route::get('/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'show'])->name('show');
+            Route::match(['put', 'patch'], '/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'update'])->name('update');
             Route::post('/{ulid}/refresh', [\App\Http\Controllers\Web\MailingController::class, 'refresh'])->name('refresh');
+
+            // Attached documents (label, customs, receipts — pdf/png/jpeg).
+            Route::post('/{ulid}/documents', [\App\Http\Controllers\Web\MailingDocumentController::class, 'store'])->name('documents.store');
+            Route::get('/{ulid}/documents/{document}/download', [\App\Http\Controllers\Web\MailingDocumentController::class, 'download'])->name('documents.download');
+            Route::get('/{ulid}/documents/{document}/preview', [\App\Http\Controllers\Web\MailingDocumentController::class, 'preview'])->name('documents.preview');
+            Route::delete('/{ulid}/documents/{document}', [\App\Http\Controllers\Web\MailingDocumentController::class, 'destroy'])->name('documents.destroy');
         });
     });
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\DeliveryRisk;
 use App\Enums\MailingStatus;
+use App\Enums\ShipmentScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,7 +19,7 @@ class ProposalMailing extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'ulid', 'organization_id', 'proposal_submission_id', 'carrier',
+        'ulid', 'organization_id', 'proposal_submission_id', 'carrier', 'scope',
         'ups_tracking_number', 'recipient_name', 'recipient_address', 'deadline',
         'status', 'scheduled_delivery', 'delivered_at', 'received_by', 'on_time',
         'proof_url', 'created_by',
@@ -28,6 +29,7 @@ class ProposalMailing extends Model
     {
         return [
             'status' => MailingStatus::class,
+            'scope' => ShipmentScope::class,
             'deadline' => 'date',
             'scheduled_delivery' => 'date',
             'delivered_at' => 'datetime',
@@ -59,6 +61,11 @@ class ProposalMailing extends Model
     public function trackingEvents(): HasMany
     {
         return $this->hasMany(MailingTrackingEvent::class)->latest('occurred_at');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(MailingDocument::class)->latest();
     }
 
     /** Multi-tenant scope — every Shipments query must be org-scoped. */

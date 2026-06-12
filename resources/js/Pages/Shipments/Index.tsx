@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Truck, AlertTriangle, Clock, CheckCircle2, Package, Plus } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Pill } from '@/Components/ui/Pill';
@@ -8,6 +8,8 @@ interface RecentMailing {
     ulid: string;
     ups_tracking_number: string;
     recipient_name: string | null;
+    scope_label: string;
+    scope_color: string;
     status_label: string;
     status_color: string;
     risk_label: string;
@@ -18,6 +20,8 @@ interface RecentMailing {
 interface Props {
     stats: { active: number; at_risk: number; delivered_late: number; delivered_on_time: number; on_time_rate: number | null };
     recent: RecentMailing[];
+    scope: string | null;
+    scopeCounts: { all: number; domestic: number; international: number };
 }
 
 const TILES = [
@@ -27,7 +31,16 @@ const TILES = [
     { key: 'delivered_on_time', label: 'Delivered on time', icon: CheckCircle2, tone: 'text-emerald-600' },
 ] as const;
 
-export default function ShipmentsDashboard({ stats, recent }: Props) {
+export default function ShipmentsDashboard({ stats, recent, scope, scopeCounts }: Props) {
+    const setScope = (s: string | null) =>
+        router.get('/shipments', s ? { scope: s } : {}, { preserveScroll: true, preserveState: true });
+
+    const tabs = [
+        { key: null, label: 'All', count: scopeCounts.all },
+        { key: 'domestic', label: 'Domestic', count: scopeCounts.domestic },
+        { key: 'international', label: 'International', count: scopeCounts.international },
+    ];
+
     return (
         <ShipmentsLayout>
             <Head title="Shipments" />
@@ -45,6 +58,20 @@ export default function ShipmentsDashboard({ stats, recent }: Props) {
                     <Link href="/shipments/mailings/create" className="bg-brand-gradient shadow-glow inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5">
                         <Plus className="h-4 w-4" /> New mailing
                     </Link>
+                </div>
+
+                <div className="mb-5 inline-flex rounded-full border border-border bg-card p-1">
+                    {tabs.map(t => (
+                        <button
+                            key={t.label}
+                            onClick={() => setScope(t.key)}
+                            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                                (scope ?? null) === t.key ? 'bg-brand-gradient text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            {t.label} <span className="ml-1 opacity-70">{t.count}</span>
+                        </button>
+                    ))}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -86,6 +113,7 @@ export default function ShipmentsDashboard({ stats, recent }: Props) {
                                         <span className="block truncate text-sm font-medium text-foreground">{m.recipient_name ?? '—'}</span>
                                         <span className="block truncate font-mono text-xs text-muted-foreground">{m.ups_tracking_number}</span>
                                     </span>
+                                    <span className="hidden sm:block"><Pill color={m.scope_color} label={m.scope_label} /></span>
                                     <Pill color={m.status_color} label={m.status_label} />
                                     <Pill color={m.risk_color} label={m.risk_label} />
                                     <span className="hidden w-24 text-right text-xs text-muted-foreground sm:block">{formatDate(m.deadline)}</span>

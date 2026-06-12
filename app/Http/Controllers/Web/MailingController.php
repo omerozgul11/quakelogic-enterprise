@@ -25,12 +25,28 @@ class MailingController extends Controller
     public function dashboard(Request $request): Response
     {
         $orgId = $request->user()->organization_id;
-        $base = fn () => ProposalMailing::query()->forOrganization($orgId);
+
+        // Optional domestic/international filter for the whole dashboard.
+        $scope = in_array($request->string('scope')->toString(), ['domestic', 'international'], true)
+            ? $request->string('scope')->toString() : null;
+
+        $base = fn () => ProposalMailing::query()->forOrganization($orgId)
+            ->when($scope, fn ($q) => $q->where('scope', $scope));
+
         $deliveredOnTime = (clone $base())->where('status', MailingStatus::Delivered->value)->where('on_time', true)->count();
         $deliveredLate = (clone $base())->where('status', MailingStatus::Delivered->value)->where('on_time', false)->count();
         $totalDelivered = $deliveredOnTime + $deliveredLate;
 
+        $scopeCounts = ProposalMailing::query()->forOrganization($orgId)
+            ->selectRaw('scope, count(*) c')->groupBy('scope')->pluck('c', 'scope');
+
         return Inertia::render('Shipments/Index', [
+            'scope' => $scope,
+            'scopeCounts' => [
+                'all' => (int) $scopeCounts->sum(),
+                'domestic' => (int) ($scopeCounts['domestic'] ?? 0),
+                'international' => (int) ($scopeCounts['international'] ?? 0),
+            ],
             'stats' => [
                 'active' => (clone $base())->active()->count(),
                 'at_risk' => (clone $base())->active()
@@ -38,15 +54,16 @@ class MailingController extends Controller
                     ->whereColumn('scheduled_delivery', '>', 'deadline')->count(),
                 'delivered_late' => $deliveredLate,
                 'delivered_on_time' => $deliveredOnTime,
-                // On-time delivery rate across all delivered mailings (null until any are delivered).
                 'on_time_rate' => $totalDelivered > 0 ? (int) round($deliveredOnTime / $totalDelivered * 100) : null,
             ],
             'recent' => $base()
                 ->with('proposalSubmission:id,project_name,proposal_number')
-                ->latest()->limit(5)->get()->map(fn (ProposalMailing $m) => [
+                ->latest()->limit(6)->get()->map(fn (ProposalMailing $m) => [
                     'ulid' => $m->ulid,
                     'ups_tracking_number' => $m->ups_tracking_number,
                     'recipient_name' => $m->recipient_name,
+                    'scope_label' => $m->scope?->label() ?? 'Domestic',
+                    'scope_color' => $m->scope?->color() ?? 'blue',
                     'status_label' => $m->status->label(),
                     'status_color' => $m->status->color(),
                     'risk_label' => $m->risk()->label(),
@@ -126,6 +143,7 @@ class MailingController extends Controller
         $data = $request->validate([
             'ups_tracking_number' => ['required', 'string', 'max:64'],
             'carrier' => ['nullable', Rule::in($supportedCarriers)],
+            'scope' => ['nullable', Rule::enum(\App\Enums\ShipmentScope::class)],
             'recipient_name' => ['nullable', 'string', 'max:255'],
             'recipient_address' => ['nullable', 'string', 'max:1000'],
             'deadline' => ['nullable', 'date'],
@@ -176,11 +194,13 @@ class MailingController extends Controller
         $data = $request->validate([
             'tracking_numbers' => ['required', 'string', 'max:20000'],
             'carrier' => ['nullable', Rule::in($supported)],
+            'scope' => ['nullable', Rule::enum(\App\Enums\ShipmentScope::class)],
             'recipient_name' => ['nullable', 'string', 'max:255'],
             'deadline' => ['nullable', 'date'],
         ]);
 
         $carrier = $data['carrier'] ?? 'ups';
+        $scope = $data['scope'] ?? 'domestic';
 
         // Split on whitespace/commas, dedupe, cap per submit so the synchronous
         // carrier lookups stay within the request timeout.
@@ -206,6 +226,7 @@ class MailingController extends Controller
             $mailing->organization_id = $orgId;
             $mailing->created_by = $request->user()->id;
             $mailing->carrier = $carrier;
+            $mailing->scope = $scope;
             $mailing->save();
 
             try {
@@ -233,7 +254,7 @@ class MailingController extends Controller
     {
         $mailing = ProposalMailing::query()
             ->forOrganization($request->user()->organization_id)
-            ->with(['trackingEvents', 'proposalSubmission:id,project_name,proposal_number', 'createdBy:id,name'])
+            ->with(['trackingEvents', 'documents', 'proposalSubmission:id,project_name,proposal_number', 'createdBy:id,name'])
             ->where('ulid', $ulid)
             ->firstOrFail();
 
@@ -242,6 +263,27 @@ class MailingController extends Controller
         return Inertia::render('Shipments/Mailings/Show', [
             'mailing' => $this->present($mailing, withTimeline: true),
         ]);
+    }
+
+    public function update(Request $request, string $ulid): RedirectResponse
+    {
+        $mailing = ProposalMailing::query()
+            ->forOrganization($request->user()->organization_id)
+            ->where('ulid', $ulid)
+            ->firstOrFail();
+
+        $this->authorize('update', $mailing);
+
+        $data = $request->validate([
+            'recipient_name' => ['nullable', 'string', 'max:255'],
+            'recipient_address' => ['nullable', 'string', 'max:1000'],
+            'deadline' => ['nullable', 'date'],
+            'scope' => ['required', Rule::enum(\App\Enums\ShipmentScope::class)],
+        ]);
+
+        $mailing->update($data);
+
+        return back()->with('success', 'Mailing updated.');
     }
 
     public function refresh(Request $request, string $ulid): RedirectResponse
@@ -282,6 +324,9 @@ class MailingController extends Controller
             'carrier' => $m->carrier,
             'carrier_label' => \App\Enums\Carrier::tryFrom($m->carrier)?->label() ?? strtoupper((string) $m->carrier),
             'tracking_url' => \App\Enums\Carrier::tryFrom($m->carrier)?->trackingUrl($m->ups_tracking_number),
+            'scope' => $m->scope?->value ?? 'domestic',
+            'scope_label' => $m->scope?->label() ?? 'Domestic',
+            'scope_color' => $m->scope?->color() ?? 'blue',
             'recipient_name' => $m->recipient_name,
             'recipient_address' => $m->recipient_address,
             'deadline' => optional($m->deadline)->toDateString(),
@@ -312,6 +357,16 @@ class MailingController extends Controller
                 'description' => $e->description,
                 'location' => $e->location,
                 'occurred_at' => $e->occurred_at->toIso8601String(),
+            ]);
+            $data['documents'] = $m->documents->map(fn ($d) => [
+                'id' => $d->id,
+                'name' => $d->display_name,
+                'type' => $d->document_type,
+                'size' => $d->size_formatted,
+                'is_image' => str_starts_with((string) $d->mime_type, 'image/'),
+                'download_url' => "/shipments/mailings/{$m->ulid}/documents/{$d->id}/download",
+                'preview_url' => "/shipments/mailings/{$m->ulid}/documents/{$d->id}/preview",
+                'created_at' => optional($d->created_at)->toIso8601String(),
             ]);
         }
 

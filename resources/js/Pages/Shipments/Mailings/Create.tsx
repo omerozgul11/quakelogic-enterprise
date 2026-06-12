@@ -24,6 +24,7 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         ups_tracking_number: '',
         carrier: 'ups',
+        scope: 'domestic',
         proposal_submission_id: prefill?.proposal_submission_id ? String(prefill.proposal_submission_id) : '',
         recipient_name: prefill?.recipient_name ?? '',
         recipient_address: prefill?.recipient_address ?? '',
@@ -55,14 +56,25 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
                 </div>
 
                 <form onSubmit={submit} className="card-surface space-y-5 p-6">
-                    <div>
-                        <label className="label">Carrier</label>
-                        <Select
-                            value={data.carrier}
-                            onChange={v => setData('carrier', v)}
-                            options={[{ value: 'ups', label: 'UPS' }]}
-                            className="w-full"
-                        />
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label className="label">Carrier</label>
+                            <Select
+                                value={data.carrier}
+                                onChange={v => setData('carrier', v)}
+                                options={[{ value: 'ups', label: 'UPS' }]}
+                                className="w-full"
+                            />
+                        </div>
+                        <div>
+                            <label className="label">Category</label>
+                            <Select
+                                value={data.scope}
+                                onChange={v => setData('scope', v)}
+                                options={[{ value: 'domestic', label: 'Domestic' }, { value: 'international', label: 'International' }]}
+                                className="w-full"
+                            />
+                        </div>
                     </div>
 
                     <div>
