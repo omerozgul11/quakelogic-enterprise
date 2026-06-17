@@ -7,6 +7,9 @@ use App\Models\Company;
 use App\Models\Crm\Invoice;
 use App\Models\Crm\Lead;
 use App\Models\Crm\Project;
+use App\Models\Opportunity;
+use App\Models\ProposalMailing;
+use App\Models\ProposalSubmission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -62,6 +65,19 @@ class ClientController extends Controller
                     'total' => (float) $i->total, 'currency' => $i->currency,
                     'status_label' => $i->status->label(), 'status_color' => $i->status->color(),
                 ]),
+            // Cross-platform: this client's records in Proposals & Shipments.
+            'proposals' => ProposalSubmission::where('organization_id', $orgId)->where('company_id', $company->id)
+                ->latest()->limit(10)->get()->map(fn (ProposalSubmission $p) => [
+                    'id' => $p->id, 'number' => $p->proposal_number, 'name' => $p->project_name,
+                    'value' => (float) $p->proposal_value,
+                    'status_label' => $p->status?->label() ?? '—', 'status_color' => $p->status?->color() ?? 'gray',
+                ]),
+            'opportunities' => Opportunity::where('organization_id', $orgId)->where('company_id', $company->id)
+                ->latest()->limit(10)->get()->map(fn (Opportunity $o) => [
+                    'id' => $o->id, 'title' => $o->title, 'value' => (float) $o->estimated_value,
+                    'status_label' => $o->status?->label() ?? '—', 'status_color' => $o->status?->color() ?? 'gray',
+                ]),
+            'shipments' => $this->clientShipments($orgId, $company->id),
             'can' => ['manage' => $request->user()->can('manage companies')],
         ]);
     }
@@ -97,6 +113,29 @@ class ClientController extends Controller
         $company->delete();
 
         return redirect()->route('crm.clients.index')->with('success', "Client \"{$name}\" deleted.");
+    }
+
+    /** Shipments for a client = mailings of that client's proposals. */
+    private function clientShipments(int $orgId, int $companyId)
+    {
+        $proposalIds = ProposalSubmission::where('organization_id', $orgId)
+            ->where('company_id', $companyId)->pluck('id');
+
+        if ($proposalIds->isEmpty()) {
+            return [];
+        }
+
+        return ProposalMailing::where('organization_id', $orgId)
+            ->whereIn('proposal_submission_id', $proposalIds)
+            ->latest()->limit(10)->get()
+            ->map(fn (ProposalMailing $m) => [
+                'id' => $m->id,
+                'ulid' => $m->ulid,
+                'tracking' => $m->ups_tracking_number,
+                'recipient' => $m->recipient_name,
+                'status_label' => $m->status?->label() ?? '—',
+                'status_color' => $m->status?->color() ?? 'gray',
+            ]);
     }
 
     /** @return array<string,mixed> */
