@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -160,5 +161,24 @@ class RolesPermissionsSeeder extends Seeder
             'view crm', 'access crm', 'view follow ups', 'view dashboards',
             'view contracts', 'view templates',
         ]);
+
+        // Collaborative proposal editing: every role can view + edit every
+        // proposal (the ProposalSubmissionPolicy no longer restricts edit to
+        // owner/team). Applied via the pivot so it layers on top of the
+        // per-role syncPermissions above without re-listing it in each.
+        $proposalEditing = Permission::whereIn('name', [
+            'view proposals', 'view all proposals', 'update proposals',
+            'view private proposal details', 'manage proposal files',
+        ])->pluck('id');
+        foreach (Role::pluck('id') as $roleId) {
+            foreach ($proposalEditing as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $roleId,
+                ]);
+            }
+        }
+
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
     }
 }
