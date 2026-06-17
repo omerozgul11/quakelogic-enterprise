@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
+import { SearchInput } from '@/Components/ui/SearchInput';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
@@ -42,7 +43,7 @@ export default function ContactsIndex({ contacts, filters, companies, can }: Pro
     };
 
     const handleSearch = (value: string) => {
-        router.get('/contacts', value ? { search: value } : {}, { preserveState: true });
+        router.get('/contacts', value ? { search: value } : {}, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     return (
@@ -65,16 +66,12 @@ export default function ContactsIndex({ contacts, filters, companies, can }: Pro
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search by name or email…"
-                                defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && handleSearch((e.target as HTMLInputElement).value)}
-                                className="input input-with-icon"
-                            />
-                        </div>
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[18rem]"
+                            initial={filters.search ?? ''}
+                            onSearch={handleSearch}
+                            placeholder="Search by name or email…"
+                        />
                         {filters.search && (
                             <button onClick={() => router.get('/contacts')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear

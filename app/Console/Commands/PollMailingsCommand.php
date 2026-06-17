@@ -6,6 +6,7 @@ use App\Models\ProposalMailing;
 use App\Services\Mailings\MailingTrackingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class PollMailingsCommand extends Command
@@ -17,6 +18,13 @@ class PollMailingsCommand extends Command
     public function handle(MailingTrackingService $tracking): int
     {
         $query = ProposalMailing::query()->active();
+
+        // Leave manually-overridden shipments alone (auto_track = false), unless
+        // the column hasn't been migrated yet. An explicit --id always refreshes.
+        if (! $this->option('id') && Schema::hasColumn('proposal_mailings', 'auto_track')) {
+            $query->where('auto_track', true);
+        }
+
         if ($id = $this->option('id')) {
             $query->whereKey($id);
         }

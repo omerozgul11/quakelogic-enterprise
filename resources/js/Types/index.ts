@@ -51,10 +51,12 @@ export interface ProposalSubmission {
     ulid: string;
     proposal_number: string;
     project_name: string;
+    proposal_type?: string;
     solicitation_number?: string;
     status: string;
     proposal_value?: number;
     award_value?: number;
+    estimated_cost?: number | null;
     currency?: string;
     due_date?: string;
     submission_date?: string;
@@ -181,6 +183,7 @@ export interface SharedProps {
     app: { name: string; version: string; switcher: AppLink[] };
     notifications_count: number;
     notifications: NotificationItem[];
+    inbox_unread_count: number;
 }
 
 export type StatusColor = 'blue' | 'green' | 'red' | 'yellow' | 'gray' | 'purple' | 'indigo' | 'orange' | 'teal' | 'cyan' | 'amber' | 'slate' | 'emerald';

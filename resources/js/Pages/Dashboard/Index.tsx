@@ -1,11 +1,13 @@
 import { Head, Link, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
-import { formatCurrency, getDueDateLabel, getDueDateColor, formatDate } from '@/Lib/utils';
+import { cn, formatCurrency, getDueDateLabel, getDueDateColor, formatDate } from '@/Lib/utils';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
+import { QuakeBotScene } from '@/Components/ui/QuakeBotScene';
 import { SharedProps } from '@/Types';
 import {
     Target, FileText, Trophy, TrendingUp, DollarSign,
-    Clock, AlertCircle, CheckCircle, ArrowUpRight, Plus, ArrowRight, FileSearch,
+    Clock, AlertCircle, CheckCircle, ArrowUpRight, Plus, ArrowRight, FileSearch, CalendarClock,
 } from 'lucide-react';
 
 interface DashboardMetrics {
@@ -16,6 +18,7 @@ interface DashboardMetrics {
     mySubmittedValue: number;
     myAwardValue: number;
     myPipelineValue: number;
+    myWeightedPipelineValue: number;
     myCommissions: number;
     myTasks: number;
     myFollowUps: number;
@@ -40,6 +43,50 @@ interface DashboardMetrics {
     companySubmittedValue: number;
     companySubmittedCount: number;
     companyAwardValue: number;
+    isAdmin: boolean;
+    orgSubmissions: Record<'last7' | 'last30' | 'last60' | 'total', { count: number; value: number }> | null;
+    upcomingSubmissions: { this_week: number; in15: number } | null;
+}
+
+const SUBMITTED_STATUSES = 'submitted,award_pending,clarification_requested,awarded,completed,lost,protested';
+const OPEN_STATUSES = 'in_progress,submitted,award_pending,clarification_requested,protested';
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Admin: total submissions org-wide with a 7 / 30 / 60 / All interval picker. */
+function AdminSubmissionsCard({ data }: { data: NonNullable<DashboardMetrics['orgSubmissions']> }) {
+    const [iv, setIv] = useState<'last7' | 'last30' | 'last60' | 'total'>('total');
+    const cur = data[iv];
+    const days = iv === 'last7' ? 7 : iv === 'last30' ? 30 : iv === 'last60' ? 60 : null;
+    const today = new Date();
+    const href = days === null
+        ? `/proposals/board?status=${SUBMITTED_STATUSES}`
+        : `/proposals/board?date_field=submission_date&from=${ymd(new Date(today.getTime() - days * 86400000))}&to=${ymd(today)}&status=${SUBMITTED_STATUSES}`;
+    const tabs: Array<[typeof iv, string]> = [['last7', '7d'], ['last30', '30d'], ['last60', '60d'], ['total', 'All']];
+    const rangeNote = days === null ? 'all time' : `last ${days} days`;
+    return (
+        <div className="card-surface card-hover group h-full p-5">
+            {/* Whole body links to the board filtered to the selected interval's submissions */}
+            <Link href={href} className="block" title={`View submissions (${rangeNote}) on the board`}>
+                <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-sky-500 text-white shadow-soft">
+                        <FileText className="h-5 w-5" />
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+                </div>
+                <p className="text-2xl font-bold tracking-tight text-foreground">{cur.count}</p>
+                <p className="mt-0.5 text-sm font-medium text-muted-foreground">Total Submissions</p>
+                <p className="mt-1 text-xs text-muted-foreground/80">{formatCurrency(cur.value)} · {rangeNote}</p>
+            </Link>
+            {/* Interval picker — buttons don't navigate; they re-target the link above */}
+            <div className="mt-2.5 inline-flex rounded-lg bg-secondary p-0.5 text-[11px] font-medium">
+                {tabs.map(([k, label]) => (
+                    <button key={k} type="button" onClick={() => setIv(k)} className={cn('rounded-md px-2 py-1 transition-colors', iv === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                        {label}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 interface Props {
@@ -101,33 +148,59 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
                             </h1>
                             <p className="mt-1.5 text-sm text-white/80">Here's what's happening with your proposals today.</p>
                         </div>
-                        <div className="flex flex-wrap gap-2.5">
+                        <div className="flex items-center gap-4 sm:gap-5">
+                            {/* QuakeBot at work — click to chat */}
                             <Link
-                                href="/proposals/create"
-                                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/15 backdrop-blur transition-colors hover:bg-white/20"
+                                href="/ai"
+                                title="Ask QuakeBot — your AI assistant"
+                                className="group hidden shrink-0 md:block"
                             >
-                                <Plus className="h-4 w-4" /> New Proposal
+                                <div className="rounded-2xl bg-white/10 px-3 py-2.5 ring-1 ring-white/15 backdrop-blur transition-colors group-hover:bg-white/[0.18]">
+                                    <QuakeBotScene />
+                                </div>
                             </Link>
-                            {canViewExecutiveDashboard && (
+                            <div className="flex flex-wrap gap-2.5">
                                 <Link
-                                    href="/dashboard/executive"
-                                    className="bg-brand-gradient inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-glow transition-opacity hover:opacity-95"
+                                    href="/proposals/create"
+                                    className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur transition-all hover:bg-white/20"
                                 >
-                                    <TrendingUp className="h-4 w-4" /> Executive View
+                                    <Plus className="h-4 w-4" /> New Proposal
                                 </Link>
-                            )}
+                                {canViewExecutiveDashboard && (
+                                    <Link
+                                        href="/dashboard/executive"
+                                        className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur transition-all hover:bg-white/20"
+                                    >
+                                        <TrendingUp className="h-4 w-4" /> Executive View
+                                    </Link>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Stats — every card links to the list its number is drawn from */}
                 <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <StatCard title="My Submissions" value={metrics.mySubmitted} icon={FileText} color="indigo" subtitle="Proposals you've submitted"
-                        href="/proposals/board" hint="Your proposals that have been submitted (have a submission date). Opens the Applications board." />
-                    <StatCard title="My Awards" value={metrics.myAwarded} icon={Trophy} color="green" subtitle="Bids you've won"
-                        href="/proposals/board?status=awarded,completed" hint="Proposals you've won — awarded or completed. Opens the Applications board filtered to those." />
+                    {metrics.isAdmin && metrics.orgSubmissions ? (
+                        <>
+                            <AdminSubmissionsCard data={metrics.orgSubmissions} />
+                            <StatCard title="Upcoming Submissions" value={metrics.upcomingSubmissions?.this_week ?? 0} icon={CalendarClock} color="red"
+                                subtitle={`Due this week · ${metrics.upcomingSubmissions?.in15 ?? 0} within 15 days`}
+                                href={`/proposals/board?date_field=due_date&from=${ymd(new Date())}&to=${ymd(new Date(Date.now() + 15 * 86400000))}&status=${OPEN_STATUSES}`}
+                                hint="Open proposals whose deadline is approaching (this week, and within 15 days). Opens the board filtered to those." />
+                        </>
+                    ) : (
+                        <>
+                            <StatCard title="My Submissions" value={metrics.mySubmitted} icon={FileText} color="indigo" subtitle="Proposals you've submitted"
+                                href="/proposals/board" hint="Your proposals that have been submitted (have a submission date). Opens the Applications board." />
+                            <StatCard title="My Awards" value={metrics.myAwarded} icon={Trophy} color="green" subtitle="Bids you've won"
+                                href="/proposals/board?status=awarded,completed" hint="Proposals you've won — awarded or completed. Opens the Applications board filtered to those." />
+                        </>
+                    )}
                     <StatCard title="Pipeline Value" value={formatCurrency(metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle="Projected value, open bids"
-                        href="/proposals/board?status=in_progress,submitted,pending,clarification_requested" hint="Projected value (USD) of your open proposals. Opens the Applications board filtered to open work." />
+                        href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint="Projected value (USD) of your open proposals. Opens the Applications board filtered to open work." />
+                    <StatCard title="Weighted Pipeline" value={formatCurrency(metrics.myWeightedPipelineValue)} icon={TrendingUp} color="teal" subtitle="Value × win probability"
+                        href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint="Forecast: each open proposal's value weighted by its win probability (per-stage default until you set one on the proposal)." />
                     <StatCard title="My Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" subtitle="Total value you've submitted"
                         href="/proposals/board" hint="Total value (USD) of everything you've submitted. Opens the Applications board." />
                     <StatCard title="Total Submitted Value" value={formatCurrency(metrics.companySubmittedValue)} icon={DollarSign} color="teal" subtitle={`${metrics.companySubmittedCount} submitted · org-wide`}
@@ -137,7 +210,7 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
                     <StatCard title="Company Earnings (YTD)" value={formatCurrency(metrics.companyAwardValue)} icon={Trophy} color="green" subtitle="All wins this year, org-wide"
                         href="/proposals/board?status=awarded,completed" hint="Value (USD) of all contracts the company has won this year. Opens the Applications board filtered to won work." />
                     <StatCard title="Active Proposals" value={metrics.myPending} icon={Target} color="orange" subtitle="Still in progress"
-                        href="/proposals/board?status=in_progress" hint="Your proposals still in progress. Opens the Applications board filtered to In Progress." />
+                        href="/proposals/board?status=in_progress" hint="In-progress proposals you can see. Opens the Applications board filtered to In Progress — the count matches what's shown there." />
                     <StatCard title="Open Tasks" value={metrics.myTasks} icon={Clock} color="indigo" subtitle="Assigned to you, not done"
                         href="/calendar" hint="Tasks assigned to you that aren't completed yet. Opens your calendar." />
                     <StatCard title="Follow-ups Due" value={metrics.myFollowUps} icon={AlertCircle} color={metrics.myFollowUps > 0 ? 'red' : 'green'} subtitle="Scheduled or overdue"

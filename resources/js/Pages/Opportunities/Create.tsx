@@ -4,12 +4,13 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardContent } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
 import { ArrowLeft, Target } from 'lucide-react';
 
 const SOURCES = ['manual', 'sam_gov', 'bidprime', 'govwin', 'merx', 'world_bank', 'referral', 'repeat_business'];
 const STATUSES = ['new', 'identified', 'monitoring', 'qualified', 'no_bid', 'pursuing', 'proposal_in_progress', 'submitted'];
 
-export default function OpportunityCreate() {
+export default function OpportunityCreate({ prefill }: { prefill?: { due_date: string | null } }) {
     const { data, setData, post, errors, processing } = useForm({
         title: '',
         source: 'manual',
@@ -18,7 +19,7 @@ export default function OpportunityCreate() {
         agency_name: '',
         naics_code: '',
         estimated_value: '',
-        due_date: '',
+        due_date: prefill?.due_date ?? '',
         description: '',
         set_aside_type: '',
         place_of_performance: '',
@@ -92,8 +93,8 @@ export default function OpportunityCreate() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="label">Estimated Value ($)</label>
-                                    <input type="number" value={data.estimated_value} onChange={e => setData('estimated_value', e.target.value)}
-                                        className="input" placeholder="0.00" min="0" step="0.01" />
+                                    <NumberInput value={data.estimated_value} onChange={e => setData('estimated_value', e.target.value)}
+                                        className="input" placeholder="0.00" />
                                 </div>
                                 <div>
                                     <label className="label">Due Date</label>

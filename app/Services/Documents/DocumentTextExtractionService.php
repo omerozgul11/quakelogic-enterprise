@@ -123,4 +123,46 @@ class DocumentTextExtractionService
 
         return $text;
     }
+
+    /**
+     * Return the high-signal front matter of a procurement document: the title
+     * page and everything up to the Table of Contents. For RFP/RFQ/IFB documents
+     * this region carries the most accurate metadata (project title, solicitation
+     * number, issuing agency, key dates, point of contact); the body and back
+     * matter are noisier and routinely cause wrong or empty field extraction.
+     *
+     * Falls back to the full text when no contents heading can be confidently
+     * located, so nothing is lost on documents without a table of contents.
+     */
+    public function frontMatter(string $text): string
+    {
+        $lines = preg_split('/\n/', $text) ?: [];
+        $count = count($lines);
+        if ($count < 12) {
+            return $text;
+        }
+
+        // A "Table of Contents" heading on its own line — allow a leading section
+        // numeral/roman numeral and the common short forms. Requiring the whole
+        // line to match avoids catching inline phrases like "the contents of...".
+        $tocRe = '/^\s*(?:\d+[.)]\s*|[IVXLC]+\.\s*)?'
+            . '(table of contents|contents|toc)\s*:?\s*$/i';
+
+        // Skip the first couple of lines so an oddly-placed cover heading isn't
+        // treated as the boundary before any title-page content is captured.
+        foreach ($lines as $i => $line) {
+            if ($i < 2) {
+                continue;
+            }
+            if (preg_match($tocRe, trim($line))) {
+                $front = trim(implode("\n", array_slice($lines, 0, $i)));
+
+                // Only trust the slice if it actually carries content; otherwise
+                // keep the full text rather than feed the model almost nothing.
+                return mb_strlen($front) >= 150 ? $front : $text;
+            }
+        }
+
+        return $text;
+    }
 }

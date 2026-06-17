@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Agency;
 use App\Models\Opportunity;
 use App\Models\ProposalSubmission;
+use App\Models\OpportunityUserState;
 use App\Models\User;
+use App\Enums\OpportunityAssignmentStage;
+use App\Enums\OpportunityReaction;
 use App\Enums\OpportunitySource;
 use App\Enums\OpportunityStatus;
 use App\Services\Proposals\ProposalNumberService;
@@ -16,9 +19,12 @@ use App\Services\BidSources\OpportunityDeduplicationService;
 use App\Services\BidSources\OpportunityDocumentService;
 use App\Services\BidSources\OpportunityPipelineService;
 use App\Services\Notifications\Notifier;
+use App\Services\Opportunities\OpportunityTimelineService;
+use App\Services\Opportunities\OpportunityWorkloadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -242,15 +248,20 @@ class OpportunityController extends Controller
 
         $user = $request->user();
 
+        // Optional due-date prefill (e.g. when adding from the calendar).
+        $due = $request->query('due');
+        $due = is_string($due) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) ? $due : null;
+
         return Inertia::render('Opportunities/Create', [
             'agencies' => Agency::where('organization_id', $user->organization_id)->orderBy('name')->get(['id', 'name']),
             'users' => User::where('organization_id', $user->organization_id)->where('is_active', true)->get(['id', 'name']),
             'statuses' => collect(OpportunityStatus::cases())->map(fn($s) => ['value' => $s->value, 'label' => $s->label()]),
             'sources' => collect(OpportunitySource::cases())->map(fn($s) => ['value' => $s->value, 'label' => $s->label()]),
+            'prefill' => ['due_date' => $due],
         ]);
     }
 
-    public function store(Request $request, Notifier $notifier): RedirectResponse
+    public function store(Request $request, Notifier $notifier, OpportunityTimelineService $timeline): RedirectResponse
     {
         $this->authorize('create', Opportunity::class);
 
@@ -271,26 +282,34 @@ class OpportunityController extends Controller
 
         $user = $request->user();
 
+        // The creator owns it from the start (Assigned in the lifecycle); a
+        // separate assignee may also be set.
         $opportunity = Opportunity::create([
             ...$validated,
             'organization_id' => $user->organization_id,
             'created_by' => $user->id,
             'owner_id' => $user->id,
+            'assigned_to' => $validated['assigned_to'] ?? $user->id,
+            'assignment_stage' => OpportunityAssignmentStage::Assigned->value,
+            'assigned_at' => now(),
+            'last_activity_at' => now(),
         ]);
+
+        $timeline->record($opportunity, OpportunityTimelineService::DISCOVERED, 'Opportunity added by ' . $user->name . '.', $user, touchActivity: false);
 
         $notifier->opportunityCreated($opportunity, $user);
 
         return redirect()->route('opportunities.index')->with('success', 'Opportunity created successfully.');
     }
 
-    public function show(Request $request, Opportunity $opportunity): Response
+    public function show(Request $request, Opportunity $opportunity, \App\Services\Opportunities\OpportunityHealthService $health): Response
     {
         $this->authorize('view', $opportunity);
 
         $opportunity->load([
             'agency', 'company.contacts:id,company_id,first_name,last_name,email,phone,title',
             'assignedTo:id,name,email', 'owner:id,name,email',
-            'proposals:id,proposal_number,project_name,status,due_date,proposal_value',
+            'proposals:id,opportunity_id,proposal_number,project_name,status,due_date,proposal_value',
             'amendments',
             'competitors',
             'partners.company:id,name',
@@ -305,17 +324,104 @@ class OpportunityController extends Controller
             'phone' => $c->phone,
         ])->values();
 
+        $user = $request->user();
+        $canManage = $this->canManageAssignments($user);
+        $isOwner = $opportunity->owner_id === $user->id;
+
+        $myState = OpportunityUserState::where('opportunity_id', $opportunity->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        // Managers see the AI-recommended owners (primary/secondary) for routing.
+        $recommendedOwners = $canManage
+            ? OpportunityUserState::where('opportunity_id', $opportunity->id)
+                ->where('is_recommended', true)
+                ->with('user:id,name')
+                ->orderByDesc('match_score')
+                ->get()
+                ->map(fn (OpportunityUserState $s) => [
+                    'user' => $s->user?->name,
+                    'score' => $s->match_score !== null ? (float) $s->match_score : null,
+                    'role' => $s->recommended_role,
+                    'reasons' => $s->match_reasons,
+                ])->values()
+            : [];
+
         return Inertia::render('Opportunities/Show', [
             'opportunity' => $opportunity,
             'contacts' => $contacts,
             'samDocuments' => $this->samDocuments($opportunity),
+            'timeline' => $this->timeline($opportunity),
+            'lifecycle' => [
+                'stage' => $opportunity->assignment_stage?->value,
+                'stage_label' => $opportunity->assignment_stage?->label(),
+                'stage_color' => $opportunity->assignment_stage?->color(),
+                'owner' => $opportunity->owner?->only(['id', 'name', 'email']),
+                'assigned_to' => $opportunity->assignedTo?->only(['id', 'name', 'email']),
+                'ownership_locked' => (bool) $opportunity->ownership_locked,
+                'assigned_at' => $opportunity->assigned_at?->toIso8601String(),
+                'last_activity_at' => $opportunity->last_activity_at?->toIso8601String(),
+                'days_since_activity' => $opportunity->days_since_activity,
+                'days_until_deadline' => $opportunity->days_until_deadline,
+                'my_reaction' => $myState?->reaction?->value,
+                'my_match' => $myState && $myState->match_score !== null
+                    ? ['score' => (float) $myState->match_score, 'reasons' => $myState->match_reasons, 'role' => $myState->recommended_role]
+                    : null,
+                'is_owner' => $isOwner,
+            ],
+            'recommendedOwners' => $recommendedOwners,
+            'health' => $health->score($opportunity),
+            'reactionOptions' => OpportunityReaction::options(),
+            'stageOptions' => array_map(
+                fn (OpportunityAssignmentStage $s) => ['value' => $s->value, 'label' => $s->label(), 'color' => $s->color()],
+                OpportunityAssignmentStage::workStages(),
+            ),
+            'assignableUsers' => $canManage
+                ? User::where('organization_id', $user->organization_id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                : [],
             'can' => [
-                'update' => $request->user()->can('update', $opportunity),
-                'delete' => $request->user()->can('delete', $opportunity),
-                'makeGoNoGo' => $request->user()->can('makeGoNoGoDecision', $opportunity),
-                'pursue' => $request->user()->can('create proposals'),
+                'update' => $user->can('update', $opportunity),
+                'delete' => $user->can('delete', $opportunity),
+                'makeGoNoGo' => $user->can('makeGoNoGoDecision', $opportunity),
+                'pursue' => $user->can('create proposals'),
+                'claim' => ! $opportunity->ownership_locked || $isOwner || $canManage,
+                'assign' => $canManage,
+                'changeStage' => $isOwner || $canManage,
             ],
         ]);
+    }
+
+    /**
+     * The opportunity's immutable timeline (newest first). A synthetic
+     * "discovered" entry is prepended from created_at when no explicit
+     * discovery event was recorded (e.g. SAM.gov-imported opportunities).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function timeline(Opportunity $opportunity): array
+    {
+        $events = $opportunity->events()->with('user:id,name')->limit(200)->get()->map(fn ($e) => [
+            'id' => $e->id,
+            'type' => $e->type,
+            'description' => $e->description,
+            'meta' => $e->meta,
+            'user' => $e->user?->name,
+            'at' => $e->created_at?->toIso8601String(),
+        ])->values()->all();
+
+        $hasDiscovery = collect($events)->contains(fn ($e) => $e['type'] === OpportunityTimelineService::DISCOVERED);
+        if (! $hasDiscovery) {
+            $events[] = [
+                'id' => 0,
+                'type' => OpportunityTimelineService::DISCOVERED,
+                'description' => 'Discovered via ' . ($opportunity->source?->label() ?? 'manual entry') . '.',
+                'meta' => null,
+                'user' => null,
+                'at' => $opportunity->created_at?->toIso8601String(),
+            ];
+        }
+
+        return $events;
     }
 
     /**
@@ -366,7 +472,7 @@ class OpportunityController extends Controller
      * Start an application (proposal) from an opportunity. Links the new draft
      * proposal to the opportunity so document prep can begin.
      */
-    public function pursue(Request $request, Opportunity $opportunity, ProposalNumberService $numberService, Notifier $notifier): RedirectResponse
+    public function pursue(Request $request, Opportunity $opportunity, ProposalNumberService $numberService, Notifier $notifier, OpportunityTimelineService $timeline): RedirectResponse
     {
         $this->authorize('view', $opportunity);
         $this->authorize('create', ProposalSubmission::class);
@@ -401,6 +507,20 @@ class OpportunityController extends Controller
             'to_status' => 'in_progress',
             'changed_at' => now(),
         ]);
+
+        // Advance the opportunity's assignment lifecycle — pursuing locks
+        // ownership to whoever started the proposal and moves it to drafting.
+        $opportunity->forceFill([
+            'assignment_stage' => OpportunityAssignmentStage::ProposalDrafting->value,
+            'owner_id' => $opportunity->owner_id ?? $user->id,
+            'assigned_to' => $opportunity->assigned_to ?? $user->id,
+            'ownership_locked' => true,
+            'ownership_locked_at' => $opportunity->ownership_locked_at ?? now(),
+            'assigned_at' => $opportunity->assigned_at ?? now(),
+            'accepted_at' => $opportunity->accepted_at ?? now(),
+        ])->save();
+
+        $timeline->record($opportunity, OpportunityTimelineService::STAGE_CHANGED, $user->name . ' started a proposal (Proposal Drafting).', $user, ['proposal_id' => $proposal->id]);
 
         $notifier->proposalCreated($proposal, $user);
 
@@ -443,6 +563,197 @@ class OpportunityController extends Controller
         $opportunity->update([...$validated, 'updated_by' => $request->user()->id]);
 
         return redirect()->route('opportunities.show', $opportunity)->with('success', 'Opportunity updated.');
+    }
+
+    /**
+     * Claim (and lock) ownership of an opportunity — moves it to "In Progress".
+     * Once locked, other users may view but cannot claim it; only the owner or
+     * an assignment manager (admin/CEO) can reassign.
+     */
+    public function claim(Request $request, Opportunity $opportunity, OpportunityTimelineService $timeline, OpportunityWorkloadService $workload, Notifier $notifier): RedirectResponse
+    {
+        $this->authorize('view', $opportunity);
+        $user = $request->user();
+
+        if (! $this->canClaim($opportunity, $user)) {
+            return back(303)->with('error', 'This opportunity is owned by ' . ($opportunity->owner?->name ?? 'another user') . '. Ask an admin to reassign it.');
+        }
+
+        $this->lockOwnership($opportunity, $user, $timeline);
+        $this->setReaction($opportunity, $user, OpportunityReaction::InProgress, $timeline, recordEvent: false);
+
+        $notifier->opportunityClaimed($opportunity->fresh(['owner']), $user);
+        $workload->recompute($user);
+
+        return back(303)->with('success', 'You now own this opportunity.');
+    }
+
+    /**
+     * Record the current user's reaction to a recommended opportunity. Choosing
+     * "In Progress" claims and locks ownership (per the ownership rules).
+     */
+    public function react(Request $request, Opportunity $opportunity, OpportunityTimelineService $timeline, OpportunityWorkloadService $workload, Notifier $notifier): RedirectResponse
+    {
+        $this->authorize('view', $opportunity);
+        $user = $request->user();
+
+        $data = $request->validate([
+            'reaction' => ['required', Rule::in(array_map(fn (OpportunityReaction $r) => $r->value, OpportunityReaction::cases()))],
+        ]);
+        $reaction = OpportunityReaction::from($data['reaction']);
+
+        if ($reaction === OpportunityReaction::InProgress) {
+            if (! $this->canClaim($opportunity, $user)) {
+                return back(303)->with('error', 'This opportunity is owned by ' . ($opportunity->owner?->name ?? 'another user') . '. Ask an admin to reassign it.');
+            }
+            $this->lockOwnership($opportunity, $user, $timeline);
+            $this->setReaction($opportunity, $user, $reaction, $timeline, recordEvent: false);
+            $notifier->opportunityClaimed($opportunity->fresh(['owner']), $user);
+            $workload->recompute($user);
+
+            return back(303)->with('success', 'You now own this opportunity.');
+        }
+
+        $this->setReaction($opportunity, $user, $reaction, $timeline);
+
+        return back(303);
+    }
+
+    /** Assign or reassign an opportunity to a user (assignment managers only). */
+    public function assign(Request $request, Opportunity $opportunity, OpportunityTimelineService $timeline, OpportunityWorkloadService $workload, Notifier $notifier): RedirectResponse
+    {
+        $this->authorize('update', $opportunity);
+        $user = $request->user();
+        abort_unless($this->canManageAssignments($user), 403, 'You do not have permission to assign opportunities.');
+
+        $data = $request->validate([
+            'user_id' => ['required', Rule::exists('users', 'id')->where('organization_id', $user->organization_id)],
+        ]);
+        $target = User::findOrFail($data['user_id']);
+        $previousOwnerId = $opportunity->owner_id;
+
+        $opportunity->forceFill([
+            'owner_id' => $target->id,
+            'assigned_to' => $target->id,
+            'assignment_stage' => OpportunityAssignmentStage::Assigned->value,
+            'assigned_at' => now(),
+            'accepted_at' => null,
+            'ownership_locked' => false,
+            'ownership_locked_at' => null,
+            'assignment_escalation_level' => 0,
+            'updated_by' => $user->id,
+        ])->save();
+
+        $timeline->record($opportunity, OpportunityTimelineService::REASSIGNED, $user->name . ' assigned this to ' . $target->name . '.', $user, ['to_user_id' => $target->id]);
+        $notifier->opportunityAssigned($opportunity, $target, $user);
+
+        $workload->recompute($target);
+        if ($previousOwnerId && $previousOwnerId !== $target->id && ($prev = User::find($previousOwnerId))) {
+            $workload->recompute($prev);
+        }
+
+        return back(303)->with('success', 'Opportunity assigned to ' . $target->name . '.');
+    }
+
+    /** Move an owned opportunity along its work stages (owner or manager). */
+    public function advanceStage(Request $request, Opportunity $opportunity, OpportunityTimelineService $timeline, OpportunityWorkloadService $workload): RedirectResponse
+    {
+        $this->authorize('view', $opportunity);
+        $user = $request->user();
+        abort_unless($opportunity->owner_id === $user->id || $this->canManageAssignments($user), 403, 'Only the owner can change the stage.');
+
+        $data = $request->validate([
+            'stage' => ['required', Rule::in(array_map(fn (OpportunityAssignmentStage $s) => $s->value, OpportunityAssignmentStage::workStages()))],
+        ]);
+        $from = $opportunity->assignment_stage;
+        $to = OpportunityAssignmentStage::from($data['stage']);
+        if ($from === $to) {
+            return back(303);
+        }
+
+        $opportunity->forceFill(['assignment_stage' => $to->value, 'updated_by' => $user->id])->save();
+        $timeline->record($opportunity, OpportunityTimelineService::STAGE_CHANGED, $user->name . ' moved the stage to "' . $to->label() . '".', $user, ['from' => $from?->value, 'to' => $to->value]);
+
+        if ($to->isClosed() && $opportunity->owner_id && ($owner = User::find($opportunity->owner_id))) {
+            $workload->recompute($owner);
+        }
+
+        return back(303)->with('success', 'Stage updated to ' . $to->label() . '.');
+    }
+
+    /** Relinquish ownership — owner or manager — returning it to Unassigned. */
+    public function release(Request $request, Opportunity $opportunity, OpportunityTimelineService $timeline, OpportunityWorkloadService $workload): RedirectResponse
+    {
+        $this->authorize('view', $opportunity);
+        $user = $request->user();
+        abort_unless($opportunity->owner_id === $user->id || $this->canManageAssignments($user), 403, 'Only the owner or an admin can release this opportunity.');
+
+        $previousOwnerId = $opportunity->owner_id;
+        $opportunity->forceFill([
+            'owner_id' => null,
+            'assigned_to' => null,
+            'assignment_stage' => OpportunityAssignmentStage::Unassigned->value,
+            'ownership_locked' => false,
+            'ownership_locked_at' => null,
+            'updated_by' => $user->id,
+        ])->save();
+
+        $timeline->record($opportunity, OpportunityTimelineService::UNLOCKED, $user->name . ' released ownership — opportunity is unassigned.', $user);
+
+        if ($previousOwnerId && ($prev = User::find($previousOwnerId))) {
+            $workload->recompute($prev);
+        }
+
+        return back(303)->with('success', 'Ownership released. The opportunity is now unassigned.');
+    }
+
+    /** Can this user claim the opportunity right now? */
+    private function canClaim(Opportunity $opportunity, User $user): bool
+    {
+        return ! $opportunity->ownership_locked
+            || $opportunity->owner_id === $user->id
+            || $this->canManageAssignments($user);
+    }
+
+    private function canManageAssignments(User $user): bool
+    {
+        return $user->can('assign opportunities');
+    }
+
+    /** Lock ownership to a user and move the lifecycle to In Progress. */
+    private function lockOwnership(Opportunity $opportunity, User $user, OpportunityTimelineService $timeline): void
+    {
+        $opportunity->forceFill([
+            'owner_id' => $user->id,
+            'assigned_to' => $opportunity->assigned_to ?? $user->id,
+            'assignment_stage' => OpportunityAssignmentStage::InProgress->value,
+            'ownership_locked' => true,
+            'ownership_locked_at' => now(),
+            'assigned_at' => $opportunity->assigned_at ?? now(),
+            'accepted_at' => $opportunity->accepted_at ?? now(),
+            'assignment_escalation_level' => 0,
+        ])->save();
+
+        $timeline->record($opportunity, OpportunityTimelineService::CLAIMED, $user->name . ' claimed ownership (In Progress).', $user);
+    }
+
+    /** Upsert the user's reaction state for an opportunity. */
+    private function setReaction(Opportunity $opportunity, User $user, ?OpportunityReaction $reaction, OpportunityTimelineService $timeline, bool $recordEvent = true): OpportunityUserState
+    {
+        $state = OpportunityUserState::firstOrNew([
+            'opportunity_id' => $opportunity->id,
+            'user_id' => $user->id,
+        ]);
+        $state->organization_id = $opportunity->organization_id;
+        $state->reaction = $reaction;
+        $state->reacted_at = now();
+        $state->save();
+
+        if ($recordEvent && $reaction) {
+            $timeline->record($opportunity, OpportunityTimelineService::REACTION, $user->name . ' marked it "' . $reaction->label() . '".', $user);
+        }
+
+        return $state;
     }
 
     public function destroy(Request $request, Opportunity $opportunity): RedirectResponse

@@ -54,7 +54,7 @@ export default function Carriers({ carriers }: { carriers: CarrierRow[] }) {
                                 </p>
 
                                 <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-sm">
-                                    <span className="text-muted-foreground">Mailings</span>
+                                    <span className="text-muted-foreground">Shipments</span>
                                     <span className="font-semibold text-foreground">{c.mailings}</span>
                                 </div>
 

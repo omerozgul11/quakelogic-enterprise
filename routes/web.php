@@ -3,12 +3,17 @@
 use App\Http\Controllers\Web\AiAssistantController;
 use App\Http\Controllers\Web\CalendarController;
 use App\Http\Controllers\Web\CommissionController;
+use App\Http\Controllers\Web\ComplianceController;
+use App\Http\Controllers\Web\ContractController;
+use App\Http\Controllers\Web\TemplateController;
 use App\Http\Controllers\Web\CrmController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DocumentController;
 use App\Http\Controllers\Web\FollowUpController;
 use App\Http\Controllers\Web\OpportunityController;
+use App\Http\Controllers\Web\OpportunityOversightController;
 use App\Http\Controllers\Web\ProposalController;
+use App\Http\Controllers\Web\ProposalCostController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\AdminController;
 use App\Http\Controllers\Web\SettingsController;
@@ -33,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/executive', [DashboardController::class, 'executive'])->name('dashboard.executive');
+    // Opportunity Command Center — executive oversight of the whole pipeline.
+    Route::get('/dashboard/opportunities', [OpportunityOversightController::class, 'index'])->name('dashboard.opportunities');
 
     // Calendar (auto-populated from proposals + opportunities)
     Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
@@ -47,6 +54,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [\App\Http\Controllers\Web\MailingController::class, 'store'])->name('store');
             Route::get('/bulk', [\App\Http\Controllers\Web\MailingController::class, 'bulkCreate'])->name('bulk');
             Route::post('/bulk', [\App\Http\Controllers\Web\MailingController::class, 'bulkStore'])->name('bulk.store');
+            Route::get('/import', [\App\Http\Controllers\Web\MailingController::class, 'importCreate'])->name('import');
+            Route::post('/import', [\App\Http\Controllers\Web\MailingController::class, 'importStore'])->name('import.store');
+            Route::post('/refresh-all', [\App\Http\Controllers\Web\MailingController::class, 'refreshAll'])->name('refresh-all');
+            Route::post('/match-proposals', [\App\Http\Controllers\Web\MailingController::class, 'matchProposals'])->name('match-proposals');
             Route::get('/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'show'])->name('show');
             Route::match(['put', 'patch'], '/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'update'])->name('update');
             Route::post('/{ulid}/refresh', [\App\Http\Controllers\Web\MailingController::class, 'refresh'])->name('refresh');
@@ -81,6 +92,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{opportunity}', [OpportunityController::class, 'destroy'])->name('destroy');
         Route::post('/{opportunity}/pursue', [OpportunityController::class, 'pursue'])->name('pursue');
         Route::post('/{opportunity}/save', [OpportunityController::class, 'toggleSave'])->name('save');
+        // Assignment lifecycle: claim/lock, react, (re)assign, stage, release.
+        Route::post('/{opportunity}/claim', [OpportunityController::class, 'claim'])->name('claim');
+        Route::post('/{opportunity}/react', [OpportunityController::class, 'react'])->name('react');
+        Route::post('/{opportunity}/assign', [OpportunityController::class, 'assign'])->name('assign');
+        Route::post('/{opportunity}/stage', [OpportunityController::class, 'advanceStage'])->name('stage');
+        Route::post('/{opportunity}/release', [OpportunityController::class, 'release'])->name('release');
         // Solicitation documents pulled live from the SAM.gov record.
         Route::get('/{opportunity}/documents/{index}', [OpportunityController::class, 'document'])->whereNumber('index')->name('documents.show');
         Route::post('/import/sam-gov', [OpportunityController::class, 'importSamGov'])->name('import.sam-gov');
@@ -93,6 +110,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/board', [ProposalController::class, 'board'])->name('board');
         Route::post('/', [ProposalController::class, 'store'])->name('store');
         Route::post('/intake', [ProposalController::class, 'intake'])->name('intake');
+        // Proposal Writer: create a proposal from dumped docs, then auto-draft it.
+        Route::post('/intake-draft', [ProposalController::class, 'intakeDraft'])->name('intake-draft');
         Route::get('/{proposalSubmission}', [ProposalController::class, 'show'])->name('show');
         Route::get('/{proposalSubmission}/edit', [ProposalController::class, 'edit'])->name('edit');
         Route::get('/{proposalSubmission}/review', [ProposalController::class, 'review'])->name('review');
@@ -101,6 +120,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{proposalSubmission}', [ProposalController::class, 'destroy'])->name('destroy');
         Route::post('/{proposalSubmission}/transition', [ProposalController::class, 'transition'])->name('transition');
         Route::post('/{proposalSubmission}/move', [ProposalController::class, 'move'])->name('move');
+        Route::post('/{proposalSubmission}/log-contact', [ProposalController::class, 'logContact'])->name('log-contact');
+        // Shipments two-way link (attach / detach a shipment from the proposal page).
+        Route::post('/{proposalSubmission}/link-shipment', [ProposalController::class, 'linkShipment'])->name('link-shipment');
+        Route::post('/{proposalSubmission}/unlink-shipment', [ProposalController::class, 'unlinkShipment'])->name('unlink-shipment');
+        // Phase 5: the contract / financial record attached to this proposal.
+        Route::post('/{proposalSubmission}/contract', [ContractController::class, 'upsert'])->name('contract.upsert');
+        // Cost line items → quick profit-margin estimate (bid vs. cost).
+        Route::post('/{proposalSubmission}/costs', [ProposalCostController::class, 'store'])->name('costs.store');
+        Route::patch('/{proposalSubmission}/costs/{cost}', [ProposalCostController::class, 'update'])->name('costs.update');
+        Route::delete('/{proposalSubmission}/costs/{cost}', [ProposalCostController::class, 'destroy'])->name('costs.destroy');
+        // Phase 18: AI-drafted follow-up email into the proposal thread.
+        Route::post('/{proposalSubmission}/draft-follow-up', [ProposalController::class, 'draftFollowUp'])->name('draft-follow-up');
+        // Proposal Writer: clarifying questions, then AI-draft a section (JSON).
+        Route::post('/{proposalSubmission}/draft-section/questions', [ProposalController::class, 'draftSectionQuestions'])->name('draft-section.questions');
+        Route::post('/{proposalSubmission}/draft-section', [ProposalController::class, 'draftSection'])->name('draft-section');
+        // Persisted proposal sections + Word/PDF export.
+        Route::post('/{proposalSubmission}/sections', [ProposalController::class, 'saveSection'])->name('sections.save');
+        Route::delete('/{proposalSubmission}/sections/{section}', [ProposalController::class, 'deleteSection'])->name('sections.delete');
+        Route::get('/{proposalSubmission}/export/{format}', [ProposalController::class, 'exportDocument'])->whereIn('format', ['docx', 'pdf'])->name('export');
+        // Phase 19: loss analysis + AI loss assessment.
+        Route::post('/{proposalSubmission}/loss-analysis', [ProposalController::class, 'lossAnalysis'])->name('loss-analysis');
+        Route::post('/{proposalSubmission}/loss-assessment', [ProposalController::class, 'generateLossAssessment'])->name('loss-assessment');
         Route::post('/{proposalSubmission}/files', [DocumentController::class, 'storeProposalFile'])->name('files.store');
         Route::delete('/{proposalSubmission}/files/{file}', [DocumentController::class, 'destroyProposalFile'])->name('files.destroy');
         Route::get('/{proposalSubmission}/files/{file}/download', [DocumentController::class, 'downloadProposalFile'])->name('files.download');
@@ -113,6 +154,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Documents
     Route::prefix('documents')->name('documents.')->group(function () {
         Route::get('/', [DocumentController::class, 'index'])->name('index');
+    });
+
+    // Contracts (Phase 5 — post-award financial lifecycle)
+    Route::prefix('contracts')->name('contracts.')->group(function () {
+        Route::get('/', [ContractController::class, 'index'])->middleware('can:view contracts')->name('index');
+        Route::post('/{contract}/milestones', [ContractController::class, 'storeMilestone'])->name('milestones.store');
+        Route::match(['put', 'patch'], '/{contract}/milestones/{milestone}', [ContractController::class, 'updateMilestone'])->name('milestones.update');
+        Route::delete('/{contract}/milestones/{milestone}', [ContractController::class, 'destroyMilestone'])->name('milestones.destroy');
+    });
+
+    // Compliance register (Phase 7)
+    Route::prefix('compliance')->name('compliance.')->group(function () {
+        Route::get('/', [ComplianceController::class, 'index'])->middleware('can:view compliance')->name('index');
+        Route::post('/', [ComplianceController::class, 'store'])->name('store');
+        Route::post('/import', [ComplianceController::class, 'import'])->name('import');
+        Route::match(['put', 'patch'], '/{compliance}', [ComplianceController::class, 'update'])->name('update');
+        Route::delete('/{compliance}', [ComplianceController::class, 'destroy'])->name('destroy');
+    });
+
+    // Proposal template library (Phase 7)
+    Route::prefix('templates')->name('templates.')->group(function () {
+        Route::get('/', [TemplateController::class, 'index'])->middleware('can:view templates')->name('index');
+        Route::post('/', [TemplateController::class, 'store'])->name('store');
+        Route::match(['put', 'patch'], '/{template}', [TemplateController::class, 'update'])->name('update');
+        Route::delete('/{template}', [TemplateController::class, 'destroy'])->name('destroy');
     });
 
     // CRM - Agencies
@@ -145,6 +211,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('follow-ups')->name('follow-ups.')->group(function () {
         Route::get('/', [FollowUpController::class, 'index'])->name('index');
         Route::post('/', [FollowUpController::class, 'store'])->name('store');
+        Route::post('/read', [FollowUpController::class, 'markRead'])->name('read');
+        Route::post('/delete', [FollowUpController::class, 'destroyMany'])->name('delete-many');
+        Route::post('/pin', [FollowUpController::class, 'togglePin'])->name('pin');
         Route::get('/{followUp}', [FollowUpController::class, 'show'])->name('show');
         Route::match(['put', 'patch'], '/{followUp}', [FollowUpController::class, 'update'])->name('update');
         Route::delete('/{followUp}', [FollowUpController::class, 'destroy'])->name('destroy');
@@ -178,6 +247,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // AI Assistant
     Route::prefix('ai')->name('ai.')->group(function () {
         Route::get('/', [AiAssistantController::class, 'index'])->name('index');
+        // Proposal Writer workspace — must precede the /{aiAnalysis} wildcard.
+        Route::get('/writer', [AiAssistantController::class, 'writer'])->name('writer');
         Route::post('/chat', [AiAssistantController::class, 'chat'])->name('chat');
         Route::post('/analyze', [AiAssistantController::class, 'analyze'])->name('analyze');
         Route::get('/{aiAnalysis}', [AiAssistantController::class, 'show'])->name('show');
@@ -223,6 +294,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::match(['put', 'patch', 'post'], '/profile', [SettingsController::class, 'updateProfile'])->name('profile');
         Route::match(['put', 'patch', 'post'], '/password', [SettingsController::class, 'updatePassword'])->name('password');
         Route::match(['put', 'patch', 'post'], '/preferences', [SettingsController::class, 'updatePreferences'])->name('preferences');
+        // Org-wide proposal Style Profile (admin only) — drives the AI writer + export.
+        Route::get('/proposal-style', [SettingsController::class, 'proposalStyle'])->name('proposal-style');
+        Route::match(['put', 'patch', 'post'], '/proposal-style', [SettingsController::class, 'updateProposalStyle'])->name('proposal-style.update');
         // Per-user work email (SMTP) connection.
         Route::match(['put', 'patch', 'post'], '/mailbox', [SettingsController::class, 'connectMailbox'])->name('mailbox');
         Route::post('/mailbox/test', [SettingsController::class, 'testMailbox'])->name('mailbox.test');

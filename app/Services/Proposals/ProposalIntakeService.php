@@ -10,12 +10,14 @@ use App\Models\FollowUp;
 use App\Models\ProposalFile;
 use App\Models\ProposalSubmission;
 use App\Models\User;
+use App\Jobs\EnrichProposalOrgsJob;
 use App\Services\Ai\AiProviderInterface;
 use App\Services\Documents\DocumentTextExtractionService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -25,6 +27,9 @@ use Illuminate\Support\Str;
  */
 class ProposalIntakeService
 {
+    /** Max file size to send to a vision model (request limit ~20 MB). */
+    private const MAX_VISION_BYTES = 20000000;
+
     /** extracted-key => [label, proposal column, type] */
     private const FIELDS = [
         'project_name'        => ['Project name', 'project_name', 'text'],
@@ -75,27 +80,55 @@ class ProposalIntakeService
     public function extract(ProposalSubmission $proposal, UploadedFile $file, User $user): ?AiAnalysis
     {
         $proposalFile = $this->storeFile($proposal, $file, $user);
+        $mime = (string) $proposalFile->mime_type;
 
-        try {
-            $text = $this->textExtractor->extract($proposalFile->path, $proposalFile->mime_type);
-        } catch (\Throwable $e) {
-            Log::warning('Proposal intake text extraction failed', ['file' => $proposalFile->id, 'error' => $e->getMessage()]);
-            $text = '';
+        $extracted = null;
+        $region = null;
+
+        // Prefer native vision: send the ORIGINAL document so the model reads the
+        // whole thing — cover/title page, SF-1449 or cover-form fields, signature
+        // block — which captures the client/company name and details that
+        // pdftotext + front-matter focusing miss. Works on scanned/image PDFs too.
+        if ($this->ai->supportsVision() && $this->isVisionMime($mime) && (int) ($proposalFile->size ?? 0) <= self::MAX_VISION_BYTES) {
+            try {
+                $bytes = Storage::disk($proposalFile->disk ?: 'local')->get($proposalFile->path);
+                if ($bytes !== null && $bytes !== '') {
+                    $vision = $this->ai->extractDocumentVision(base64_encode($bytes), $mime);
+                    if ($this->hasUsefulFields($vision)) {
+                        $extracted = $vision;
+                        $region = 'vision';
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Proposal intake vision extraction failed', ['file' => $proposalFile->id, 'error' => $e->getMessage()]);
+            }
         }
 
-        if (trim($text) === '') {
-            return null;
-        }
+        // Fall back to text extraction (front-matter focused) when vision is
+        // unavailable or returned nothing useful.
+        if ($extracted === null) {
+            try {
+                $text = $this->textExtractor->extract($proposalFile->path, $mime);
+            } catch (\Throwable $e) {
+                Log::warning('Proposal intake text extraction failed', ['file' => $proposalFile->id, 'error' => $e->getMessage()]);
+                $text = '';
+            }
 
-        // Drop any References / Bibliography section so citation author names are
-        // never extracted as proposal contacts.
-        $text = $this->textExtractor->stripReferenceSections($text);
+            if (trim($text) === '') {
+                return null;
+            }
 
-        try {
-            $extracted = $this->ai->extractDocumentData($text, array_keys(self::FIELDS));
-        } catch (\Throwable $e) {
-            Log::error('Proposal intake AI extraction failed', ['file' => $proposalFile->id, 'error' => $e->getMessage()]);
-            return null;
+            // Drop References / Bibliography so citation authors aren't extracted as contacts.
+            $text = $this->textExtractor->stripReferenceSections($text);
+            $focus = $this->textExtractor->frontMatter($text);
+            $region = $focus !== $text ? 'front_matter' : 'full_document';
+
+            try {
+                $extracted = $this->ai->extractDocumentData($focus, array_keys(self::FIELDS));
+            } catch (\Throwable $e) {
+                Log::error('Proposal intake AI extraction failed', ['file' => $proposalFile->id, 'error' => $e->getMessage()]);
+                return null;
+            }
         }
 
         $proposalFile->update(['status' => 'parsed']);
@@ -108,9 +141,31 @@ class ProposalIntakeService
             'analysis_type' => 'document_extraction',
             'ai_provider' => $extracted['_provider'] ?? $this->ai->getName(),
             'status' => 'needs_review',
-            'context_data' => ['file' => $proposalFile->display_name, 'characters' => $extracted['_chars'] ?? null],
+            'context_data' => [
+                'file' => $proposalFile->display_name,
+                'characters' => $extracted['_chars'] ?? null,
+                'source_region' => $region,
+            ],
             'output' => $extracted,
         ]);
+    }
+
+    /** Mime types we can hand to a vision model directly. */
+    private function isVisionMime(string $mime): bool
+    {
+        return in_array($mime, ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'], true);
+    }
+
+    /** True when an extraction result actually found something worth using. */
+    private function hasUsefulFields(array $data): bool
+    {
+        foreach (['project_name', 'company', 'agency', 'solicitation_number', 'scope'] as $k) {
+            if (! empty($data[$k])) {
+                return true;
+            }
+        }
+
+        return ! empty($data['contacts']);
     }
 
     /**
@@ -289,6 +344,13 @@ class ProposalIntakeService
 
         $summary['manager_set'] = true;
         $summary['notes_generated'] = $notes !== '';
+
+        // On a fresh intake, research the client company + agency on the web in
+        // the background and save a factual background to their records (which
+        // then feeds the writer + RAG). Best-effort; no-ops without web research.
+        if (! $fillBlanksOnly && ($proposal->company_id || $proposal->agency_id)) {
+            EnrichProposalOrgsJob::dispatch($proposal->id);
+        }
 
         return $summary;
     }

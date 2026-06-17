@@ -44,15 +44,15 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
 
     return (
         <ShipmentsLayout>
-            <Head title="New mailing" />
+            <Head title="New shipment" />
             <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
                 <Link href="/shipments/mailings" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="h-4 w-4" /> Back to mailings
+                    <ArrowLeft className="h-4 w-4" /> Back to shipments
                 </Link>
 
                 <div className="mb-6 flex items-center gap-3">
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gradient text-white"><Truck className="h-5 w-5" /></span>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">New mailing</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">New shipment</h1>
                 </div>
 
                 <form onSubmit={submit} className="card-surface space-y-5 p-6">

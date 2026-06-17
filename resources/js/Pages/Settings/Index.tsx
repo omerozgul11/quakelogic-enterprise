@@ -1,11 +1,54 @@
 import { Head, useForm, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
 import { TwoFactor } from '@/Components/settings/TwoFactor';
-import { Settings, Lock, User, Palette, LayoutDashboard, Bell, Mail, Check } from 'lucide-react';
+import { cn } from '@/Lib/utils';
+import { Settings, Lock, User, Palette, LayoutDashboard, Bell, Mail, Check, Circle, RefreshCw, Eye, EyeOff } from 'lucide-react';
+
+const PW_LENGTH = 16;
+/** Generate a strong password that satisfies every rule in the legend. */
+function generatePassword(): string {
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const nums = '23456789';
+    const special = '!@#$%^&*-_=+?';
+    const all = lower + upper + nums + special;
+    const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+    const chars = [pick(lower), pick(upper), pick(nums), pick(special)];
+    while (chars.length < PW_LENGTH) chars.push(pick(all));
+    for (let i = chars.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [chars[i], chars[j]] = [chars[j], chars[i]]; }
+    return chars.join('');
+}
+
+const PW_RULES: Array<{ label: string; test: (s: string) => boolean }> = [
+    { label: 'At least 12 characters', test: s => s.length >= 12 },
+    { label: 'Uppercase letter', test: s => /[A-Z]/.test(s) },
+    { label: 'Lowercase letter', test: s => /[a-z]/.test(s) },
+    { label: 'Number', test: s => /[0-9]/.test(s) },
+    { label: 'Special character', test: s => /[^A-Za-z0-9]/.test(s) },
+];
+
+/** Live password-compliance legend — icons flip green as each rule is met. */
+function PasswordRules({ value }: { value: string }) {
+    return (
+        <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {PW_RULES.map(r => {
+                const ok = r.test(value);
+                return (
+                    <li key={r.label} className={cn('flex items-center gap-1.5 text-xs transition-colors', ok ? 'text-emerald-600' : 'text-muted-foreground')}>
+                        {ok ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Circle className="h-3.5 w-3.5 shrink-0" />}
+                        {r.label}
+                    </li>
+                );
+            })}
+        </ul>
+    );
+}
 
 interface Preferences {
     display: { theme: 'system' | 'light' | 'dark'; density: 'comfortable' | 'compact' };
@@ -64,6 +107,12 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
 export default function SettingsIndex({ user, preferences, twoFactor, mailbox }: Props) {
     const profileForm = useForm({ name: user.name, email: user.email });
     const passwordForm = useForm({ current_password: '', password: '', password_confirmation: '' });
+    const [showPw, setShowPw] = useState(false);
+    const generate = () => {
+        const pw = generatePassword();
+        passwordForm.setData({ ...passwordForm.data, password: pw, password_confirmation: pw });
+        setShowPw(true);
+    };
 
     const mailboxForm = useForm({
         email: mailbox.email ?? user.email,
@@ -197,20 +246,41 @@ export default function SettingsIndex({ user, preferences, twoFactor, mailbox }:
                     <Card>
                         <CardHeader><CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5 text-muted-foreground" /> Change Password</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
+                            {/* Hidden username so the browser/passkey manager associates the saved credential */}
+                            <input type="text" name="username" autoComplete="username" value={user.email} readOnly hidden />
                             <div>
                                 <label className="label">Current Password</label>
-                                <input type="password" value={passwordForm.data.current_password} onChange={e => passwordForm.setData('current_password', e.target.value)} className="input" required />
+                                <input type="password" autoComplete="current-password" value={passwordForm.data.current_password} onChange={e => passwordForm.setData('current_password', e.target.value)} className="input" required />
                                 {passwordForm.errors.current_password && <p className="mt-1 text-xs text-destructive">{passwordForm.errors.current_password}</p>}
                             </div>
                             <div>
-                                <label className="label">New Password</label>
-                                <input type="password" value={passwordForm.data.password} onChange={e => passwordForm.setData('password', e.target.value)} className="input" required />
+                                <div className="flex items-center justify-between">
+                                    <label className="label">New Password</label>
+                                    <button type="button" onClick={generate} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                                        <RefreshCw className="h-3.5 w-3.5" /> Generate strong password
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type={showPw ? 'text' : 'password'}
+                                        autoComplete="new-password"
+                                        value={passwordForm.data.password}
+                                        onChange={e => passwordForm.setData('password', e.target.value)}
+                                        className="input pr-10 font-mono"
+                                        required
+                                    />
+                                    <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" title={showPw ? 'Hide' : 'Show'}>
+                                        {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                                <PasswordRules value={passwordForm.data.password} />
                                 {passwordForm.errors.password && <p className="mt-1 text-xs text-destructive">{passwordForm.errors.password}</p>}
                             </div>
                             <div>
                                 <label className="label">Confirm New Password</label>
-                                <input type="password" value={passwordForm.data.password_confirmation} onChange={e => passwordForm.setData('password_confirmation', e.target.value)} className="input" required />
+                                <input type={showPw ? 'text' : 'password'} autoComplete="new-password" value={passwordForm.data.password_confirmation} onChange={e => passwordForm.setData('password_confirmation', e.target.value)} className="input font-mono" required />
                             </div>
+                            <p className="text-xs text-muted-foreground">After saving, your browser will offer to store this in your password manager / passkeys.</p>
                             <div className="flex items-center justify-end gap-3">
                                 {passwordForm.recentlySuccessful && <p className="text-sm font-medium text-emerald-600">Password changed.</p>}
                                 <Button type="submit" disabled={passwordForm.processing}>{passwordForm.processing ? 'Changing...' : 'Change Password'}</Button>
@@ -271,7 +341,7 @@ export default function SettingsIndex({ user, preferences, twoFactor, mailbox }:
                                 </div>
                                 <div>
                                     <label className="label">Port *</label>
-                                    <input type="number" value={mailboxForm.data.smtp_port} onChange={e => mailboxForm.setData('smtp_port', e.target.value)} className="input" required />
+                                    <NumberInput allowDecimal={false} value={mailboxForm.data.smtp_port} onChange={e => mailboxForm.setData('smtp_port', e.target.value)} className="input" required />
                                 </div>
                             </div>
                             <div className="grid gap-4 sm:grid-cols-2">

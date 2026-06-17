@@ -179,7 +179,7 @@ class ReportController extends Controller
         [$period, $start, $end, $from, $to] = $this->resolveRange($request);
 
         $won = \App\Enums\ProposalStatus::wonValues();
-        $openStatuses = ['in_progress', 'submitted', 'pending', 'clarification_requested'];
+        $openStatuses = ['in_progress', 'submitted', 'award_pending', 'clarification_requested', 'protested'];
 
         $by = function ($query, string $col, string $agg = 'count(*)') use ($orgId) {
             return $query->where('organization_id', $orgId)
@@ -203,11 +203,12 @@ class ReportController extends Controller
             'owner_id',
             'COALESCE(SUM(COALESCE(NULLIF(award_value, 0), proposal_value)), 0)'
         );
-        // Pipeline value, active project count, and cancelled count are all
-        // "right now" numbers (not period-scoped).
-        $pipelineValue = $by(ProposalSubmission::whereIn('status', $openStatuses), 'owner_id', 'COALESCE(SUM(proposal_value), 0)');
-        $activeCount = $by(ProposalSubmission::whereIn('status', $openStatuses), 'owner_id');
-        $cancelledCount = $by(ProposalSubmission::where('status', 'cancelled'), 'owner_id');
+        // Pipeline value, active project count, and cancelled count — scoped to
+        // proposals created within the selected interval so every figure on the
+        // page moves with the date filter (full set when the period is "all").
+        $pipelineValue = $by($since(ProposalSubmission::whereIn('status', $openStatuses), 'created_at'), 'owner_id', 'COALESCE(SUM(proposal_value), 0)');
+        $activeCount = $by($since(ProposalSubmission::whereIn('status', $openStatuses), 'created_at'), 'owner_id');
+        $cancelledCount = $by($since(ProposalSubmission::where('status', 'cancelled'), 'created_at'), 'owner_id');
 
         $team = \App\Models\User::where('organization_id', $orgId)
             ->with('roles:id,name')
@@ -235,8 +236,8 @@ class ReportController extends Controller
             ->sortByDesc(fn ($r) => [$r['earnings'], $r['submitted_value'], $r['created']])
             ->values();
 
-        // Current proposal pipeline by status (org-wide snapshot).
-        $statusCounts = ProposalSubmission::where('organization_id', $orgId)
+        // Proposal pipeline by status, scoped to proposals created in the interval.
+        $statusCounts = $since(ProposalSubmission::where('organization_id', $orgId), 'created_at')
             ->selectRaw('status, COUNT(*) as c, COALESCE(SUM(proposal_value), 0) as v')
             ->groupBy('status')
             ->get()
@@ -294,11 +295,11 @@ class ReportController extends Controller
             return ['custom', $from->copy()->startOfDay(), $to->copy()->endOfDay(), $from->toDateString(), $to->toDateString()];
         }
 
-        $period = in_array($request->input('period'), ['month', 'quarter', 'year', 'all'], true)
+        $period = in_array($request->input('period'), ['week', 'month', 'year', 'all'], true)
             ? $request->input('period') : 'year';
         $start = match ($period) {
+            'week' => now()->subDays(7)->startOfDay(),
             'month' => now()->startOfMonth(),
-            'quarter' => now()->startOfQuarter(),
             'year' => now()->startOfYear(),
             default => null,
         };
@@ -312,6 +313,6 @@ class ReportController extends Controller
             return $start->format('M j, Y') . ' – ' . $end->format('M j, Y');
         }
 
-        return ['month' => 'This Month', 'quarter' => 'This Quarter', 'year' => 'This Year', 'all' => 'All Time'][$period] ?? $period;
+        return ['week' => 'This Week', 'month' => 'This Month', 'year' => 'This Year', 'all' => 'All Time'][$period] ?? $period;
     }
 }

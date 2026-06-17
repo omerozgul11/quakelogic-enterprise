@@ -9,6 +9,7 @@ import { Pagination } from '@/Components/ui/Pagination';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { Select } from '@/Components/ui/Select';
 import { CompanyFormModal, EditableCompany } from '@/Components/crm/CompanyFormModal';
+import { SearchInput } from '@/Components/ui/SearchInput';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { Company, PaginatedResponse } from '@/Types';
 import { Building2, ExternalLink, Search, X, Plus, Pencil, Trash2 } from 'lucide-react';
@@ -41,7 +42,7 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
     };
 
     const handleFilter = (key: string, value: string) => {
-        router.get('/companies', { ...filters, [key]: value || undefined }, { preserveState: true });
+        router.get('/companies', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     return (
@@ -64,16 +65,12 @@ export default function CompaniesIndex({ companies, filters, can }: Props) {
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search companies…"
-                                defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="input input-with-icon"
-                            />
-                        </div>
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[18rem]"
+                            initial={filters.search ?? ''}
+                            onSearch={v => handleFilter('search', v)}
+                            placeholder="Search companies…"
+                        />
                         <Select
                             value={filters.type ?? ''}
                             onChange={v => handleFilter('type', v)}

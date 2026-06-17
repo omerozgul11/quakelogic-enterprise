@@ -38,7 +38,7 @@ interface StatusRow {
 
 interface Props {
     team: Row[];
-    period: 'month' | 'quarter' | 'year' | 'all' | 'custom';
+    period: 'week' | 'month' | 'year' | 'all' | 'custom';
     from: string | null;
     to: string | null;
     periodLabel: string;
@@ -50,8 +50,8 @@ interface Props {
 }
 
 const PERIODS: Array<{ value: Exclude<Props['period'], 'custom'>; label: string }> = [
+    { value: 'week', label: 'This Week' },
     { value: 'month', label: 'This Month' },
-    { value: 'quarter', label: 'This Quarter' },
     { value: 'year', label: 'This Year' },
     { value: 'all', label: 'All Time' },
 ];
@@ -157,9 +157,9 @@ export default function ReportsUsers({ team, period, from, to, periodLabel, stat
                                 </CardContent>
                             </Card>
 
-                            {/* Current proposal statuses */}
+                            {/* Proposal statuses for the selected period */}
                             <Card>
-                                <CardHeader><CardTitle>Proposals by status (current)</CardTitle></CardHeader>
+                                <CardHeader><CardTitle>Proposals by status <span className="font-normal text-muted-foreground">· {periodLabel}</span></CardTitle></CardHeader>
                                 <CardContent>
                                     <div className="space-y-2.5">
                                         {statusBreakdown.map(s => {

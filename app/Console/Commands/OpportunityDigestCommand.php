@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\FollowUp;
 use App\Models\Opportunity;
+use App\Models\OpportunityUserState;
 use App\Models\User;
 use App\Notifications\ActivityNotification;
 use App\Services\Mail\MailGatewayFactory;
@@ -62,7 +63,28 @@ class OpportunityDigestCommand extends Command
                 })
                 ->orderByDesc('posted_date')
                 ->limit($limit)
-                ->get(['id', 'title', 'agency_name', 'due_date', 'estimated_value', 'currency']);
+                ->get(['id', 'title', 'agency_name', 'due_date', 'estimated_value', 'currency', 'owner_id']);
+
+            if ($matches->isEmpty()) {
+                continue;
+            }
+
+            // Annotate with the user's match score / recommendation, drop the
+            // ones they've dismissed, and rank the most relevant first.
+            $states = OpportunityUserState::where('user_id', $user->id)
+                ->whereIn('opportunity_id', $matches->pluck('id'))
+                ->get()
+                ->keyBy('opportunity_id');
+
+            $matches = $matches
+                ->reject(fn ($o) => optional($states->get($o->id))->reaction?->value === 'not_interested')
+                ->each(function ($o) use ($states) {
+                    $state = $states->get($o->id);
+                    $o->setAttribute('match_score', $state?->match_score);
+                    $o->setAttribute('recommended_role', $state?->recommended_role);
+                })
+                ->sortByDesc(fn ($o) => (float) ($o->match_score ?? 0))
+                ->values();
 
             if ($matches->isEmpty()) {
                 continue;
@@ -136,10 +158,14 @@ class OpportunityDigestCommand extends Command
         $lines = ["Good morning {$greeting},", '', 'Here are the latest opportunities matching your keywords (' . implode(', ', $keywords) . '):', ''];
 
         foreach ($matches as $opp) {
+            $score = $opp->match_score !== null ? round((float) $opp->match_score) . '% match' : null;
+            $rec = $opp->recommended_role ? '★ recommended' : null;
             $bits = array_filter([
                 $opp->agency_name,
                 $opp->due_date ? 'due ' . $opp->due_date->format('M j, Y') : null,
                 $opp->estimated_value ? ($opp->currency ?? 'USD') . ' ' . number_format((float) $opp->estimated_value) : null,
+                $score,
+                $rec,
             ]);
             $lines[] = '• ' . $opp->title . ($bits ? ' — ' . implode(' · ', $bits) : '');
         }

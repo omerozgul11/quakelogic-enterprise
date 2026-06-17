@@ -4,14 +4,20 @@ import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
 import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
-import { formatCurrency, formatDate } from '@/Lib/utils';
+import { formatCurrency, formatDate, formatDateTime, healthDotClass, ProposalHealth, proposalTypeLabel, proposalTypeColor, proposalTypeHasValue } from '@/Lib/utils';
 import { ProposalSubmission, SharedProps } from '@/Types';
-import { ArrowLeft, FileText, Upload, Download, Users, ChevronRight, ChevronLeft, Sparkles, Building2, MessageSquare, Pencil, Eye, Trash2, Lock, ExternalLink } from 'lucide-react';
+import { ArrowLeft, FileText, Upload, Download, Users, ChevronRight, ChevronLeft, Sparkles, Building2, MessageSquare, Pencil, Eye, Trash2, Lock, ExternalLink, CheckCircle } from 'lucide-react';
 import { FilePreviewModal, PreviewFile } from '@/Components/ui/FilePreviewModal';
 import { SubmitCelebration } from '@/Components/ui/SubmitCelebration';
+import { ProposalCountdown, Countdown } from '@/Components/proposal/ProposalCountdown';
+import { CostMarginPanel, CostLine, MarginSummary } from '@/Components/proposal/CostMarginPanel';
+import { ProposalWriterPanel, SavedSection } from '@/Components/proposal/ProposalWriterPanel';
 import { MailTrackingPanel, MailTracking } from '@/Components/proposal/MailTrackingPanel';
+import { ContractPanel, ContractData } from '@/Components/proposal/ContractPanel';
+import { LossAnalysisPanel, LossData } from '@/Components/proposal/LossAnalysisPanel';
 import { useState, useEffect } from 'react';
 
 interface ProposalFile {
@@ -72,13 +78,33 @@ interface Props {
         follow_ups?: FollowUp[];
         team_members?: Array<{ id: number; user: { id: number; name: string } | null; role: string }>;
         status_history?: Array<{ id: number; to_status: string | null; from_status: string | null; notes: string | null; changed_at: string; changed_by: { name: string } | null }>;
+        loss_reason?: string | null;
+        loss_competitor?: string | null;
+        loss_competitor_price?: number | string | null;
+        debrief_requested?: boolean;
+        protest_recommended?: boolean;
+        lessons_learned?: string | null;
+        loss_assessment?: string | null;
+        created_at?: string | null;
     };
+    createdBy?: { id: number; name: string } | null;
     stepNav: { previous: Step | null; next: Step | null };
+    countdown: Countdown | null;
+    proposalTypes: Array<{ value: string; label: string; description: string; has_value: boolean }>;
+    costs: CostLine[];
+    margin: MarginSummary;
+    costCategories: Array<{ value: string; label: string }>;
+    proposalSections: Array<{ value: string; label: string }>;
+    savedSections: SavedSection[];
     allowedTransitions: Step[];
     samDocuments: SamDocuments;
     currencies: Array<{ value: string; label: string; symbol: string; name: string }>;
     extraction: Extraction | null;
-    can: { edit: boolean; upload: boolean; transition: boolean; delete: boolean };
+    health: ProposalHealth | null;
+    readiness: { score: number; ready: boolean; threshold: number; items: Array<{ key: string; label: string; done: boolean }> };
+    contract: ContractData | null;
+    contractOptions: { stages: Array<{ value: string; label: string }>; paymentStatuses: Array<{ value: string; label: string }> };
+    can: { edit: boolean; upload: boolean; transition: boolean; delete: boolean; editStyle?: boolean };
     mailTracking?: MailTracking;
 }
 
@@ -88,7 +114,7 @@ function formatSize(bytes: number): string {
     return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-export default function ProposalShow({ proposal, stepNav, allowedTransitions, samDocuments, currencies, extraction, can, mailTracking }: Props) {
+export default function ProposalShow({ proposal, createdBy, stepNav, countdown, proposalTypes, costs, margin, costCategories, proposalSections, savedSections, allowedTransitions, samDocuments, currencies, extraction, health, readiness, contract, contractOptions, can, mailTracking }: Props) {
     const [showUpload, setShowUpload] = useState(false);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
     const [editing, setEditing] = useState(false);
@@ -96,6 +122,7 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
 
     const detailsForm = useForm({
         project_name: proposal.project_name ?? '',
+        proposal_type: proposal.proposal_type ?? 'proposal',
         company: proposal.company?.name ?? '',
         solicitation_number: proposal.solicitation_number ?? '',
         proposal_value: proposal.proposal_value != null ? String(proposal.proposal_value) : '',
@@ -106,6 +133,33 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
         award_date: (proposal.award_date ?? '').slice(0, 10),
         scope_summary: proposal.scope_summary ?? '',
     });
+
+    // RFIs are informational only — hide the value fields for them.
+    const proposalType = proposal.proposal_type ?? 'proposal';
+    const showValue = proposalTypeHasValue(proposalType);
+    const editTypeHasValue = proposalTypeHasValue(detailsForm.data.proposal_type);
+
+    const submissionMethods = (proposal as { submission_methods?: string[] }).submission_methods ?? [];
+    const detailRows: Array<[string, string | null | undefined]> = [
+        ['Type', proposalTypeLabel(proposalType)],
+        ['Company', proposal.company?.name],
+        ['Solicitation #', proposal.solicitation_number],
+        ...(showValue
+            ? ([
+                ['Proposal Value', proposal.proposal_value ? formatCurrency(proposal.proposal_value, proposal.currency) : null],
+                ['Award Value', proposal.award_value ? formatCurrency(proposal.award_value, proposal.currency) : null],
+            ] as Array<[string, string | null | undefined]>)
+            : []),
+        ['Due Date', proposal.due_date ? formatDate(proposal.due_date) : null],
+        ['Submission Date', proposal.submission_date ? formatDate(proposal.submission_date) : null],
+        ['Submission Method', submissionMethods.length
+            ? submissionMethods.map(m => ({ email: 'Email', portal: 'Portal', mail: 'Mail' }[m] ?? m)).join(', ')
+            : null],
+        ['Owner', proposal.owner?.name],
+        ['Added to platform', proposal.created_at
+            ? `${formatDateTime(proposal.created_at)}${createdBy ? ` by ${createdBy.name}` : ''}`
+            : null],
+    ];
 
     const saveDetails = (e: React.FormEvent) => {
         e.preventDefault();
@@ -141,6 +195,18 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
         if (confirm(`Delete proposal ${proposal.proposal_number}? This cannot be undone.`)) {
             router.delete(`/proposals/${proposal.id}`);
         }
+    };
+
+    const handleLogContact = () => {
+        const note = window.prompt('Log a client contact (optional note — call, email, meeting):', '');
+        if (note === null) return; // cancelled
+        router.post(`/proposals/${proposal.id}/log-contact`, { note }, { preserveScroll: true });
+    };
+
+    const [draftingEmail, setDraftingEmail] = useState(false);
+    const handleDraftFollowUp = () => {
+        setDraftingEmail(true);
+        router.post(`/proposals/${proposal.id}/draft-follow-up`, {}, { preserveScroll: true, onFinish: () => setDraftingEmail(false) });
     };
 
     const handleUpload = (e: React.FormEvent) => {
@@ -198,6 +264,9 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
                 )}
 
                 <div className="mb-6 flex flex-wrap items-center gap-3">
+                    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${proposalTypeColor(proposalType)}`} title="Document type">
+                        {proposalTypeLabel(proposalType)}
+                    </span>
                     <StatusBadge status={statusValue} />
                     {can.transition && allowedTransitions.length > 0 && (
                         <Select
@@ -214,10 +283,91 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
                             <Sparkles className="h-3 w-3" /> Auto-extracted
                         </span>
                     )}
+                    {health && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground" title="Days since last logged client contact">
+                            <span className={`inline-block h-2.5 w-2.5 rounded-full ${healthDotClass(health.color)}`} />
+                            {health.label}
+                        </span>
+                    )}
+                    {can.edit && (
+                        <Button variant="secondary" size="sm" icon={MessageSquare} onClick={handleLogContact}>
+                            Log client contact
+                        </Button>
+                    )}
+                    {can.edit && (
+                        <Button variant="secondary" size="sm" icon={Sparkles} onClick={handleDraftFollowUp} disabled={draftingEmail}>
+                            {draftingEmail ? 'Drafting…' : 'Draft follow-up (AI)'}
+                        </Button>
+                    )}
                 </div>
+
+                {countdown && <ProposalCountdown countdown={countdown} />}
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <div className="space-y-6 lg:col-span-2">
+                        {/* Submission readiness (Phase 17) — pre-submission checklist + score */}
+                        {statusValue === 'in_progress' && (
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <CardTitle>Submission Readiness</CardTitle>
+                                    <span className={`text-2xl font-bold tabular-nums ${readiness.ready ? 'text-emerald-600' : readiness.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                                        {readiness.score}%
+                                    </span>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-secondary">
+                                        <div
+                                            className={`h-full rounded-full transition-all ${readiness.ready ? 'bg-emerald-500' : readiness.score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                            style={{ width: `${readiness.score}%` }}
+                                        />
+                                    </div>
+                                    <p className="mb-3 text-xs text-muted-foreground">
+                                        {readiness.ready
+                                            ? `Ready to submit (target ${readiness.threshold}%).`
+                                            : `Below the ${readiness.threshold}% target — complete the items below before submitting.`}
+                                    </p>
+                                    <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                                        {readiness.items.map(item => (
+                                            <li key={item.key} className="flex items-center gap-2 text-sm">
+                                                {item.done
+                                                    ? <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+                                                    : <Lock className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
+                                                <span className={item.done ? 'text-foreground' : 'text-muted-foreground'}>{item.label}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Contract & financials (Phase 5) — shown once a proposal is won, or if one already exists */}
+                        {(['awarded', 'completed'].includes(statusValue) || contract) && (
+                            <ContractPanel
+                                proposalId={proposal.id}
+                                contract={contract}
+                                options={contractOptions}
+                                currencies={currencies}
+                                canEdit={can.edit}
+                            />
+                        )}
+
+                        {/* Loss analysis (Phase 19) — for lost or protested bids */}
+                        {['lost', 'protested'].includes(statusValue) && (
+                            <LossAnalysisPanel
+                                proposalId={proposal.id}
+                                canEdit={can.edit}
+                                data={{
+                                    loss_reason: proposal.loss_reason ?? null,
+                                    loss_competitor: proposal.loss_competitor ?? null,
+                                    loss_competitor_price: proposal.loss_competitor_price ?? null,
+                                    debrief_requested: !!proposal.debrief_requested,
+                                    protest_recommended: !!proposal.protest_recommended,
+                                    lessons_learned: proposal.lessons_learned ?? null,
+                                    loss_assessment: proposal.loss_assessment ?? null,
+                                }}
+                            />
+                        )}
+
                         {/* Details */}
                         <Card>
                             <CardHeader>
@@ -229,10 +379,21 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
                             <CardContent>
                                 {editing ? (
                                     <form onSubmit={saveDetails} className="animate-panel space-y-4">
-                                        <div>
-                                            <label className="label">Project Name *</label>
-                                            <input type="text" value={detailsForm.data.project_name} onChange={e => detailsForm.setData('project_name', e.target.value)} className="input" required />
-                                            {detailsForm.errors.project_name && <p className="mt-1 text-xs text-destructive">{detailsForm.errors.project_name}</p>}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="label">Project Name *</label>
+                                                <input type="text" value={detailsForm.data.project_name} onChange={e => detailsForm.setData('project_name', e.target.value)} className="input" required />
+                                                {detailsForm.errors.project_name && <p className="mt-1 text-xs text-destructive">{detailsForm.errors.project_name}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="label">Type</label>
+                                                <Select
+                                                    value={detailsForm.data.proposal_type}
+                                                    onChange={v => detailsForm.setData('proposal_type', v)}
+                                                    options={proposalTypes.map(t => ({ value: t.value, label: `${t.label} — ${t.description}` }))}
+                                                    className="w-full"
+                                                />
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
@@ -244,19 +405,25 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
                                                 <input type="text" value={detailsForm.data.solicitation_number} onChange={e => detailsForm.setData('solicitation_number', e.target.value)} className="input" />
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="label">Proposal Value ({currencySymbol})</label>
-                                                <div className="flex gap-2">
-                                                    <Select value={detailsForm.data.currency} onChange={v => detailsForm.setData('currency', v)} options={currencies.map(c => ({ value: c.value, label: c.value }))} className="w-24 shrink-0" />
-                                                    <input type="number" value={detailsForm.data.proposal_value} onChange={e => detailsForm.setData('proposal_value', e.target.value)} className="input flex-1" min="0" step="0.01" />
+                                        {editTypeHasValue ? (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="label">Proposal Value ({currencySymbol})</label>
+                                                    <div className="flex gap-2">
+                                                        <Select value={detailsForm.data.currency} onChange={v => detailsForm.setData('currency', v)} options={currencies.map(c => ({ value: c.value, label: c.value }))} className="w-24 shrink-0" />
+                                                        <NumberInput value={detailsForm.data.proposal_value} onChange={e => detailsForm.setData('proposal_value', e.target.value)} className="input flex-1" />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="label">Award Value ({currencySymbol})</label>
+                                                    <NumberInput value={detailsForm.data.award_value} onChange={e => detailsForm.setData('award_value', e.target.value)} className="input" />
                                                 </div>
                                             </div>
-                                            <div>
-                                                <label className="label">Award Value ({currencySymbol})</label>
-                                                <input type="number" value={detailsForm.data.award_value} onChange={e => detailsForm.setData('award_value', e.target.value)} className="input" min="0" step="0.01" />
-                                            </div>
-                                        </div>
+                                        ) : (
+                                            <p className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+                                                RFIs are informational only — no proposal value is tracked.
+                                            </p>
+                                        )}
                                         <div className="grid grid-cols-3 gap-4">
                                             <div>
                                                 <label className="label">Due Date</label>
@@ -283,19 +450,7 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
                                 ) : (
                                     <>
                                         <dl className="space-y-0">
-                                            {([
-                                                ['Company', proposal.company?.name],
-                                                ['Solicitation #', proposal.solicitation_number],
-                                                ['Proposal Value', proposal.proposal_value ? formatCurrency(proposal.proposal_value, proposal.currency) : null],
-                                                ['Award Value', proposal.award_value ? formatCurrency(proposal.award_value, proposal.currency) : null],
-                                                ['Due Date', proposal.due_date ? formatDate(proposal.due_date) : null],
-                                                ['Submission Date', proposal.submission_date ? formatDate(proposal.submission_date) : null],
-                                                ['Submission Method', ((proposal as { submission_methods?: string[] }).submission_methods ?? []).length
-                                                    ? ((proposal as { submission_methods?: string[] }).submission_methods ?? [])
-                                                        .map(m => ({ email: 'Email', portal: 'Portal', mail: 'Mail' }[m] ?? m)).join(', ')
-                                                    : null],
-                                                ['Owner', proposal.owner?.name],
-                                            ] as Array<[string, string | null | undefined]>).map(([label, value]) => (
+                                            {detailRows.map(([label, value]) => (
                                                 <div key={label} className="flex justify-between border-b border-border py-2.5 last:border-0">
                                                     <dt className="text-sm text-muted-foreground">{label}</dt>
                                                     <dd className="text-sm font-semibold text-foreground">{value ?? '—'}</dd>
@@ -312,6 +467,20 @@ export default function ProposalShow({ proposal, stepNav, allowedTransitions, sa
                                 )}
                             </CardContent>
                         </Card>
+
+                        {/* Cost & margin — bid vs. direct costs → potential profit (RFIs carry no value) */}
+                        {showValue && (
+                            <CostMarginPanel
+                                proposalId={proposal.id}
+                                costs={costs}
+                                margin={margin}
+                                categories={costCategories}
+                                canEdit={can.edit}
+                            />
+                        )}
+
+                        {/* Proposal Writer — AI-draft full proposal sections */}
+                        <ProposalWriterPanel proposalId={proposal.id} sections={proposalSections} savedSections={savedSections} canEdit={can.edit} canEditStyle={!!can.editStyle} />
 
                         {/* Notes — auto-generated by QuakeAI from the document (key dates, requests, specs) */}
                         <Card>

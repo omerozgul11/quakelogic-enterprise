@@ -1,6 +1,9 @@
-import { Link } from '@inertiajs/react';
-import { Truck, ExternalLink, Plus } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { Truck, ExternalLink, Plus, Link2, Unlink } from 'lucide-react';
 import { Pill } from '@/Components/ui/Pill';
+import { Select } from '@/Components/ui/Select';
+import { Button } from '@/Components/ui/Button';
 import { formatDate, formatDateTime } from '@/Lib/utils';
 
 export interface MailTracking {
@@ -19,23 +22,36 @@ export interface MailTracking {
         received_by: string | null;
         proof_url: string | null;
     } | null;
+    linkableShipments?: Array<{ ulid: string; label: string }>;
 }
 
 /**
- * The Shipments two-way link surfaced on the proposal page: shows the mailed
- * submission's UPS delivery status, or (for mail submissions without tracking)
- * a prompt to start tracking. Renders nothing when irrelevant.
+ * Dedicated Shipments section on the proposal page (two-way link with the
+ * Shipments app): shows the linked UPS shipment's delivery status, and lets a
+ * shipment-access user link an existing shipment, create one, or unlink.
+ * Hidden entirely from users without shipment access (unless one is already linked).
  */
 export function MailTrackingPanel({ tracking, proposalId }: { tracking?: MailTracking; proposalId: number }) {
+    const [linkUlid, setLinkUlid] = useState('');
     if (!tracking) return null;
-    const { canAccess, isMailed, mailing } = tracking;
-    if (!mailing && !(isMailed && canAccess)) return null;
+    const { canAccess, isMailed, mailing, linkableShipments = [] } = tracking;
+    if (!mailing && !canAccess) return null;
+
+    const linkExisting = () => {
+        if (!linkUlid) return;
+        router.post(`/proposals/${proposalId}/link-shipment`, { ulid: linkUlid }, { preserveScroll: true, onSuccess: () => setLinkUlid('') });
+    };
+    const unlink = () => {
+        if (confirm('Unlink this shipment from the proposal? The shipment itself is kept.')) {
+            router.post(`/proposals/${proposalId}/unlink-shipment`, {}, { preserveScroll: true });
+        }
+    };
 
     return (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
+        <div className="card-surface p-5">
             <div className="mb-3 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Mail tracking</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Shipment</h3>
             </div>
 
             {mailing ? (
@@ -81,14 +97,40 @@ export function MailTrackingPanel({ tracking, proposalId }: { tracking?: MailTra
                                 <Truck className="h-3.5 w-3.5" /> View tracking
                             </Link>
                         )}
+                        {canAccess && (
+                            <button onClick={unlink} className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-destructive">
+                                <Unlink className="h-3.5 w-3.5" /> Unlink
+                            </button>
+                        )}
                     </div>
                 </div>
             ) : (
-                <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">Submitted by mail — no UPS tracking yet.</p>
-                    <Link href={`/shipments/mailings/create?proposal=${proposalId}`} className="bg-brand-gradient shadow-glow inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
-                        <Plus className="h-4 w-4" /> Add mail tracking
-                    </Link>
+                <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        {isMailed ? 'Submitted by mail — no shipment linked yet.' : 'No shipment is linked to this proposal yet.'}
+                    </p>
+
+                    {linkableShipments.length > 0 && (
+                        <div>
+                            <label className="label">Link an existing shipment</label>
+                            <div className="flex items-center gap-2">
+                                <Select
+                                    value={linkUlid}
+                                    onChange={setLinkUlid}
+                                    options={linkableShipments.map(s => ({ value: s.ulid, label: s.label }))}
+                                    placeholder="Choose a shipment…"
+                                    className="min-w-0 flex-1"
+                                />
+                                <Button size="sm" icon={Link2} onClick={linkExisting} disabled={!linkUlid}>Link</Button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <Link href={`/shipments/mailings/create?proposal=${proposalId}`} className="bg-brand-gradient shadow-glow inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+                            <Plus className="h-4 w-4" /> Add new shipment
+                        </Link>
+                    </div>
                 </div>
             )}
         </div>

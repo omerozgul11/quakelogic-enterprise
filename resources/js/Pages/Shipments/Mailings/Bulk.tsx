@@ -24,7 +24,7 @@ export default function MailingsBulk() {
             <Head title="Bulk add shipments" />
             <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
                 <Link href="/shipments/mailings" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="h-4 w-4" /> Back to mailings
+                    <ArrowLeft className="h-4 w-4" /> Back to shipments
                 </Link>
 
                 <div className="mb-6 flex items-center gap-3">
@@ -33,9 +33,9 @@ export default function MailingsBulk() {
                 </div>
 
                 <p className="mb-5 text-sm text-muted-foreground">
-                    Paste your existing tracking numbers — one per line (or comma-separated). Each is
-                    fetched from the carrier right away, so delivered ones show as past and in-transit
-                    ones show as en route. Up to 50 at a time.
+                    Paste your existing tracking numbers — one per line (or comma-separated). Every
+                    shipment is added right away; UPS status (delivered, in transit, etc.) loads in the
+                    background and any still loading update automatically. Up to 100 at a time.
                 </p>
 
                 <form onSubmit={submit} className="card-surface space-y-5 p-6">

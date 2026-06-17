@@ -10,6 +10,10 @@ import { formatDateTime } from '@/Lib/utils';
 
 interface Props {
     analysis: AiAnalysis & {
+        subject_type?: string;
+        subject_id?: number;
+        subject_label?: string | null;
+        subject_url?: string | null;
         created_by_user: { id: number; name: string } | null;
         reviewed_by_user: { id: number; name: string } | null;
     };
@@ -17,7 +21,7 @@ interface Props {
 
 export default function AiShow({ analysis }: Props) {
     const statusValue = typeof analysis.status === 'string' ? analysis.status : (analysis.status as any)?.value ?? 'pending';
-    const output = analysis.human_modified_output ?? analysis.ai_output;
+    const output = analysis.output;
 
     return (
         <AppLayout>
@@ -27,15 +31,18 @@ export default function AiShow({ analysis }: Props) {
                     icon={Sparkles}
                     eyebrow={(analysis.analysis_type ?? '').replace(/_/g, ' ')}
                     title="AI Analysis"
-                    description={`${analysis.subject_type} #${analysis.subject_id} · ${formatDateTime(analysis.created_at)}`}
+                    description={`${analysis.subject_label || `${analysis.subject_type ?? 'Subject'} #${analysis.subject_id}`} · ${formatDateTime(analysis.created_at)}`}
                     actions={
-                        <Button href="/ai" variant="secondary" icon={ArrowLeft}>
-                            Back
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            {analysis.subject_url && (
+                                <Button href={analysis.subject_url} variant="secondary">Open record</Button>
+                            )}
+                            <Button href="/ai" variant="secondary" icon={ArrowLeft}>Back</Button>
+                        </div>
                     }
                 />
 
-                {statusValue === 'completed' && output && (
+                {output && (
                     <Card className="mb-6">
                         <CardHeader>
                             <CardTitle>Analysis Output</CardTitle>
@@ -63,10 +70,12 @@ export default function AiShow({ analysis }: Props) {
                     </Card>
                 )}
 
-                {statusValue !== 'completed' && (
+                {!output && (
                     <Card className="mb-6 p-6 text-center">
                         <p className="text-sm text-muted-foreground">
-                            Analysis status: <StatusBadge status={statusValue} />
+                            {statusValue === 'failed'
+                                ? 'This analysis could not be generated. Please try running it again.'
+                                : <>Analysis status: <StatusBadge status={statusValue} /></>}
                         </p>
                     </Card>
                 )}

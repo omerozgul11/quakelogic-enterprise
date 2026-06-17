@@ -5,7 +5,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
 type Size = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<Variant, string> = {
-    primary: 'bg-brand-gradient text-white shadow-sm hover:brightness-95 active:scale-[0.98]',
+    primary: 'bg-brand-gradient text-white shadow-glow ring-1 ring-inset ring-white/15 hover:brightness-[1.04] active:scale-[0.98]',
     secondary: 'border border-orange-300 bg-card text-orange-700 hover:bg-orange-50 dark:border-orange-800/70 dark:text-orange-300 dark:hover:bg-orange-950/40 active:scale-[0.98]',
     ghost: 'text-muted-foreground hover:bg-secondary hover:text-foreground active:scale-[0.98]',
     danger: 'bg-destructive text-white shadow-sm hover:brightness-95 active:scale-[0.98]',
@@ -19,7 +19,7 @@ const SIZES: Record<Size, string> = {
 };
 
 const BASE =
-    'group inline-flex select-none items-center justify-center rounded-lg font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50';
+    'group inline-flex select-none items-center justify-center rounded-lg font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50';
 
 type IconType = React.ComponentType<{ className?: string }>;
 

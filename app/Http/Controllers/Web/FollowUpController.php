@@ -99,13 +99,30 @@ class FollowUpController extends Controller
             'proposal_id' => null,
             'recipient_id' => null,
             'proposal_number' => null,
-            'project_name' => 'General',
+            'project_name' => 'Daily Summary',
             'status' => null,
             'messages' => $selfMessages->map(fn ($f) => $this->presentMessage($f, $viewerId))->values(),
             'count' => $selfMessages->count(),
             'last_at' => $selfMessages->max('created_at')?->toIso8601String(),
-        ])
-            ->sortByDesc(fn ($t) => $t['last_at'] ?? '')
+        ]);
+
+        // Pinned conversations float to the top (most-recent first within each
+        // group). The Daily Summary (general) thread is always pinned above
+        // everything else so digests/self-notes are one click away.
+        $pinned = \App\Models\InboxPin::where('user_id', $user->id)->pluck('thread_key')->flip();
+        $threads = $threads
+            ->map(fn ($t) => ['pinned' => $t['key'] === 'general' || $pinned->has($t['key'])] + $t)
+            ->sort(function ($a, $b) {
+                $aGeneral = $a['key'] === 'general';
+                $bGeneral = $b['key'] === 'general';
+                if ($aGeneral !== $bGeneral) {
+                    return $aGeneral ? -1 : 1;
+                }
+                if ($a['pinned'] !== $b['pinned']) {
+                    return $a['pinned'] ? -1 : 1;
+                }
+                return strcmp($b['last_at'] ?? '', $a['last_at'] ?? '');
+            })
             ->values();
 
         $mailbox = $user->emailAccount;
@@ -147,7 +164,111 @@ class FollowUpController extends Controller
             'mine' => $f->created_by === $viewerId,
             'contact' => $f->contact ? trim($f->contact->first_name . ' ' . $f->contact->last_name) : null,
             'automated' => (bool) $f->is_automated,
+            'unread' => $f->isUnreadFor($viewerId),
         ];
+    }
+
+    /**
+     * Base query over the inbox messages a user may act on (mark read / delete),
+     * scoped to their organization. Mirrors canAccess() and the inbox's own
+     * visibility: a Super Admin sees every message in the org (the inbox shows
+     * them all), while everyone else sees messages assigned to or created by them,
+     * or attached to a proposal they're on. markRead() and destroyMany() both use
+     * this so the actionable set always matches what the badge counts and the
+     * inbox displays — previously markRead wasn't admin-aware, so admins could
+     * read messages that never cleared from the unread badge.
+     */
+    private function accessibleMessages(User $user)
+    {
+        $query = FollowUp::where('organization_id', $user->organization_id);
+
+        if ($user->hasRole('Super Admin')) {
+            return $query;
+        }
+
+        return $query->where(fn ($q) => $q
+            ->where('assigned_to', $user->id)
+            ->orWhere('created_by', $user->id)
+            ->orWhereHas('proposal', fn ($p) => $p
+                ->where('owner_id', $user->id)
+                ->orWhere('proposal_manager_id', $user->id)
+                ->orWhere('created_by', $user->id)
+                ->orWhereHas('teamMembers', fn ($tm) => $tm->where('user_id', $user->id))));
+    }
+
+    /**
+     * Mark a set of inbox messages as read for the viewer (fired when they open a
+     * conversation, or via the bulk "Mark read" action). Scoped to the messages
+     * the viewer may access, so it can never clear someone else's unread state.
+     */
+    public function markRead(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $ids = collect($request->input('ids', []))->filter(fn ($id) => is_numeric($id))->map(fn ($id) => (int) $id);
+
+        if ($ids->isEmpty()) {
+            return back();
+        }
+
+        $this->accessibleMessages($user)
+            ->whereIn('id', $ids->all())
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return back();
+    }
+
+    /**
+     * Bulk-delete inbox messages. Scoped to the messages the viewer may access, so
+     * a user can clear out conversations they can see but never delete messages
+     * that aren't theirs. Soft-deletes (and audits) each row individually.
+     */
+    public function destroyMany(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $ids = collect($request->input('ids', []))->filter(fn ($id) => is_numeric($id))->map(fn ($id) => (int) $id);
+
+        if ($ids->isEmpty()) {
+            return back();
+        }
+
+        $messages = $this->accessibleMessages($user)->whereIn('id', $ids->all())->get();
+        foreach ($messages as $message) {
+            $message->delete();
+        }
+
+        $count = $messages->count();
+        if ($count === 0) {
+            return back();
+        }
+
+        return back()->with('success', $count === 1 ? 'Message deleted.' : "{$count} messages deleted.");
+    }
+
+    /**
+     * Pin or unpin a conversation in the viewer's inbox (toggles). Pinned threads
+     * float to the top of their conversation list.
+     */
+    public function togglePin(Request $request): RedirectResponse
+    {
+        $validated = $request->validate(['key' => 'required|string|max:191']);
+        $user = $request->user();
+
+        $existing = \App\Models\InboxPin::where('user_id', $user->id)
+            ->where('thread_key', $validated['key'])
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+        } else {
+            \App\Models\InboxPin::create([
+                'user_id' => $user->id,
+                'organization_id' => $user->organization_id,
+                'thread_key' => $validated['key'],
+            ]);
+        }
+
+        return back();
     }
 
     /**

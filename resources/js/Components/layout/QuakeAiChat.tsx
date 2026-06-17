@@ -1,24 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { cn } from '@/Lib/utils';
-import { QuakeAiIcon } from '@/Components/ui/QuakeAiIcon';
+import { QuakeBot } from '@/Components/ui/QuakeBot';
+import { ChatMsg, loadChat, saveChat, onChatChanged } from '@/Lib/chatStore';
 import { Send, X, ArrowUpRight } from 'lucide-react';
 
-interface Msg { role: 'user' | 'assistant'; content: string }
-
-const GREETING: Msg = {
-    role: 'assistant',
-    content: "Hi! I'm QuakeAI. Ask me about your proposals, opportunities, deadlines, or anything in your portal.",
-};
+type Msg = ChatMsg;
 
 export function QuakeAiChat({ active }: { active?: boolean }) {
+    const uid = (usePage().props as { auth?: { user?: { id?: number } } }).auth?.user?.id ?? 'anon';
     const [open, setOpen] = useState(false);
-    const [messages, setMessages] = useState<Msg[]>([GREETING]);
+    const [messages, setMessages] = useState<Msg[]>([]);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const boxRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Restore the saved conversation and stay in sync with the full panel.
+    useEffect(() => {
+        setMessages(loadChat(uid));
+        return onChatChanged(() => setMessages(prev => {
+            const stored = loadChat(uid);
+            return JSON.stringify(prev) === JSON.stringify(stored) ? prev : stored;
+        }));
+    }, [uid]);
 
     useEffect(() => {
         const h = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
@@ -37,9 +43,10 @@ export function QuakeAiChat({ active }: { active?: boolean }) {
     const send = async () => {
         const text = input.trim();
         if (!text || sending) return;
-        const history = messages.filter((_, i) => i > 0).slice(-8);
+        const history = messages.slice(-8);
         const next = [...messages, { role: 'user', content: text } as Msg];
         setMessages(next);
+        saveChat(uid, next);
         setInput('');
         setSending(true);
         try {
@@ -51,9 +58,9 @@ export function QuakeAiChat({ active }: { active?: boolean }) {
                 body: JSON.stringify({ message: text, history }),
             });
             const data = await res.json();
-            setMessages(m => [...m, { role: 'assistant', content: data.reply ?? 'Sorry, no response.' }]);
+            setMessages(m => { const u = [...m, { role: 'assistant', content: data.reply ?? 'Sorry, no response.' } as Msg]; saveChat(uid, u); return u; });
         } catch {
-            setMessages(m => [...m, { role: 'assistant', content: 'Sorry — something went wrong. Please try again.' }]);
+            setMessages(m => { const u = [...m, { role: 'assistant', content: 'Sorry — something went wrong. Please try again.' } as Msg]; saveChat(uid, u); return u; });
         } finally {
             setSending(false);
         }
@@ -63,21 +70,23 @@ export function QuakeAiChat({ active }: { active?: boolean }) {
         <div ref={boxRef} className="relative">
             <button
                 onClick={() => setOpen(v => !v)}
-                title="Ask QuakeAI"
+                title="Ask QuakeBot"
                 className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                     open || active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 )}
             >
-                <QuakeAiIcon className="h-[20px] w-[20px]" />
+                <QuakeBot className="h-[24px] w-[24px]" />
             </button>
 
             {open && (
                 <div className="animate-scale-in absolute right-0 top-11 z-30 flex h-[26rem] w-[22rem] origin-top-right flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/10">
                     <div className="bg-brand-gradient flex items-center justify-between px-4 py-3 text-white">
                         <span className="flex items-center gap-2">
-                            <QuakeAiIcon className="h-5 w-5" />
-                            <span className="text-sm font-bold">Ask QuakeAI</span>
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90 ring-1 ring-white/40">
+                                <QuakeBot className="h-5 w-5" />
+                            </span>
+                            <span className="text-sm font-bold">Ask QuakeBot</span>
                         </span>
                         <button onClick={() => setOpen(false)} className="rounded-full p-1 transition-colors hover:bg-white/20">
                             <X className="h-4 w-4" />
@@ -85,6 +94,13 @@ export function QuakeAiChat({ active }: { active?: boolean }) {
                     </div>
 
                     <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-secondary/30 p-3">
+                        {messages.length === 0 && !sending && (
+                            <div className="flex h-full flex-col items-center justify-center px-5 text-center">
+                                <QuakeBot className="h-9 w-9" />
+                                <p className="mt-2.5 text-sm font-medium text-foreground">How can I help?</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Ask about your proposals, deadlines, or pipeline.</p>
+                            </div>
+                        )}
                         {messages.map((m, i) => (
                             <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
                                 <div className={cn(
@@ -127,7 +143,7 @@ export function QuakeAiChat({ active }: { active?: boolean }) {
                             </button>
                         </div>
                         <Link href="/ai" onClick={() => setOpen(false)} className="mt-2 flex items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-primary">
-                            Open full QuakeAI <ArrowUpRight className="h-3 w-3" />
+                            Open full QuakeBot <ArrowUpRight className="h-3 w-3" />
                         </Link>
                     </div>
                 </div>

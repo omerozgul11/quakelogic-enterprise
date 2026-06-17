@@ -11,14 +11,17 @@ class ProposalWorkflowService
 {
     public const ALLOWED_TRANSITIONS = [
         'in_progress' => ['submitted', 'cancelled'],
-        'submitted' => ['pending', 'clarification_requested', 'awarded', 'lost', 'cancelled'],
-        'pending' => ['submitted', 'clarification_requested', 'awarded', 'lost', 'cancelled'],
-        'clarification_requested' => ['submitted', 'lost', 'cancelled'],
-        'awarded' => ['completed', 'submitted'],
+        'submitted' => ['award_pending', 'clarification_requested', 'awarded', 'lost', 'protested', 'cancelled'],
+        'award_pending' => ['submitted', 'clarification_requested', 'awarded', 'lost', 'protested', 'cancelled'],
+        'clarification_requested' => ['submitted', 'lost', 'protested', 'cancelled'],
+        'awarded' => ['completed', 'submitted', 'protested'],
         'completed' => ['awarded'],
         // A lost or cancelled proposal can be reopened — it must never be a
         // dead-end the user can't move out of.
-        'lost' => ['submitted', 'awarded', 'in_progress'],
+        'lost' => ['submitted', 'awarded', 'protested', 'in_progress'],
+        // A protest resolves to a re-decision (awarded / lost), can be dropped
+        // back to pending while it plays out, or cancelled.
+        'protested' => ['awarded', 'lost', 'award_pending', 'cancelled'],
         'cancelled' => ['in_progress'],
     ];
 
@@ -29,7 +32,7 @@ class ProposalWorkflowService
      */
     public const MAIN_PIPELINE = [
         'in_progress', 'submitted',
-        'pending', 'clarification_requested', 'awarded', 'completed',
+        'award_pending', 'clarification_requested', 'awarded', 'completed',
     ];
 
     /**
@@ -119,8 +122,32 @@ class ProposalWorkflowService
                 'award_date' => $proposal->award_date ? null : now()->toDateString(),
                 'award_value' => ((float) $proposal->award_value) > 0 ? null : $proposal->proposal_value,
             ], fn ($v) => $v !== null));
+
+            // Phase 5: a won proposal becomes a contract. Create the linked
+            // contract record (idempotent) seeded from the proposal's value so
+            // the post-award financial lifecycle is ready to track.
+            $this->ensureContract($proposal, $user);
         }
 
         return $proposal->refresh();
+    }
+
+    /**
+     * Ensure a won proposal has a linked Contract record (Phase 5). Idempotent —
+     * never touches an existing contract. Seeds value/currency from the proposal.
+     */
+    public function ensureContract(ProposalSubmission $proposal, ?User $user = null): \App\Models\Contract
+    {
+        return \App\Models\Contract::firstOrCreate(
+            ['proposal_submission_id' => $proposal->id],
+            [
+                'organization_id' => $proposal->organization_id,
+                'created_by' => $user?->id,
+                'stage' => \App\Enums\ContractStage::ContractReview->value,
+                'payment_status' => \App\Enums\PaymentStatus::NotInvoiced->value,
+                'contract_value' => ((float) $proposal->award_value) > 0 ? $proposal->award_value : $proposal->proposal_value,
+                'currency' => $proposal->currency ?? 'USD',
+            ],
+        );
     }
 }

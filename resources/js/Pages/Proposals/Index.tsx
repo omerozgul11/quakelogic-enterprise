@@ -2,28 +2,51 @@ import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { Select } from '@/Components/ui/Select';
+import { SearchInput } from '@/Components/ui/SearchInput';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { DateFilter, DateFilterValue } from '@/Components/ui/DateFilter';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
-import { cn, formatCurrency, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
+import { cn, formatCurrency, getDueDateLabel, getDueDateColor, proposalTypeLabel, proposalTypeColor } from '@/Lib/utils';
 import { PaginatedResponse, ProposalSubmission } from '@/Types';
-import { Plus, Search, X, FileText, ExternalLink, Trash2, KanbanSquare, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Plus, Search, X, FileText, ExternalLink, Trash2, KanbanSquare, ChevronUp, ChevronDown, ChevronsUpDown, TrendingUp } from 'lucide-react';
+
+interface MarginRollup {
+    bid: number;
+    cost: number;
+    profit: number;
+    margin: number | null;
+    count: number;
+    currency: string;
+}
 
 interface Props {
     proposals: PaginatedResponse<ProposalSubmission>;
     filters: Record<string, string>;
     statuses: Array<{ value: string; label: string; color: string }>;
+    types: Array<{ value: string; label: string; description: string; has_value: boolean }>;
+    margins: MarginRollup;
     can: { create: boolean; delete: boolean };
 }
+
+/** Per-bid dollar profit (bid − cost), or null when there's no bid or no cost estimate. */
+function rowProfit(p: ProposalSubmission): number | null {
+    const bid = Number(p.proposal_value ?? 0);
+    const cost = Number(p.estimated_cost ?? 0);
+    if (bid <= 0 || cost <= 0) return null;
+    return Math.round((bid - cost) * 100) / 100;
+}
+
+const signClass = (v: number | null) =>
+    v == null ? 'text-muted-foreground' : v > 0 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : 'text-foreground';
 
 const DEFAULT_DIR: Record<string, 'asc' | 'desc'> = {
     name: 'asc', company: 'asc', owner: 'asc', status: 'asc', value: 'desc', due_date: 'asc', date: 'desc',
 };
 
-export default function ProposalsIndex({ proposals, filters, statuses, can }: Props) {
+export default function ProposalsIndex({ proposals, filters, statuses, types, margins, can }: Props) {
     const sort = typeof filters.sort === 'string' ? filters.sort : 'date';
     const direction = filters.direction === 'asc' ? 'asc' : 'desc';
 
@@ -44,7 +67,7 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
     );
 
     const handleFilter = (key: string, value: string) => {
-        router.get('/proposals', { ...filters, [key]: value || undefined }, { preserveState: true });
+        router.get('/proposals', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     const handleDate = (v: DateFilterValue) => {
@@ -82,16 +105,19 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search proposals…"
-                                defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="input input-with-icon"
-                            />
-                        </div>
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[18rem]"
+                            initial={filters.search ?? ''}
+                            onSearch={v => handleFilter('search', v)}
+                            placeholder="Search proposals…"
+                        />
+                        <Select
+                            value={filters.type ?? ''}
+                            onChange={v => handleFilter('type', v)}
+                            options={types.map(t => ({ value: t.value, label: t.label }))}
+                            placeholder="All Types"
+                            className="w-full sm:w-40"
+                        />
                         <Select
                             value={filters.status ?? ''}
                             onChange={v => handleFilter('status', v)}
@@ -111,6 +137,39 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                     </div>
                 </Card>
 
+                {/* Overall profit-margin roll-up across the filtered set (USD) */}
+                {margins.count > 0 && (
+                    <Card className="mb-4 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <TrendingUp className="h-4 w-4 text-primary" />
+                                Estimated profit margin
+                                <span className="text-xs font-normal text-muted-foreground">
+                                    across {margins.count} {margins.count === 1 ? 'proposal' : 'proposals'} with a cost estimate · USD
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-8">
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total bid</p>
+                                    <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(margins.bid, 'USD')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Est. cost</p>
+                                    <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(margins.cost, 'USD')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Potential profit</p>
+                                    <p className={`text-base font-bold tabular-nums ${signClass(margins.profit)}`}>{formatCurrency(margins.profit, 'USD')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Blended margin</p>
+                                    <p className={`text-base font-bold tabular-nums ${signClass(margins.margin)}`}>{margins.margin != null ? `${margins.margin}%` : '—'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+                )}
+
                 {/* Table */}
                 <Card className="overflow-hidden">
                     <div className="overflow-x-auto">
@@ -122,6 +181,7 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                     <SortHeader field="company" label="Company" className="hidden md:table-cell" />
                                     <SortHeader field="status" label="Status" />
                                     <SortHeader field="value" label="Value" />
+                                    <th className="th hidden sm:table-cell">Profit</th>
                                     <SortHeader field="due_date" label="Due Date" className="hidden sm:table-cell" />
                                     <SortHeader field="owner" label="Owner" className="hidden lg:table-cell" />
                                     <th className="th" />
@@ -130,7 +190,7 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                             <tbody className="divide-y divide-border">
                                 {proposals.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8}>
+                                        <td colSpan={9}>
                                             <EmptyState
                                                 icon={FileText}
                                                 title="No proposals found"
@@ -147,7 +207,12 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                             </Link>
                                         </td>
                                         <td className="td max-w-md">
-                                            <p className="font-medium text-foreground line-clamp-2">{proposal.project_name}</p>
+                                            <div className="flex items-start gap-2">
+                                                <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${proposalTypeColor(proposal.proposal_type)}`}>
+                                                    {proposalTypeLabel(proposal.proposal_type)}
+                                                </span>
+                                                <p className="font-medium text-foreground line-clamp-2">{proposal.project_name}</p>
+                                            </div>
                                             {proposal.solicitation_number && (
                                                 <p className="mt-0.5 text-xs text-muted-foreground">{proposal.solicitation_number}</p>
                                             )}
@@ -160,6 +225,14 @@ export default function ProposalsIndex({ proposals, filters, statuses, can }: Pr
                                             {proposal.award_value ? (
                                                 <span className="text-emerald-600">{formatCurrency(proposal.award_value, proposal.currency)}</span>
                                             ) : formatCurrency(proposal.proposal_value, proposal.currency)}
+                                        </td>
+                                        <td className="td hidden font-medium sm:table-cell">
+                                            {(() => {
+                                                const profit = rowProfit(proposal);
+                                                return profit != null
+                                                    ? <span className={`text-sm font-semibold tabular-nums ${signClass(profit)}`}>{formatCurrency(profit, proposal.currency)}</span>
+                                                    : <span className="text-sm text-muted-foreground">—</span>;
+                                            })()}
                                         </td>
                                         <td className="td hidden sm:table-cell">
                                             <span className={`text-sm font-medium ${getDueDateColor(proposal.due_date)}`}>

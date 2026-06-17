@@ -21,7 +21,7 @@ class ProposalMailing extends Model
     protected $fillable = [
         'ulid', 'organization_id', 'proposal_submission_id', 'carrier', 'scope',
         'ups_tracking_number', 'recipient_name', 'recipient_address', 'deadline',
-        'status', 'scheduled_delivery', 'delivered_at', 'received_by', 'on_time',
+        'status', 'auto_track', 'scheduled_delivery', 'delivered_at', 'received_by', 'on_time',
         'proof_url', 'created_by',
     ];
 
@@ -34,6 +34,7 @@ class ProposalMailing extends Model
             'scheduled_delivery' => 'date',
             'delivered_at' => 'datetime',
             'on_time' => 'boolean',
+            'auto_track' => 'boolean',
         ];
     }
 
@@ -61,6 +62,12 @@ class ProposalMailing extends Model
     public function trackingEvents(): HasMany
     {
         return $this->hasMany(MailingTrackingEvent::class)->latest('occurred_at');
+    }
+
+    /** The most recent scan — used for "where it is now" on list views. */
+    public function latestEvent(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(MailingTrackingEvent::class)->latestOfMany('occurred_at');
     }
 
     public function documents(): HasMany

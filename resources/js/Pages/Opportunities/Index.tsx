@@ -2,6 +2,7 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { Select } from '@/Components/ui/Select';
+import { SearchInput } from '@/Components/ui/SearchInput';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
@@ -9,11 +10,17 @@ import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
 import { cn, formatCurrency, formatDate, formatRelativeDate, formatTime, getDueDateLabel, getDueDateColor, sourceLabel } from '@/Lib/utils';
 import { PaginatedResponse, Opportunity } from '@/Types';
-import { Plus, Upload, Search, X, ExternalLink, Target, Tag, ChevronUp, ChevronDown, ChevronsUpDown, Star, Sparkles } from 'lucide-react';
+import { Plus, Upload, Search, X, ExternalLink, Target, Tag, ChevronUp, ChevronDown, ChevronsUpDown, Star, Sparkles, Lock, UserCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
+type OppRow = Opportunity & {
+    owner?: { id: number; name: string } | null;
+    ownership_locked?: boolean;
+    assignment_stage?: string | null;
+};
+
 interface Props {
-    opportunities: PaginatedResponse<Opportunity>;
+    opportunities: PaginatedResponse<OppRow>;
     filters: Record<string, string | string[]>;
     view: 'foryou' | 'saved' | 'all';
     counts: { all: number; foryou: number; saved: number };
@@ -55,7 +62,7 @@ export default function OpportunitiesIndex({ opportunities, filters, view, count
     }, []);
 
     const handleFilter = (key: string, value: string) => {
-        router.get('/opportunities', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true });
+        router.get('/opportunities', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     const toggleKeyword = (kw: string) => {
@@ -136,12 +143,12 @@ export default function OpportunitiesIndex({ opportunities, filters, view, count
                                 onClick={() => setView(t.key)}
                                 className={cn(
                                     'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition',
-                                    active ? 'bg-primary text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                                    active ? 'bg-primary/[0.12] text-primary ring-1 ring-inset ring-primary/20' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                                 )}
                             >
                                 {Icon && <Icon className="h-3.5 w-3.5" />}
                                 {t.label}
-                                <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', active ? 'bg-white/20' : 'bg-secondary')}>{t.count}</span>
+                                <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', active ? 'bg-primary/15 text-primary' : 'bg-secondary')}>{t.count}</span>
                             </button>
                         );
                     })}
@@ -150,16 +157,12 @@ export default function OpportunitiesIndex({ opportunities, filters, view, count
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                        <div className="relative min-w-0 flex-1 sm:min-w-[18rem]">
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search by keyword — title, agency, description…"
-                                defaultValue={typeof filters.search === 'string' ? filters.search : ''}
-                                onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="input input-with-icon"
-                            />
-                        </div>
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[18rem]"
+                            initial={typeof filters.search === 'string' ? filters.search : ''}
+                            onSearch={v => handleFilter('search', v)}
+                            placeholder="Search by keyword — title, agency, description…"
+                        />
                         <Select
                             value={(filters.status as string) ?? ''}
                             onChange={v => handleFilter('status', v)}
@@ -308,6 +311,12 @@ export default function OpportunitiesIndex({ opportunities, filters, view, count
                                             </Link>
                                             {opp.solicitation_number && (
                                                 <p className="mt-0.5 text-xs text-muted-foreground">{opp.solicitation_number}</p>
+                                            )}
+                                            {opp.owner && (
+                                                <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground" title={opp.ownership_locked ? `Owned by ${opp.owner.name} (locked)` : `Owned by ${opp.owner.name}`}>
+                                                    {opp.ownership_locked ? <Lock className="h-3 w-3 text-amber-500" /> : <UserCheck className="h-3 w-3" />}
+                                                    {opp.owner.name}
+                                                </p>
                                             )}
                                         </td>
                                         <td className="td hidden text-muted-foreground md:table-cell">{opp.agency_name ?? '—'}</td>

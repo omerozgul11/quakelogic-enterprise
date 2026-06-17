@@ -6,9 +6,10 @@ import {
     Users, Bell, LogOut, Settings, FileSearch, MessageSquare,
     BarChart3, Puzzle, Sparkles, ShieldCheck, KanbanSquare,
     Menu, X, Sun, Moon, ChevronDown, TrendingUp, Activity, BookOpen,
-    CalendarDays, Inbox,
+    CalendarDays, Inbox, FileSignature, LibraryBig, ScrollText, PenLine, Gauge,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
+import { clearChat } from '@/Lib/chatStore';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
 import { GlobalSearch } from '@/Components/layout/GlobalSearch';
 import { PwaControls } from '@/Components/layout/PwaControls';
@@ -25,20 +26,33 @@ interface NavItem {
 interface NavSection {
     title?: string;
     items: NavItem[];
+    /** Render as a collapsible dropdown (closed by default) to save space. */
+    collapsible?: boolean;
 }
 
 const sections: NavSection[] = [
     { items: [
         { label: 'Dashboard', href: '/', icon: LayoutDashboard },
         { label: 'Calendar', href: '/calendar', icon: CalendarDays },
+        { label: 'QuakeAI', href: '/ai', icon: Sparkles, permission: 'use ai assistant' },
+        { label: 'Proposal Writer', href: '/ai/writer', icon: PenLine, permission: 'use ai assistant' },
     ] },
     {
         title: 'Pipeline',
         items: [
             { label: 'Opportunities', href: '/opportunities', icon: Target, permission: 'view opportunities' },
+            { label: 'Command Center', href: '/dashboard/opportunities', icon: Gauge, permission: 'view executive dashboard' },
             { label: 'Applications', href: '/proposals/board', icon: KanbanSquare, permission: 'view proposals' },
             { label: 'Proposals', href: '/proposals', icon: FileText, permission: 'view proposals' },
             { label: 'Documents', href: '/documents', icon: FileSearch, permission: 'view proposals' },
+            { label: 'Contracts', href: '/contracts', icon: FileSignature, permission: 'view contracts' },
+        ],
+    },
+    {
+        title: 'Library',
+        items: [
+            { label: 'Compliance', href: '/compliance', icon: ShieldCheck, permission: 'view compliance' },
+            { label: 'Template Library', href: '/templates', icon: LibraryBig, permission: 'view templates' },
         ],
     },
     {
@@ -52,17 +66,9 @@ const sections: NavSection[] = [
     {
         title: 'Insights',
         items: [
-            { label: 'Reports', href: '/reports', icon: BarChart3, permission: 'view dashboards' },
             { label: 'Team Performance', href: '/reports/users', icon: Users, permission: 'view dashboards' },
             { label: 'Market Pricing', href: '/market-pricing', icon: TrendingUp, permission: 'view opportunities' },
-            { label: 'Ask QuakeAI', href: '/ai', icon: Sparkles, permission: 'use ai assistant' },
             { label: 'Integrations', href: '/integrations', icon: Puzzle, permission: 'manage integrations' },
-        ],
-    },
-    {
-        title: 'Help',
-        items: [
-            { label: 'User Guide', href: '/guide', icon: BookOpen },
         ],
     },
 ];
@@ -76,6 +82,7 @@ function matchesHref(path: string, href: string): boolean {
 // (e.g. /proposals/board highlights "Applications", not also "Proposals").
 const ALL_HREFS = [
     ...sections.flatMap(s => s.items.map(i => i.href)),
+    '/guide',
     '/admin/team',
     '/admin/activity',
     '/admin',
@@ -171,7 +178,7 @@ function timeAgo(iso: string | null): string {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
     const page = usePage<SharedProps>();
-    const { auth, flash, notifications_count, notifications } = page.props;
+    const { auth, flash, notifications_count, notifications, inbox_unread_count } = page.props;
     const currentUrl = page.url;
     const matchedHref = activeHref(currentUrl);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -181,6 +188,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const [sidebarWidth, startResize, resizing, resetSidebarWidth] = useSidebarWidth();
     const user = auth.user;
     const recentNotifications = notifications ?? [];
+
+    // Collapsible nav sections (System / Help). Closed by default to save space;
+    // the user's open/closed choice is remembered across sessions.
+    const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('nav-open-sections');
+            if (saved) setOpenSections(JSON.parse(saved));
+        } catch { /* ignore */ }
+    }, []);
+    const toggleSection = (title: string) => {
+        setOpenSections(prev => {
+            const next = { ...prev, [title]: !(prev[title] ?? false) };
+            try { localStorage.setItem('nav-open-sections', JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+        });
+    };
 
     const openNotification = (n: SharedProps['notifications'][number]) => {
         setNotifOpen(false);
@@ -194,10 +218,67 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
     const hasPermission = (permission?: string) =>
         !permission || (user?.permissions?.includes(permission) ?? false);
-    const handleLogout = () => router.post('/logout');
+    const handleLogout = () => { clearChat(); router.post('/logout'); };
     const isSuperAdmin = user?.roles?.includes('Super Admin');
 
-    const SidebarBody = ({ mobile = false }: { mobile?: boolean }) => (
+    const adminItems: NavItem[] = [
+        { label: 'Team Activity', href: '/admin/team', icon: BarChart3 },
+        { label: 'Activity Log', href: '/admin/activity', icon: Activity },
+        { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText },
+        { label: 'Admin', href: '/admin', icon: Settings },
+    ];
+
+    const SidebarBody = ({ mobile = false }: { mobile?: boolean }) => {
+        const renderItem = (item: NavItem) => {
+            const Icon = item.icon;
+            const active = item.href === matchedHref;
+            return (
+                <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => mobile && setSidebarOpen(false)}
+                    className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
+                >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="min-w-0 truncate" title={item.label}>{item.label}</span>
+                    {item.href === '/follow-ups' && inbox_unread_count > 0 && (
+                        <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-orange-500">
+                            ({inbox_unread_count > 99 ? '99+' : inbox_unread_count})
+                        </span>
+                    )}
+                </Link>
+            );
+        };
+
+        const renderSection = (key: number | string, title: string | undefined, items: NavItem[], collapsible: boolean) => {
+            if (items.length === 0) return null;
+            // Collapsible sections start closed to save space, but auto-open when
+            // they contain the current page so its highlight is never hidden.
+            const containsActive = items.some(i => i.href === matchedHref);
+            const open = !collapsible || containsActive || (openSections[title ?? ''] ?? false);
+            return (
+                <div key={key}>
+                    {title && (collapsible ? (
+                        <button
+                            type="button"
+                            onClick={() => toggleSection(title)}
+                            aria-expanded={open}
+                            className="flex w-full items-center gap-1 rounded-lg px-3 pb-1.5 pt-0.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70 transition-colors hover:text-foreground"
+                        >
+                            <span className="truncate">{title}</span>
+                            <ChevronDown className={cn('ml-auto h-3.5 w-3.5 shrink-0 transition-transform duration-200', open ? '' : '-rotate-90')} />
+                        </button>
+                    ) : (
+                        <p className="truncate px-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
+                            {title}
+                        </p>
+                    ))}
+                    {open && <div className="space-y-0.5">{items.map(renderItem)}</div>}
+                </div>
+            );
+        };
+
+        return (
         <div className="flex h-full flex-col">
             <div className="flex h-16 items-center justify-between px-3">
                 <AppSwitcher onNavigate={() => mobile && setSidebarOpen(false)} />
@@ -208,75 +289,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
             </div>
 
-            <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
-                {sections.map((section, si) => {
-                    const items = section.items.filter(i => hasPermission(i.permission));
-                    if (items.length === 0) return null;
-                    return (
-                        <div key={si}>
-                            {section.title && (
-                                <p className="truncate px-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
-                                    {section.title}
-                                </p>
-                            )}
-                            <div className="space-y-0.5">
-                                {items.map(item => {
-                                    const Icon = item.icon;
-                                    const active = item.href === matchedHref;
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            onClick={() => mobile && setSidebarOpen(false)}
-                                            className={cn(
-                                                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                                                active
-                                                    ? 'bg-brand-gradient text-white shadow-sm'
-                                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                                            )}
-                                        >
-                                            <Icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
-                                            <span className="min-w-0 truncate" title={item.label}>{item.label}</span>
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })}
-
-                {isSuperAdmin && (
-                    <div>
-                        <p className="px-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">System</p>
-                        <div className="space-y-0.5">
-                            {[
-                                { label: 'Team Activity', href: '/admin/team', icon: BarChart3 },
-                                { label: 'Activity Log', href: '/admin/activity', icon: Activity },
-                                { label: 'Admin', href: '/admin', icon: Settings },
-                            ].map(item => {
-                                const Icon = item.icon;
-                                const active = item.href === matchedHref;
-                                return (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        onClick={() => mobile && setSidebarOpen(false)}
-                                        className={cn(
-                                            'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                                            active ? 'bg-brand-gradient text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                                        )}
-                                    >
-                                        <Icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
-                                        <span className="min-w-0 truncate" title={item.label}>{item.label}</span>
-                                    </Link>
-                                );
-                            })}
-                        </div>
-                    </div>
+            <nav className="sidebar-scroll flex-1 space-y-5 overflow-y-auto px-3 py-3">
+                {sections.map((section, si) =>
+                    renderSection(si, section.title, section.items.filter(i => hasPermission(i.permission)), !!section.collapsible),
                 )}
+
+                {isSuperAdmin && renderSection('system', 'System', adminItems, true)}
             </nav>
 
-            <div className="border-t border-border p-3">
+            <div className="space-y-1 border-t border-border p-3">
+                {renderItem({ label: 'User Guide', href: '/guide', icon: BookOpen })}
                 <Link
                     href="/settings"
                     onClick={() => mobile && setSidebarOpen(false)}
@@ -292,10 +314,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
             </div>
         </div>
-    );
+        );
+    };
 
     return (
-        <div className="flex min-h-screen bg-background">
+        <div className="ql-liquid flex min-h-screen">
             {/* Mobile overlay */}
             {sidebarOpen && (
                 <div className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -303,14 +326,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Mobile sidebar */}
             <aside className={cn(
-                'fixed inset-y-0 left-0 z-50 w-64 transform border-r border-border bg-card shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
+                'fixed inset-y-0 left-0 z-50 w-64 transform bg-card shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
                 <SidebarBody mobile />
             </aside>
 
             {/* Desktop sidebar — drag the right edge to resize */}
-            <aside className="hidden shrink-0 border-r border-border bg-card lg:block" style={{ width: sidebarWidth }}>
+            <aside className="glass-panel hidden shrink-0 lg:block" style={{ width: sidebarWidth }}>
                 <div className="sticky top-0 h-screen">
                     <SidebarBody />
                     <div
@@ -327,7 +350,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Main column */}
             <div className="flex min-w-0 flex-1 flex-col">
-                <header className="glass sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border px-4 sm:px-6">
+                <header className="glass-panel sticky top-0 z-30 flex h-16 items-center gap-2 px-4 sm:px-6">
                     <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
                         <Menu className="h-6 w-6 text-muted-foreground" />
                     </button>
@@ -457,7 +480,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                 )}
 
-                <main key={currentUrl.split('?')[0]} className="animate-fade-in flex-1">
+                <main key={currentUrl.split('?')[0]} className="animate-page flex-1">
                     {children}
                 </main>
 

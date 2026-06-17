@@ -30,6 +30,8 @@ interface ExecutiveMetrics {
     monthlyTrend: Array<{ month: string; submitted: number; awarded: number }>;
     topUsers: Array<{ user: string; total_proposals: number; total_value: number; won: number }>;
     sourceAnalysis: Record<string, number>;
+    expectedMonthlyRevenue: number;
+    avgAwardCycleDays: number;
 }
 
 const COLORS = CHART_COLORS;
@@ -63,7 +65,7 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
     const statusChartData = Object.entries(metrics.proposalsByStatus).map(([status, count]) => ({
         name: status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
         value: count,
-    }));
+    })).filter(d => d.value > 0);
 
     const sourceData = Object.entries(metrics.sourceAnalysis).map(([source, count]) => ({
         name: source.replace(/_/g, ' ').toUpperCase(),
@@ -98,6 +100,12 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                     <KpiCard title="Overdue Items" value={String(metrics.overdueTasks + metrics.overdueFollowUps)} subtitle={`${metrics.overdueTasks} tasks, ${metrics.overdueFollowUps} follow-ups`} icon={AlertCircle} />
                 </div>
 
+                {/* KPI Row 3 — forecasting (Phase 4) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <KpiCard title="Expected Revenue (This Month)" value={formatCurrency(metrics.expectedMonthlyRevenue)} subtitle="Open bids weighted by win probability, due this month" icon={DollarSign} />
+                    <KpiCard title="Avg. Award Cycle" value={metrics.avgAwardCycleDays > 0 ? `${metrics.avgAwardCycleDays} days` : '—'} subtitle="Submission → award, won this year" icon={TrendingUp} />
+                </div>
+
                 {/* Charts Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* Monthly Trend */}
@@ -122,11 +130,12 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                         <h2 className="text-lg font-semibold text-foreground mb-4">Proposals by Status</h2>
                         <ResponsiveContainer width="100%" height={260}>
                             <PieChart>
-                                <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={56} outerRadius={88} paddingAngle={2} cornerRadius={4} dataKey="value"
-                                    label={({ name, value }) => `${name}: ${value}`} labelLine={false} stroke="hsl(var(--card))" strokeWidth={2}>
+                                <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={84} paddingAngle={2} cornerRadius={4} dataKey="value" nameKey="name"
+                                    stroke="hsl(var(--card))" strokeWidth={2}>
                                     {statusChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                 </Pie>
                                 <Tooltip content={<ChartTooltip nameKey="name" />} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>

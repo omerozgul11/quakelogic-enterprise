@@ -20,10 +20,12 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, HasRoles, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     protected $fillable = [
-        'ulid', 'organization_id', 'name', 'email', 'title', 'phone',
+        'ulid', 'organization_id', 'name', 'email', 'title', 'phone', 'department',
         'avatar_path', 'password', 'is_active', 'hire_date',
         'commission_rate_override', 'timezone', 'notification_preferences',
         'pipeline_keywords', 'market_keywords',
+        'product_expertise', 'industry_expertise', 'geographic_focus',
+        'min_opportunity_value', 'max_opportunity_value', 'workload_score', 'workload_updated_at',
     ];
 
     protected $hidden = [
@@ -40,6 +42,13 @@ class User extends Authenticatable
             'notification_preferences' => 'array',
             'pipeline_keywords' => 'array',
             'market_keywords' => 'array',
+            'product_expertise' => 'array',
+            'industry_expertise' => 'array',
+            'geographic_focus' => 'array',
+            'min_opportunity_value' => 'decimal:2',
+            'max_opportunity_value' => 'decimal:2',
+            'workload_score' => 'integer',
+            'workload_updated_at' => 'datetime',
         ];
     }
 
@@ -57,6 +66,17 @@ class User extends Authenticatable
     public function opportunities(): HasMany
     {
         return $this->hasMany(Opportunity::class, 'assigned_to');
+    }
+
+    /** Opportunities this user owns (claimed / locked). */
+    public function ownedOpportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class, 'owner_id');
+    }
+
+    public function opportunityStates(): HasMany
+    {
+        return $this->hasMany(OpportunityUserState::class);
     }
 
     public function proposals(): HasMany

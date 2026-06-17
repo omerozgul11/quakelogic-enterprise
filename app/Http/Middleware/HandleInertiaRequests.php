@@ -64,6 +64,13 @@ class HandleInertiaRequests extends Middleware
             'notifications_count' => fn() => $user
                 ? $scopeNotifications($user->unreadNotifications())->count()
                 : 0,
+            // Unread Inbox (follow-up) messages — drives the "(N)" badge next to
+            // the Inbox nav item. Mirrors the inbox's own unread logic.
+            'inbox_unread_count' => fn() => $user
+                ? \App\Models\FollowUp::where('organization_id', $user->organization_id)
+                    ->unreadForViewer($user)
+                    ->count()
+                : 0,
             'notifications' => fn() => $user
                 ? $scopeNotifications($user->notifications())->take(8)->get()->map(fn ($n) => [
                     'id' => $n->id,

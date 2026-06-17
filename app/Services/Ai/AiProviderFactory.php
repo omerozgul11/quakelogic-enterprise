@@ -11,6 +11,7 @@ class AiProviderFactory
         $instance = match ($provider) {
             'openai' => new OpenAiProvider(),
             'anthropic' => new AnthropicProvider(),
+            'gemini' => new GeminiProvider(),
             'local' => new LocalLlmProvider(),
             default => new FakeAiProvider(),
         };

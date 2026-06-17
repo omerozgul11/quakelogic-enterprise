@@ -182,7 +182,24 @@ const STATUS_COLORS: Record<string, string> = {
     in_progress: 'bg-blue-100 text-blue-800',
     under_review: 'bg-yellow-100 text-yellow-800',
     pending: 'bg-orange-100 text-orange-800',
+    award_pending: 'bg-orange-100 text-orange-800',
     clarification_requested: 'bg-amber-100 text-amber-800',
+    protested: 'bg-purple-100 text-purple-800',
+    // Contract stages (Phase 5)
+    contract_review: 'bg-amber-100 text-amber-800',
+    contract_signed: 'bg-blue-100 text-blue-800',
+    po_received: 'bg-indigo-100 text-indigo-800',
+    invoice_sent: 'bg-orange-100 text-orange-800',
+    paid: 'bg-emerald-100 text-emerald-800',
+    // Payment statuses (Phase 5)
+    not_invoiced: 'bg-slate-100 text-slate-600',
+    invoiced: 'bg-blue-100 text-blue-800',
+    partially_paid: 'bg-amber-100 text-amber-800',
+    overdue: 'bg-red-100 text-red-800',
+    // Compliance statuses (Phase 7)
+    active: 'bg-emerald-100 text-emerald-800',
+    expired: 'bg-red-100 text-red-800',
+    not_applicable: 'bg-slate-100 text-slate-600',
     negotiation: 'bg-purple-100 text-purple-800',
     discovery: 'bg-blue-100 text-blue-800',
     qualification: 'bg-indigo-100 text-indigo-800',
@@ -200,6 +217,51 @@ export function getStatusColor(status: string): string {
 
 export function statusLabel(status: string): string {
     return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** Short label for a proposal/document type (RFI, RFQ, RFP, Proposal). */
+export function proposalTypeLabel(type?: string | null): string {
+    switch (type) {
+        case 'rfi': return 'RFI';
+        case 'rfq': return 'RFQ';
+        case 'rfp': return 'RFP';
+        case 'proposal': return 'Proposal';
+        default: return type ? type.toUpperCase() : '—';
+    }
+}
+
+/** Badge color classes for a proposal/document type. */
+export function proposalTypeColor(type?: string | null): string {
+    switch (type) {
+        case 'rfi': return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+        case 'rfq': return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300';
+        case 'rfp': return 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300';
+        case 'proposal': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+        default: return 'bg-secondary text-muted-foreground';
+    }
+}
+
+/** RFIs are informational only — they carry no dollar value. */
+export function proposalTypeHasValue(type?: string | null): boolean {
+    return type !== 'rfi';
+}
+
+/** Proposal health (days since last client contact) — traffic-light dot classes. */
+export const HEALTH_DOT: Record<string, string> = {
+    green: 'bg-emerald-500',
+    yellow: 'bg-yellow-500',
+    orange: 'bg-orange-500',
+    red: 'bg-red-500',
+};
+
+export interface ProposalHealth {
+    color: 'green' | 'yellow' | 'orange' | 'red';
+    days: number;
+    label: string;
+}
+
+export function healthDotClass(color?: string | null): string {
+    return (color && HEALTH_DOT[color]) || 'bg-slate-300';
 }
 
 const SOURCE_LABELS: Record<string, string> = {

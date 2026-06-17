@@ -26,6 +26,10 @@ class OpenAiProvider implements AiProviderInterface
         return !empty(config('ai.providers.openai.api_key'));
     }
 
+    public function supportsVision(): bool { return false; }
+
+    public function extractShipments(string $base64Data, string $mediaType): array { return []; }
+
     public function extractDocumentData(string $documentText, array $schema): array
     {
         $systemPrompt = "You are an expert government contracting analyst. Extract structured data from procurement documents. Return valid JSON only.";
@@ -83,6 +87,18 @@ class OpenAiProvider implements AiProviderInterface
         );
     }
 
+    public function generateProposalSection(array $context, string $section): string
+    {
+        $label = $context['section_label'] ?? ucwords(str_replace('_', ' ', $section));
+        $guidance = $context['section_guidance'] ?? '';
+        return $this->complete(
+            "You are an expert U.S. government proposal writer. Write the \"{$label}\" section in polished, compliant prose. "
+            . "Follow the context's 'style_profile' and mirror any 'relevant_past_work'; treat 'answers' as authoritative. "
+            . "Use ONLY facts in the context — do not invent; insert [NEEDS: …] where a detail is missing. No preamble.",
+            "Section: {$label}\n{$guidance}\n\nContext:\n" . json_encode($context)
+        );
+    }
+
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string
     {
         try {
@@ -108,4 +124,11 @@ class OpenAiProvider implements AiProviderInterface
             throw $e;
         }
     }
+
+    public function extractDocumentVision(string $base64Data, string $mediaType): array { return []; }
+
+    public function research(string $query): string { return ''; }
+
+    /** Embeddings not wired for OpenAI here; RAG uses the Gemini tier. */
+    public function embed(array $texts): array { return []; }
 }

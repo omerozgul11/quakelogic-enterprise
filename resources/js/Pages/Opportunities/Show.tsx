@@ -5,10 +5,35 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
 import { formatCurrency, formatDate, sourceLabel } from '@/Lib/utils';
+import { Select } from '@/Components/ui/Select';
 import { Opportunity } from '@/Types';
-import { ArrowLeft, Edit, Target, Building, ExternalLink, Rocket, Users, Mail, Phone, FileText, Eye, Download } from 'lucide-react';
+import { ArrowLeft, Edit, Target, Building, ExternalLink, Rocket, Users, Mail, Phone, FileText, Eye, Download, Lock, Unlock, History, UserCheck, Clock, AlertTriangle } from 'lucide-react';
 import { FilePreviewModal, PreviewFile } from '@/Components/ui/FilePreviewModal';
 import { useState } from 'react';
+
+const TONE: Record<string, string> = {
+    gray: 'bg-slate-500/10 text-slate-600', slate: 'bg-slate-500/10 text-slate-600',
+    blue: 'bg-blue-500/10 text-blue-600', indigo: 'bg-indigo-500/10 text-indigo-600',
+    purple: 'bg-purple-500/10 text-purple-600', orange: 'bg-orange-500/10 text-orange-600',
+    amber: 'bg-amber-500/10 text-amber-600', cyan: 'bg-cyan-500/10 text-cyan-600',
+    green: 'bg-emerald-500/10 text-emerald-600', red: 'bg-rose-500/10 text-rose-600',
+};
+const tone = (c?: string) => TONE[c ?? 'gray'] ?? TONE.gray;
+
+interface TimelineEntry { id: number; type: string; description: string; meta: Record<string, unknown> | null; user: string | null; at: string | null }
+interface Lifecycle {
+    stage: string | null; stage_label: string | null; stage_color: string | null;
+    owner: { id: number; name: string; email: string | null } | null;
+    assigned_to: { id: number; name: string; email: string | null } | null;
+    ownership_locked: boolean;
+    assigned_at: string | null; last_activity_at: string | null;
+    days_since_activity: number | null; days_until_deadline: number | null;
+    my_reaction: string | null; is_owner: boolean;
+    my_match: { score: number; reasons: string[] | null; role: string | null } | null;
+}
+interface Choice { value: string; label: string; color?: string }
+interface RecommendedOwner { user: string | null; score: number | null; role: string | null; reasons: string[] | null }
+interface Health { score: number; category: 'healthy' | 'warning' | 'critical'; factors: Record<string, number> }
 
 interface OppContact { id: number; name: string; title: string | null; email: string | null; phone: string | null }
 
@@ -23,8 +48,17 @@ interface Props {
     };
     contacts: OppContact[];
     samDocuments: SamDocument[];
-    can: { edit: boolean; delete: boolean; pursue: boolean };
+    timeline: TimelineEntry[];
+    lifecycle: Lifecycle;
+    recommendedOwners: RecommendedOwner[];
+    health: Health;
+    reactionOptions: Choice[];
+    stageOptions: Choice[];
+    assignableUsers: Array<{ id: number; name: string }>;
+    can: { edit?: boolean; update?: boolean; delete: boolean; pursue: boolean; claim?: boolean; assign?: boolean; changeStage?: boolean };
 }
+
+const fmtAt = (at: string | null) => (at ? new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     return (
@@ -35,7 +69,9 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
-export default function OpportunityShow({ opportunity, contacts, samDocuments, can }: Props) {
+const HEALTH_TONE: Record<string, string> = { healthy: 'green', warning: 'amber', critical: 'red' };
+
+export default function OpportunityShow({ opportunity, contacts, samDocuments, timeline, lifecycle, recommendedOwners, health, reactionOptions, stageOptions, assignableUsers, can }: Props) {
     const application = opportunity.proposals?.[0];
     const [preview, setPreview] = useState<PreviewFile | null>(null);
 
@@ -46,6 +82,14 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, c
     };
 
     const pursue = () => router.post(`/opportunities/${opportunity.id}/pursue`);
+    const act = (path: string, data: Record<string, string | number> = {}) =>
+        router.post(`/opportunities/${opportunity.id}/${path}`, data, { preserveScroll: true });
+    const release = () => {
+        if (confirm('Release ownership? The opportunity will become unassigned.')) act('release');
+    };
+
+    const deadline = lifecycle.days_until_deadline;
+    const deadlineAtRisk = deadline !== null && deadline <= 7;
 
     return (
         <AppLayout>
@@ -60,7 +104,7 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, c
                             <Button variant="secondary" icon={ArrowLeft} href="/opportunities">
                                 Back
                             </Button>
-                            {can.edit && (
+                            {(can.update ?? can.edit) && (
                                 <Button variant="secondary" icon={Edit} href={`/opportunities/${opportunity.id}/edit`}>
                                     Edit
                                 </Button>
@@ -160,6 +204,34 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, c
                                 )}
                             </CardContent>
                         </Card>
+
+                        {/* Immutable opportunity timeline */}
+                        <Card className="animate-rise">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <History className="h-4 w-4 text-muted-foreground" /> Timeline
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {timeline.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {timeline.map(e => (
+                                            <div key={`${e.type}-${e.id}-${e.at}`} className="flex gap-3">
+                                                <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary/50" />
+                                                <div className="min-w-0 flex-1 border-b border-border pb-3 last:border-0 last:pb-0">
+                                                    <p className="text-sm text-foreground">{e.description}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {e.user ? `${e.user} · ` : ''}{fmtAt(e.at)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* Sidebar */}
@@ -197,13 +269,140 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, c
                             </CardContent>
                         </Card>
 
-                        {/* Status */}
+                        {/* Ownership & assignment lifecycle */}
                         <Card className="animate-rise">
                             <CardHeader>
-                                <CardTitle className="text-sm">Status</CardTitle>
+                                <CardTitle className="text-sm">Ownership &amp; Assignment</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <StatusBadge status={opportunity.status} />
+                            <CardContent className="space-y-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <StatusBadge status={opportunity.status} />
+                                    {lifecycle.stage_label && (
+                                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone(lifecycle.stage_color ?? undefined)}`}>
+                                            {lifecycle.stage_label}
+                                        </span>
+                                    )}
+                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone(HEALTH_TONE[health.category])}`} title={`Deadline ${health.factors.deadline} · Activity ${health.factors.activity} · Progress ${health.factors.progress} · Engagement ${health.factors.engagement}`}>
+                                        Health {health.score}
+                                    </span>
+                                </div>
+
+                                {/* Owner / lock state */}
+                                <div className="rounded-lg border border-border p-3 text-sm">
+                                    {lifecycle.owner ? (
+                                        <div className="flex items-center gap-2">
+                                            {lifecycle.ownership_locked ? <Lock className="h-4 w-4 text-amber-500" /> : <UserCheck className="h-4 w-4 text-muted-foreground" />}
+                                            <span className="text-foreground">
+                                                Owned by <span className="font-semibold">{lifecycle.is_owner ? 'you' : lifecycle.owner.name}</span>
+                                                {lifecycle.ownership_locked && <span className="text-muted-foreground"> · locked</span>}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted-foreground">Unassigned — no one owns this yet.</p>
+                                    )}
+                                    {(lifecycle.last_activity_at || deadline !== null) && (
+                                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                            {lifecycle.last_activity_at && (
+                                                <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Active {fmtAt(lifecycle.last_activity_at)}</span>
+                                            )}
+                                            {deadline !== null && (
+                                                <span className={`inline-flex items-center gap-1 ${deadlineAtRisk ? 'font-semibold text-rose-600' : ''}`}>
+                                                    {deadlineAtRisk && <AlertTriangle className="h-3 w-3" />}
+                                                    {deadline < 0 ? `${Math.abs(deadline)}d overdue` : deadline === 0 ? 'Due today' : `${deadline}d to deadline`}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Claim / release */}
+                                {lifecycle.is_owner ? (
+                                    <Button variant="secondary" icon={Unlock} className="w-full" onClick={release}>Release ownership</Button>
+                                ) : (
+                                    can.claim && (
+                                        <Button icon={Lock} className="w-full" onClick={() => act('claim')}>
+                                            Claim &amp; start (In Progress)
+                                        </Button>
+                                    )
+                                )}
+                                {!lifecycle.is_owner && lifecycle.ownership_locked && !can.assign && (
+                                    <p className="text-xs text-muted-foreground">This opportunity is locked to its owner. Ask an admin to reassign it.</p>
+                                )}
+
+                                {/* Stage picker (owner / manager) */}
+                                {can.changeStage && lifecycle.owner && (
+                                    <div>
+                                        <label className="label">Work stage</label>
+                                        <Select
+                                            value={lifecycle.stage ?? ''}
+                                            onChange={v => act('stage', { stage: v })}
+                                            options={stageOptions.map(s => ({ value: s.value, label: s.label }))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* (Re)assign (manager only) */}
+                                {can.assign && assignableUsers.length > 0 && (
+                                    <div>
+                                        <label className="label">Assign owner</label>
+                                        <Select
+                                            value={lifecycle.owner ? String(lifecycle.owner.id) : ''}
+                                            onChange={v => act('assign', { user_id: v })}
+                                            placeholder="Assign to…"
+                                            options={assignableUsers.map(u => ({ value: String(u.id), label: u.name }))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* AI-recommended owners (managers) */}
+                                {can.assign && recommendedOwners.length > 0 && (
+                                    <div className="rounded-lg border border-border p-3">
+                                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recommended owners</p>
+                                        <div className="space-y-1.5">
+                                            {recommendedOwners.map((r, i) => (
+                                                <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                                                    <span className="flex items-center gap-1.5 text-foreground">
+                                                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${r.role === 'primary' ? tone('green') : tone('blue')}`}>{r.role}</span>
+                                                        {r.user}
+                                                    </span>
+                                                    {r.score !== null && <span className="font-semibold text-muted-foreground">{Math.round(r.score)}%</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* This user's own fit */}
+                                {lifecycle.my_match && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone(lifecycle.my_match.score >= 60 ? 'green' : lifecycle.my_match.score >= 35 ? 'blue' : 'gray')}`}>
+                                            {Math.round(lifecycle.my_match.score)}% match for you
+                                        </span>
+                                        {lifecycle.my_match.role && <span className="text-xs text-muted-foreground">★ recommended ({lifecycle.my_match.role})</span>}
+                                    </div>
+                                )}
+
+                                {/* Personal reaction (triage) */}
+                                <div>
+                                    <label className="label">My status</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {reactionOptions.map(r => {
+                                            const active = lifecycle.my_reaction === r.value;
+                                            return (
+                                                <button
+                                                    key={r.value}
+                                                    type="button"
+                                                    onClick={() => act('react', { reaction: r.value })}
+                                                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${active ? tone(r.color) + ' ring-1 ring-inset ring-current' : 'border border-border text-muted-foreground hover:bg-secondary'}`}
+                                                >
+                                                    {r.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
 

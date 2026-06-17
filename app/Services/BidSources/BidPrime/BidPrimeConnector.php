@@ -20,12 +20,12 @@ class BidPrimeConnector implements BidSourceConnectorInterface
 
     public function fetchOpportunities(array $filters = [], int $limit = 100, int $offset = 0): array
     {
-        return $this->client->fetchOpportunities($filters, $limit, $offset);
+        return $this->client->searchOpportunities($filters);
     }
 
     public function fetchOpportunity(string $externalId): ?BidSourceResultDTO
     {
-        return $this->client->fetchOpportunity($externalId);
+        return $this->client->getOpportunity($externalId);
     }
 
     public function supportsIncrementalSync(): bool

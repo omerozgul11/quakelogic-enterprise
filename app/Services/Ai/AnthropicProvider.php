@@ -25,6 +25,8 @@ class AnthropicProvider implements AiProviderInterface
         return !empty($this->apiKey);
     }
 
+    public function supportsVision(): bool { return true; }
+
     /**
      * Extract structured fields from a procurement document with a real LLM.
      *
@@ -71,6 +73,12 @@ class AnthropicProvider implements AiProviderInterface
             }
 
             Rules:
+            - The title page and front matter (cover sheet, any SF-1449/cover form,
+              and everything up to the Table of Contents) are AUTHORITATIVE. Take
+              project_name, solicitation_number, agency, due_date, and value from there
+              whenever they appear; prefer those over anything mentioned later in the body.
+            - "project_name": the official title of the solicitation/project exactly as it
+              reads on the title page — not a section heading or a sentence from the body.
             - "agency": the government agency or office ISSUING the solicitation.
             - "company": the buyer/client organization we would be doing business with
               (the customer named on the document), NOT QuakeLogic. If only a government
@@ -79,14 +87,17 @@ class AnthropicProvider implements AiProviderInterface
               specialist, buyer, or project/program manager — each with their OWN email,
               phone, and title exactly as written. Only include a person who has a name,
               an email, or a phone. Match each email/phone to the correct person.
-            - Search the ENTIRE document for the real people — the header, any
-              "Point of Contact"/"Contracting Officer" block, and the signature block.
-              Prefer names that sit next to an email, phone, or explicit contact role.
+            - For contacts, prefer the title page / "Point of Contact" / "Contracting
+              Officer" block; otherwise use the header and signature block. Prefer names
+              that sit next to an email, phone, or explicit contact role.
             - IGNORE any References, Bibliography, Works Cited, Citations, Sources, or
-              author/reference list. NEVER extract a person, email, or company from a
-              citation (e.g. "A. Apamuk, et al., 2019") — those are not contacts.
+              author/reference list. NEVER extract a project name, person, email, company,
+              or date from a citation (e.g. "A. Apamuk, et al., 2019") — those are not
+              proposal data.
             - "value": the total or ceiling dollar amount as a plain number (no \$ or commas).
             - All dates as YYYY-MM-DD.
+            - If a field is not clearly stated on the title page or front matter, use null
+              rather than guessing from unrelated body text.
 
             Document:
             {$text}
@@ -272,6 +283,133 @@ class AnthropicProvider implements AiProviderInterface
         }
     }
 
+    public function generateProposalSection(array $context, string $section): string
+    {
+        $label = $context['section_label'] ?? ucwords(str_replace('_', ' ', $section));
+        $guidance = $context['section_guidance'] ?? '';
+        try {
+            $text = trim($this->complete(
+                "You are an expert U.S. government proposal writer. Write the \"{$label}\" section in polished, persuasive, "
+                . "compliant prose. Match the context's 'style_profile' tone/voice and mirror any 'relevant_past_work' style; "
+                . "treat 'answers' as authoritative. Use ONLY facts in the context — do not invent company details, past "
+                . "performance, personnel, certifications, numbers or dates; insert [NEEDS: …] where a detail is missing. "
+                . "No preamble, no markdown code fences.",
+                "Section to write: {$label}\n{$guidance}\n\nProposal context (JSON):\n" . json_encode($context)
+            ));
+            return $text !== '' ? $text : $this->fallback()->generateProposalSection($context, $section);
+        } catch (\Throwable $e) {
+            Log::warning('Anthropic proposal section failed; using fallback', ['error' => $e->getMessage()]);
+            return $this->fallback()->generateProposalSection($context, $section);
+        }
+    }
+
+    /**
+     * Read a shipping document (PDF) or a label photo (PNG/JPEG/WebP/GIF) directly
+     * with the model's native document/vision support — no OCR binary required —
+     * and pull out every distinct shipment it can find.
+     *
+     * Returns a list of rows: tracking_number (required), carrier, recipient_name,
+     * recipient_address, ship_date, deadline, scope. Returns [] on any failure so
+     * the importer can fall back / report the file as unreadable.
+     *
+     * @param  string  $base64Data  Base64-encoded file contents.
+     * @param  string  $mediaType   e.g. application/pdf, image/png, image/jpeg.
+     * @return array<int, array<string, mixed>>
+     */
+    public function extractShipments(string $base64Data, string $mediaType): array
+    {
+        if (! $this->isAvailable() || $base64Data === '') {
+            return [];
+        }
+
+        $isPdf = $mediaType === 'application/pdf';
+        $fileBlock = $isPdf
+            ? ['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => $base64Data]]
+            : ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $mediaType, 'data' => $base64Data]];
+
+        $system = <<<'SYS'
+            You are a logistics data extractor. You read shipping labels, packing slips,
+            carrier confirmations, and manifests, and return ONLY the shipments actually
+            shown. Never invent a tracking number, name, address, or date. Return ONE JSON
+            object and nothing else — no prose, no markdown.
+            SYS;
+
+        $instruction = <<<'TXT'
+            Extract every distinct package/shipment in this file. Return exactly this JSON:
+
+            {
+              "shipments": [
+                {
+                  "tracking_number": string,
+                  "carrier": "ups"|"fedex"|"usps"|"dhl"|null,
+                  "recipient_name": string|null,
+                  "recipient_address": string|null,
+                  "ship_date": "YYYY-MM-DD"|null,
+                  "deadline": "YYYY-MM-DD"|null,
+                  "scope": "domestic"|"international"|null
+                }
+              ]
+            }
+
+            Rules:
+            - tracking_number is REQUIRED for every entry. Omit any shipment you can't find a tracking number for.
+            - UPS tracking numbers look like 1Z followed by 16 letters/digits. Read carefully; do not guess digits.
+            - "recipient_name"/"recipient_address" are the SHIP TO party, not the sender.
+            - "scope": international if the ship-to country is outside the United States, otherwise domestic. Use null if unclear.
+            - Dates as YYYY-MM-DD. Use null for anything not clearly shown.
+            - If there are no shipments, return {"shipments": []}.
+            TXT;
+
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+                'anthropic-version' => '2023-06-01',
+                'anthropic-beta' => 'pdfs-2024-09-25',
+                'content-type' => 'application/json',
+            ])->timeout((int) config('ai.providers.anthropic.timeout', 60))
+              ->post($this->baseUrl . '/v1/messages', [
+                  'model' => $this->model,
+                  'max_tokens' => 4096,
+                  'system' => $system,
+                  'messages' => [[
+                      'role' => 'user',
+                      'content' => [$fileBlock, ['type' => 'text', 'text' => $instruction]],
+                  ]],
+              ]);
+
+            if (! $response->successful()) {
+                throw new \RuntimeException('Anthropic file extraction failed: ' . $response->status());
+            }
+
+            $data = $this->decodeJsonObject($response->json('content.0.text') ?? '');
+        } catch (\Throwable $e) {
+            Log::warning('Anthropic shipment extraction failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+
+        $rows = [];
+        foreach ($data['shipments'] ?? [] as $s) {
+            if (! is_array($s)) {
+                continue;
+            }
+            $tn = $this->cleanString($s['tracking_number'] ?? null);
+            if (! $tn) {
+                continue;
+            }
+            $rows[] = [
+                'tracking_number' => preg_replace('/\s+/', '', $tn),
+                'carrier' => $this->cleanString($s['carrier'] ?? null),
+                'recipient_name' => $this->cleanString($s['recipient_name'] ?? null),
+                'recipient_address' => $this->cleanString($s['recipient_address'] ?? null),
+                'deadline' => $this->cleanString($s['deadline'] ?? null),
+                'scope' => $this->cleanString($s['scope'] ?? null),
+            ];
+        }
+
+        return $rows;
+    }
+
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string
     {
         try {
@@ -297,4 +435,11 @@ class AnthropicProvider implements AiProviderInterface
             throw $e;
         }
     }
+
+    public function extractDocumentVision(string $base64Data, string $mediaType): array { return []; }
+
+    public function research(string $query): string { return ''; }
+
+    /** Anthropic has no first-party embeddings API; RAG uses the Gemini tier. */
+    public function embed(array $texts): array { return []; }
 }

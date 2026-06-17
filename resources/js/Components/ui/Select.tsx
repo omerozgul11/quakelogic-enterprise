@@ -77,7 +77,7 @@ export function Select({ value, options, onChange, placeholder, className, size 
                 onClick={() => (open ? setOpen(false) : openMenu())}
                 className={cn(
                     'inline-flex items-center justify-between gap-2 rounded-lg border border-input bg-card text-left transition-colors',
-                    'hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400',
+                    'hover:border-muted-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                     size === 'sm' ? 'h-8 pl-2.5 pr-2 text-xs' : 'h-10 pl-3 pr-2.5 text-sm',
                     className,
                 )}

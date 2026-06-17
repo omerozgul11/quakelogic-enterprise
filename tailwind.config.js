@@ -54,7 +54,7 @@ export default {
             boxShadow: {
                 soft: '0 1px 2px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.05)',
                 lift: '0 6px 16px -6px rgba(15,23,42,0.16)',
-                glow: '0 4px 14px -4px rgba(242,101,34,0.45)',
+                glow: '0 8px 24px -10px rgba(234,108,52,0.42)',
             },
             keyframes: {
                 'fade-in': {

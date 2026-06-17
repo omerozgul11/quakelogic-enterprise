@@ -15,6 +15,9 @@ class DatabaseSeeder extends Seeder
             OrganizationSeeder::class,
             RolesPermissionsSeeder::class,
             UserSeeder::class,
+            // Starter proposal template library (Phase 7) — useful default content,
+            // not demo business data, so it's safe to seed on a clean install.
+            ProposalTemplateSeeder::class,
         ]);
 
         // Demo data seeders (disabled). Re-enable to repopulate sample records:

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OpportunityAssignmentStage;
 use App\Enums\OpportunitySource;
 use App\Enums\OpportunityStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,11 +16,14 @@ use Laravel\Scout\Searchable;
 class Opportunity extends Model
 {
     use HasFactory, Searchable, SoftDeletes;
+    use \App\Models\Concerns\Auditable;
 
     protected $fillable = [
         'ulid', 'organization_id', 'created_by', 'updated_by', 'assigned_to', 'owner_id',
         'title', 'solicitation_number', 'opportunity_number', 'source', 'external_id', 'source_url',
         'status', 'set_aside_type', 'contract_type', 'naics_code', 'psc_code',
+        'assignment_stage', 'assigned_at', 'accepted_at', 'last_activity_at',
+        'ownership_locked', 'ownership_locked_at', 'assignment_escalation_level',
         'agency_name', 'sub_agency_name', 'agency_id', 'company_id',
         'place_of_performance_city', 'place_of_performance_state', 'place_of_performance_country',
         'estimated_value', 'estimated_value_low', 'estimated_value_high', 'currency', 'probability_of_win',
@@ -34,7 +38,14 @@ class Opportunity extends Model
     {
         return [
             'status' => OpportunityStatus::class,
+            'assignment_stage' => OpportunityAssignmentStage::class,
             'source' => OpportunitySource::class,
+            'assigned_at' => 'datetime',
+            'accepted_at' => 'datetime',
+            'last_activity_at' => 'datetime',
+            'ownership_locked' => 'boolean',
+            'ownership_locked_at' => 'datetime',
+            'assignment_escalation_level' => 'integer',
             'posted_date' => 'date',
             'due_date' => 'date',
             'response_deadline' => 'date',
@@ -123,6 +134,16 @@ class Opportunity extends Model
         return $this->hasMany(FollowUp::class);
     }
 
+    public function userStates(): HasMany
+    {
+        return $this->hasMany(OpportunityUserState::class);
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(OpportunityEvent::class)->latest('created_at');
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'taskable_id')->where('taskable_type', self::class);
@@ -144,7 +165,30 @@ class Opportunity extends Model
 
     public function getDueDateRemainingAttribute(): ?int
     {
-        return $this->due_date ? now()->diffInDays($this->due_date, false) : null;
+        return $this->due_date ? (int) now()->startOfDay()->diffInDays($this->due_date, false) : null;
+    }
+
+    /** Whole days since the opportunity was assigned (null if never assigned). */
+    public function getDaysSinceAssignmentAttribute(): ?int
+    {
+        return $this->assigned_at ? (int) $this->assigned_at->diffInDays(now()) : null;
+    }
+
+    /** Whole days since the last recorded activity on the opportunity. */
+    public function getDaysSinceActivityAttribute(): ?int
+    {
+        return $this->last_activity_at ? (int) $this->last_activity_at->diffInDays(now()) : null;
+    }
+
+    /**
+     * Days until the response deadline (response_deadline preferred, else
+     * due_date). Negative once past due. Null when neither date is set.
+     */
+    public function getDaysUntilDeadlineAttribute(): ?int
+    {
+        $deadline = $this->response_deadline ?? $this->due_date;
+
+        return $deadline ? (int) now()->startOfDay()->diffInDays($deadline, false) : null;
     }
 
     public function scopeActive($query)

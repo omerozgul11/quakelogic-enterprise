@@ -5,6 +5,7 @@ import { Button } from '@/Components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { StatCard } from '@/Components/ui/StatCard';
 import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
 import { formatDate, generatePassword } from '@/Lib/utils';
 import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check, Mail } from 'lucide-react';
 import { useState } from 'react';
@@ -26,8 +27,63 @@ interface User {
     email: string;
     is_active: boolean;
     created_at: string;
+    title?: string | null;
+    phone?: string | null;
+    department?: string | null;
+    pipeline_keywords?: string[];
+    product_expertise?: string[];
+    industry_expertise?: string[];
+    geographic_focus?: string[];
+    min_opportunity_value?: number | string | null;
+    max_opportunity_value?: number | string | null;
+    workload_score?: number | null;
     roles: Array<{ id: number; name: string }>;
     mailbox: MailboxState;
+}
+
+/** Expertise / opportunity-matching profile fields, shared by create + edit. */
+function ProfileFields({ form }: { form: { data: Record<string, unknown>; setData: (key: string, value: unknown) => void } }) {
+    const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => form.setData(k, e.target.value);
+    const str = (k: string) => (form.data[k] as string | undefined) ?? '';
+    return (
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-secondary/20 p-4 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Expertise &amp; opportunity matching
+            </p>
+            <div>
+                <label className="label">Job title</label>
+                <input type="text" className="input" value={str('title')} onChange={set('title')} placeholder="e.g., Business Development Manager" />
+            </div>
+            <div>
+                <label className="label">Department</label>
+                <input type="text" className="input" value={str('department')} onChange={set('department')} placeholder="e.g., Business Development" />
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label">Keywords <span className="font-normal text-muted-foreground">(comma-separated — drives the daily match feed &amp; digest)</span></label>
+                <textarea className="input min-h-[56px]" value={str('pipeline_keywords')} onChange={set('pipeline_keywords')} placeholder="Seismic, Shake Table, Nuclear, Structural Health Monitoring" />
+            </div>
+            <div>
+                <label className="label">Product expertise</label>
+                <input type="text" className="input" value={str('product_expertise')} onChange={set('product_expertise')} placeholder="Seismographs, SHM Systems" />
+            </div>
+            <div>
+                <label className="label">Industry expertise</label>
+                <input type="text" className="input" value={str('industry_expertise')} onChange={set('industry_expertise')} placeholder="Nuclear, Government" />
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label">Geographic focus</label>
+                <input type="text" className="input" value={str('geographic_focus')} onChange={set('geographic_focus')} placeholder="United States, International" />
+            </div>
+            <div>
+                <label className="label">Min opportunity value ($)</label>
+                <NumberInput value={str('min_opportunity_value')} onChange={set('min_opportunity_value')} className="input" />
+            </div>
+            <div>
+                <label className="label">Max opportunity value ($)</label>
+                <NumberInput value={str('max_opportunity_value')} onChange={set('max_opportunity_value')} className="input" />
+            </div>
+        </div>
+    );
 }
 
 const SMTP_PRESETS: Record<string, { host: string; port: string; enc: string }> = {
@@ -104,7 +160,7 @@ function AdminMailbox({ user }: { user: User }) {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="label">Port</label>
-                                <input type="number" value={form.data.smtp_port} onChange={e => form.setData('smtp_port', e.target.value)} className="input" required />
+                                <NumberInput allowDecimal={false} value={form.data.smtp_port} onChange={e => form.setData('smtp_port', e.target.value)} className="input" required />
                             </div>
                             <div>
                                 <label className="label">Encryption</label>
@@ -160,13 +216,36 @@ export default function AdminIndex({ users, roles }: Props) {
 
     const defaultBase = roles.find(r => r.name === 'Read Only')?.name ?? roles[0]?.name ?? '';
 
-    const edit = useForm({ name: '', is_active: true, role: '', custom_role: '', base_role: defaultBase });
-    const create = useForm({ name: '', email: '', password: '', password_confirmation: '', role: roles[0]?.name ?? '', custom_role: '', base_role: defaultBase });
+    const profileDefaults = {
+        title: '', phone: '', department: '',
+        pipeline_keywords: '', product_expertise: '', industry_expertise: '', geographic_focus: '',
+        min_opportunity_value: '', max_opportunity_value: '',
+    };
+    const csv = (a?: string[]) => (a ?? []).join(', ');
+    const num = (v?: number | string | null) => (v === null || v === undefined ? '' : String(v));
+
+    const edit = useForm({ name: '', is_active: true, role: '', custom_role: '', base_role: defaultBase, ...profileDefaults });
+    const create = useForm({ name: '', email: '', password: '', password_confirmation: '', role: roles[0]?.name ?? '', custom_role: '', base_role: defaultBase, ...profileDefaults });
 
     const startEdit = (user: User) => {
         setShowCreate(false);
         setEditingUser(user);
-        edit.setData({ name: user.name, is_active: user.is_active, role: user.roles[0]?.name ?? '', custom_role: '', base_role: defaultBase });
+        edit.setData({
+            name: user.name,
+            is_active: user.is_active,
+            role: user.roles[0]?.name ?? '',
+            custom_role: '',
+            base_role: defaultBase,
+            title: user.title ?? '',
+            phone: user.phone ?? '',
+            department: user.department ?? '',
+            pipeline_keywords: csv(user.pipeline_keywords),
+            product_expertise: csv(user.product_expertise),
+            industry_expertise: csv(user.industry_expertise),
+            geographic_focus: csv(user.geographic_focus),
+            min_opportunity_value: num(user.min_opportunity_value),
+            max_opportunity_value: num(user.max_opportunity_value),
+        });
     };
 
     const handleSave = (e: React.FormEvent) => {
@@ -317,6 +396,8 @@ export default function AdminIndex({ users, roles }: Props) {
                                     </div>
                                 )}
 
+                                <ProfileFields form={create} />
+
                                 <p className="text-xs text-muted-foreground">The user can change their own name, email and password later under Settings.</p>
                                 <div className="flex gap-2">
                                     <Button type="submit" disabled={create.processing}>{create.processing ? 'Creating…' : 'Create user'}</Button>
@@ -387,6 +468,8 @@ export default function AdminIndex({ users, roles }: Props) {
                                     </div>
                                 )}
 
+                                <ProfileFields form={edit} />
+
                                 <div className="flex gap-2">
                                     <Button type="submit" disabled={edit.processing}>Save</Button>
                                     <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>Cancel</Button>
@@ -414,7 +497,14 @@ export default function AdminIndex({ users, roles }: Props) {
                             <tbody className="divide-y divide-border">
                                 {users.data.map(user => (
                                     <tr key={user.id} className="row-link">
-                                        <td className="td font-medium text-foreground">{user.name}</td>
+                                        <td className="td font-medium text-foreground">
+                                            {user.name}
+                                            {(user.title || user.department) && (
+                                                <div className="text-xs font-normal text-muted-foreground">
+                                                    {[user.title, user.department].filter(Boolean).join(' · ')}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="td text-muted-foreground">
                                             <span className="inline-flex items-center gap-1.5">
                                                 {user.email}

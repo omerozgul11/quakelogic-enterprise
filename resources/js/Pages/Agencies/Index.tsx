@@ -4,6 +4,7 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
+import { SearchInput } from '@/Components/ui/SearchInput';
 import { Agency, PaginatedResponse } from '@/Types';
 import { Building, ExternalLink, Search, X, Plus } from 'lucide-react';
 
@@ -15,7 +16,7 @@ interface Props {
 
 export default function AgenciesIndex({ agencies, filters, can }: Props) {
     const handleFilter = (value: string) => {
-        router.get('/agencies', value ? { search: value } : {}, { preserveState: true });
+        router.get('/agencies', value ? { search: value } : {}, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     return (
@@ -38,16 +39,12 @@ export default function AgenciesIndex({ agencies, filters, can }: Props) {
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative min-w-[18rem] flex-1">
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search agencies…"
-                                defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && handleFilter((e.target as HTMLInputElement).value)}
-                                className="input input-with-icon"
-                            />
-                        </div>
+                        <SearchInput
+                            className="min-w-[18rem] flex-1"
+                            initial={filters.search ?? ''}
+                            onSearch={handleFilter}
+                            placeholder="Search agencies…"
+                        />
                         {filters.search && (
                             <button onClick={() => router.get('/agencies')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear

@@ -7,7 +7,14 @@ import {
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Pill } from '@/Components/ui/Pill';
 import { Select } from '@/Components/ui/Select';
+import { Combobox } from '@/Components/ui/Combobox';
 import { formatDate, formatDateTime } from '@/Lib/utils';
+
+interface LinkableProposal {
+    id: number;
+    label: string;
+    due_date: string | null;
+}
 
 interface TrackingEvent {
     id: number;
@@ -30,6 +37,7 @@ interface Doc {
 interface Mailing {
     ulid: string;
     ups_tracking_number: string;
+    carrier: string;
     carrier_label: string;
     tracking_url: string | null;
     scope: string;
@@ -38,13 +46,18 @@ interface Mailing {
     recipient_name: string | null;
     recipient_address: string | null;
     deadline: string | null;
+    status: string;
     status_label: string;
     status_color: string;
     risk_label: string;
     risk_color: string;
     scheduled_delivery: string | null;
     delivered_at: string | null;
+    delivered_on: string | null;
     received_by: string | null;
+    auto_track: boolean;
+    current_location: string | null;
+    last_update: string | null;
     proof_url: string | null;
     proposal: { id: number; project_name: string; proposal_number: string | null } | null;
     created_by: string | null;
@@ -68,7 +81,16 @@ const DOC_TYPES = [
     { value: 'other', label: 'Other' },
 ];
 
-export default function MailingsShow({ mailing }: { mailing: Mailing }) {
+const STATUS_OPTIONS = [
+    { value: 'label_created', label: 'Label created' },
+    { value: 'in_transit', label: 'In transit' },
+    { value: 'out_for_delivery', label: 'Out for delivery' },
+    { value: 'delivered', label: 'Delivered' },
+    { value: 'exception', label: 'Exception' },
+    { value: 'returned', label: 'Returned to sender' },
+];
+
+export default function MailingsShow({ mailing, linkableProposals }: { mailing: Mailing; linkableProposals: LinkableProposal[] }) {
     const [refreshing, setRefreshing] = useState(false);
     const [editing, setEditing] = useState(false);
     const [docType, setDocType] = useState('label');
@@ -76,11 +98,28 @@ export default function MailingsShow({ mailing }: { mailing: Mailing }) {
     const fileRef = useRef<HTMLInputElement>(null);
 
     const form = useForm({
+        ups_tracking_number: mailing.ups_tracking_number,
+        carrier: mailing.carrier,
+        proposal_submission_id: mailing.proposal?.id ? String(mailing.proposal.id) : '',
+        status: mailing.status,
+        auto_track: mailing.auto_track,
         recipient_name: mailing.recipient_name ?? '',
         recipient_address: mailing.recipient_address ?? '',
         deadline: mailing.deadline ?? '',
         scope: mailing.scope,
+        scheduled_delivery: mailing.scheduled_delivery ?? '',
+        delivered_at: mailing.delivered_on ?? '',
+        received_by: mailing.received_by ?? '',
     });
+
+    const proposalOptions = linkableProposals.map(p => ({ value: String(p.id), label: p.label }));
+
+    // Changing the status by hand implies a manual override — pause UPS auto-sync
+    // so the next poll doesn't revert it (the user can re-enable it below).
+    const onStatusChange = (v: string) => {
+        form.setData('status', v);
+        if (v !== mailing.status) form.setData('auto_track', false);
+    };
 
     const refresh = () => {
         setRefreshing(true);
@@ -110,10 +149,10 @@ export default function MailingsShow({ mailing }: { mailing: Mailing }) {
 
     return (
         <ShipmentsLayout>
-            <Head title={`Mailing ${mailing.ups_tracking_number}`} />
+            <Head title={`Shipment ${mailing.ups_tracking_number}`} />
             <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
                 <Link href="/shipments/mailings" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="h-4 w-4" /> Back to mailings
+                    <ArrowLeft className="h-4 w-4" /> Back to shipments
                 </Link>
 
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -132,6 +171,12 @@ export default function MailingsShow({ mailing }: { mailing: Mailing }) {
                             <Pill color={mailing.status_color} label={mailing.status_label} />
                             <Pill color={mailing.risk_color} label={mailing.risk_label} />
                         </div>
+                        {mailing.current_location && (
+                            <p className="mt-2 inline-flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                                <MapPin className="h-3.5 w-3.5 text-primary" /> Currently at {mailing.current_location}
+                                {mailing.last_update && <span className="text-muted-foreground/60">· {formatDateTime(mailing.last_update)}</span>}
+                            </p>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => setEditing(v => !v)} className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary">
@@ -149,6 +194,26 @@ export default function MailingsShow({ mailing }: { mailing: Mailing }) {
                             {editing ? (
                                 <form onSubmit={save} className="space-y-4">
                                     <div>
+                                        <label className="label">Tracking number</label>
+                                        <input value={form.data.ups_tracking_number} onChange={e => form.setData('ups_tracking_number', e.target.value)} className="input font-mono" />
+                                        {form.errors.ups_tracking_number && <p className="mt-1 text-xs text-destructive">{form.errors.ups_tracking_number}</p>}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="label">Carrier</label>
+                                            <Select value={form.data.carrier} onChange={v => form.setData('carrier', v)} className="w-full" options={[{ value: 'ups', label: 'UPS' }]} />
+                                        </div>
+                                        <div>
+                                            <label className="label">Status</label>
+                                            <Select value={form.data.status} onChange={onStatusChange} className="w-full" options={STATUS_OPTIONS} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="label">Linked proposal</label>
+                                        <Combobox value={form.data.proposal_submission_id} options={proposalOptions} onChange={v => form.setData('proposal_submission_id', v)} placeholder="Search proposals…" />
+                                        <p className="mt-1 text-xs text-muted-foreground">Pick the right one, or clear (×) to unlink — overrides an auto-match.</p>
+                                    </div>
+                                    <div>
                                         <label className="label">Category</label>
                                         <Select value={form.data.scope} onChange={v => form.setData('scope', v)} className="w-full"
                                             options={[{ value: 'domestic', label: 'Domestic' }, { value: 'international', label: 'International' }]} />
@@ -165,6 +230,35 @@ export default function MailingsShow({ mailing }: { mailing: Mailing }) {
                                         <label className="label">Deadline</label>
                                         <input type="date" value={form.data.deadline} onChange={e => form.setData('deadline', e.target.value)} className="input" />
                                     </div>
+
+                                    <div className="space-y-4 border-t border-border pt-4">
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Delivery details</p>
+                                        <div>
+                                            <label className="label">Scheduled delivery</label>
+                                            <input type="date" value={form.data.scheduled_delivery} onChange={e => form.setData('scheduled_delivery', e.target.value)} className="input" />
+                                        </div>
+                                        {form.data.status === 'delivered' && (
+                                            <>
+                                                <div>
+                                                    <label className="label">Delivered on</label>
+                                                    <input type="date" value={form.data.delivered_at} onChange={e => form.setData('delivered_at', e.target.value)} className="input" />
+                                                </div>
+                                                <div>
+                                                    <label className="label">Received by</label>
+                                                    <input value={form.data.received_by} onChange={e => form.setData('received_by', e.target.value)} className="input" placeholder="Name at delivery" />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-secondary/30 p-3">
+                                        <input type="checkbox" checked={form.data.auto_track} onChange={e => form.setData('auto_track', e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+                                        <span className="text-sm">
+                                            <span className="font-medium text-foreground">Auto-sync from UPS</span>
+                                            <span className="mt-0.5 block text-xs text-muted-foreground">When on, the UPS poll updates this shipment. Turn off to keep your manual status — UPS won't overwrite it.</span>
+                                        </span>
+                                    </label>
+
                                     <button type="submit" disabled={form.processing} className="bg-brand-gradient shadow-glow w-full rounded-full py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60">
                                         {form.processing ? 'Saving…' : 'Save changes'}
                                     </button>
@@ -187,6 +281,11 @@ export default function MailingsShow({ mailing }: { mailing: Mailing }) {
                                         <a href={mailing.proof_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
                                             <ExternalLink className="h-4 w-4" /> Proof of delivery
                                         </a>
+                                    )}
+                                    {!mailing.auto_track && (
+                                        <p className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                            Manual status — UPS auto-sync off
+                                        </p>
                                     )}
                                     {mailing.created_by && <p className="pt-1 text-xs text-muted-foreground">Added by {mailing.created_by}</p>}
                                 </dl>

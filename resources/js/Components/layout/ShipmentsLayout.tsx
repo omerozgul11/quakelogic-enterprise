@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Truck, Plug, ShieldCheck, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown,
+    LayoutDashboard, Truck, Plug, ShieldCheck, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown, UploadCloud,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
+import { clearChat } from '@/Lib/chatStore';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
+import { HeaderClock } from '@/Components/layout/HeaderClock';
+import { ShipmentsAiChat } from '@/Components/layout/ShipmentsAiChat';
 
 interface NavItem {
     label: string;
@@ -16,13 +19,18 @@ interface NavItem {
 
 const navItems: NavItem[] = [
     { label: 'Dashboard', href: '/shipments', icon: LayoutDashboard },
-    { label: 'Mailings', href: '/shipments/mailings', icon: Truck },
+    { label: 'Shipments', href: '/shipments/mailings', icon: Truck },
+    { label: 'Import', href: '/shipments/mailings/import', icon: UploadCloud },
     { label: 'Carriers', href: '/shipments/carriers', icon: Plug },
     { label: 'Access', href: '/shipments/admin', icon: ShieldCheck, adminOnly: true },
 ];
 
 function isActive(path: string, href: string): boolean {
     if (href === '/shipments') return path === '/shipments';
+    // Keep "Shipments" from also lighting up on the dedicated Import page.
+    if (href === '/shipments/mailings') {
+        return (path === href || path.startsWith(href + '/')) && !path.startsWith('/shipments/mailings/import');
+    }
     return path === href || path.startsWith(href + '/');
 }
 
@@ -63,13 +71,14 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
     const [dark, toggleDark] = useDarkMode();
     const user = auth.user;
     const isAdmin = user?.roles?.includes('Super Admin') ?? false;
+    const canUseAi = user?.permissions?.includes('use ai assistant') ?? false;
     const recentNotifications = notifications ?? [];
 
     const openNotification = (n: SharedProps['notifications'][number]) => {
         setNotifOpen(false);
         if (n.url) router.post(`/notifications/${n.id}/read`, { follow: true }, { preserveScroll: true });
     };
-    const handleLogout = () => router.post('/logout');
+    const handleLogout = () => { clearChat(); router.post('/logout'); };
 
     const SidebarBody = ({ mobile = false }: { mobile?: boolean }) => (
         <div className="flex h-full flex-col">
@@ -88,7 +97,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                 </span>
             </div>
 
-            <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
+            <nav className="sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
                 {navItems.filter(item => !item.adminOnly || isAdmin).map(item => {
                     const Icon = item.icon;
                     const active = isActive(path, item.href);
@@ -97,20 +106,17 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                             key={item.href}
                             href={item.href}
                             onClick={() => mobile && setSidebarOpen(false)}
-                            className={cn(
-                                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                                active ? 'bg-brand-gradient text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                            )}
+                            className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
                         >
-                            <Icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
+                            <Icon className="h-[18px] w-[18px] shrink-0" />
                             <span className="min-w-0 truncate">{item.label}</span>
                         </Link>
                     );
                 })}
             </nav>
 
-            <div className="border-t border-border p-3">
-                <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+            <div className="mt-auto p-3">
+                <div className="flex items-center gap-3 rounded-lg bg-secondary/40 px-2 py-2">
                     <span className={cn('flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white', avatarGradient(user?.name))}>
                         {getInitials(user?.name)}
                     </span>
@@ -124,29 +130,32 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
     );
 
     return (
-        <div className="flex min-h-screen bg-background">
+        <div className="ql-liquid flex min-h-screen">
             {sidebarOpen && (
                 <div className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
             )}
 
             <aside className={cn(
-                'fixed inset-y-0 left-0 z-50 w-64 transform border-r border-border bg-card shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
+                'glass-panel fixed inset-y-0 left-0 z-50 w-64 transform shadow-2xl transition-transform duration-300 ease-in-out lg:hidden',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
                 <SidebarBody mobile />
             </aside>
 
-            <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:block">
+            <aside className="glass-panel hidden w-64 shrink-0 lg:block">
                 <div className="sticky top-0 h-screen"><SidebarBody /></div>
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">
-                <header className="glass sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border px-4 sm:px-6">
+                <header className="glass sticky top-0 z-30 flex h-16 items-center gap-2 px-4 shadow-[0_6px_24px_-14px_rgba(15,23,42,0.5)] sm:px-6">
                     <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
                         <Menu className="h-6 w-6 text-muted-foreground" />
                     </button>
 
                     <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+                        <HeaderClock />
+                        {canUseAi && <ShipmentsAiChat />}
+
                         <button
                             onClick={toggleDark}
                             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -230,9 +239,9 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                     </div>
                 )}
 
-                <main key={path} className="animate-fade-in flex-1">{children}</main>
+                <main key={path} className="animate-page flex-1">{children}</main>
 
-                <footer className="border-t border-border py-4 text-center text-xs text-muted-foreground">
+                <footer className="py-4 text-center text-xs text-muted-foreground">
                     QuakeLogic Shipments — © {new Date().getFullYear()} QuakeLogic Inc.
                 </footer>
             </div>

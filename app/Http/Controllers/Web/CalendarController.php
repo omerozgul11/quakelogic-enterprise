@@ -92,6 +92,10 @@ class CalendarController extends Controller
                 'proposals' => $proposals->count(),
                 'opportunities' => $opportunities->count(),
             ],
+            'can' => [
+                'createProposal' => $user->can('create proposals'),
+                'createOpportunity' => $user->can('create opportunities'),
+            ],
         ]);
     }
 }

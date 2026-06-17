@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
 import { formatPercent, formatCurrency } from '@/Lib/utils';
 import { ArrowLeft, Plus, Percent } from 'lucide-react';
 import { useState } from 'react';
@@ -90,15 +91,15 @@ export default function CommissionRules({ rules }: Props) {
                                 {data.type === 'percentage' && (
                                     <div>
                                         <label className="label">Rate (%)</label>
-                                        <input type="number" value={data.rate} onChange={e => setData('rate', e.target.value)}
-                                            min="0" max="100" step="0.1" className="input" />
+                                        <NumberInput value={data.rate} onChange={e => setData('rate', e.target.value)}
+                                            className="input" />
                                     </div>
                                 )}
                                 {data.type === 'fixed' && (
                                     <div>
                                         <label className="label">Fixed Amount ($)</label>
-                                        <input type="number" value={data.fixed_amount} onChange={e => setData('fixed_amount', e.target.value)}
-                                            min="0" step="0.01" className="input" />
+                                        <NumberInput value={data.fixed_amount} onChange={e => setData('fixed_amount', e.target.value)}
+                                            className="input" />
                                     </div>
                                 )}
                                 <div className="flex gap-2">

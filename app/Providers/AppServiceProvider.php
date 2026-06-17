@@ -10,6 +10,7 @@ use App\Services\BidSources\BidPrime\FakeBidPrimeClient;
 use App\Services\BidSources\OpportunityDeduplicationService;
 use App\Services\BidSources\SamGov\SamGovImportService;
 use App\Listeners\RefreshPipelineOnLogin;
+use App\Observers\EmbeddingObserver;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +69,12 @@ class AppServiceProvider extends ServiceProvider
         // Keep the opportunity pipeline fresh on every login (purge past-due +
         // throttled SAM.gov refresh).
         Event::listen(Login::class, RefreshPipelineOnLogin::class);
+
+        // Keep the AI knowledge base in sync: re-embed a record whenever it's
+        // created/updated/deleted, so QuakeBot answers from current data.
+        foreach (array_keys(EmbeddingObserver::KIND_MAP) as $modelClass) {
+            $modelClass::observe(EmbeddingObserver::class);
+        }
 
         if ($this->app->isLocal()) {
             DB::listen(function ($query) {

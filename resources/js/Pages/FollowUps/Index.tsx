@@ -1,12 +1,13 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Select } from '@/Components/ui/Select';
+import { Checkbox } from '@/Components/ui/Checkbox';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { cn, formatDateTime, formatRelativeDate } from '@/Lib/utils';
-import { MessageSquare, Send, Plus, Sparkles, ExternalLink, Mail, X, User as UserIcon, FileText } from 'lucide-react';
+import { MessageSquare, Send, Plus, Sparkles, ExternalLink, Mail, X, User as UserIcon, FileText, Pin, Trash2, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
 
 interface ThreadMessage {
@@ -23,6 +24,7 @@ interface ThreadMessage {
     mine: boolean;
     contact: string | null;
     automated: boolean;
+    unread: boolean;
 }
 
 interface Thread {
@@ -36,6 +38,7 @@ interface Thread {
     messages: ThreadMessage[];
     count: number;
     last_at: string | null;
+    pinned: boolean;
 }
 
 interface Props {
@@ -54,8 +57,71 @@ export default function FollowUpsIndex({ threads, proposals, users, mailbox }: P
     const [composing, setComposing] = useState(false);
     const [target, setTarget] = useState('general');
 
+    // Message ids that were unread when this inbox first loaded — keep their dot
+    // visible for the session even after we mark them read on open, so you can see
+    // what was new. Thread keys opened this session clear the list dot instantly.
+    const [seenUnread] = useState<Set<number>>(() => new Set(threads.flatMap(t => t.messages.filter(m => m.unread).map(m => m.id))));
+    const [openedKeys, setOpenedKeys] = useState<Set<string>>(new Set());
+
+    const msgUnread = (m: ThreadMessage) => m.unread || seenUnread.has(m.id);
+    const threadUnread = (t: Thread) => !openedKeys.has(t.key) && t.messages.some(m => m.unread);
+
     const reply = useForm({ subject: '', message: '' });
     const selected = threads.find(t => t.key === selectedKey) ?? null;
+
+    // Bulk selection happens in the conversation list on the left: tick one or
+    // more conversations, then mark them read or delete them. Selection is by
+    // thread key; the message ids are gathered from the selected threads.
+    const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+    const clearSelection = () => setSelectedKeys(new Set());
+    const toggleThread = (key: string) => setSelectedKeys(prev => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    });
+
+    const allKeys = threads.map(t => t.key);
+    const allSelected = allKeys.length > 0 && allKeys.every(k => selectedKeys.has(k));
+    const toggleSelectAll = () => setSelectedKeys(prev =>
+        allKeys.length > 0 && allKeys.every(k => prev.has(k)) ? new Set() : new Set(allKeys));
+
+    const selectedMessageIds = () =>
+        threads.filter(t => selectedKeys.has(t.key)).flatMap(t => t.messages.map(m => m.id));
+
+    const markSelectedRead = () => {
+        const ids = selectedMessageIds();
+        if (!ids.length) { clearSelection(); return; }
+        router.post('/follow-ups/read', { ids }, { preserveScroll: true, onSuccess: clearSelection });
+    };
+
+    const deleteIds = (ids: number[], confirmText: string) => {
+        if (!ids.length) return;
+        if (!confirm(confirmText)) return;
+        router.post('/follow-ups/delete', { ids }, { preserveScroll: true, onSuccess: clearSelection });
+    };
+
+    const deleteSelected = () => {
+        const ids = selectedMessageIds();
+        const n = selectedKeys.size;
+        deleteIds(ids, `Delete ${n} conversation${n === 1 ? '' : 's'} (${ids.length} message${ids.length === 1 ? '' : 's'})? This cannot be undone.`);
+    };
+
+    // Open a conversation; mark its unread messages read (clears the nav badge and
+    // this thread's list dot) without disturbing the per-message dots in view.
+    const togglePin = (key: string) => {
+        router.post('/follow-ups/pin', { key }, { preserveScroll: true, preserveState: true, only: ['threads'] });
+    };
+
+    const openThread = (key: string) => {
+        setSelectedKey(key);
+        setComposing(false);
+        const t = threads.find(x => x.key === key);
+        const unreadIds = t ? t.messages.filter(m => m.unread).map(m => m.id) : [];
+        if (unreadIds.length) {
+            setOpenedKeys(prev => new Set(prev).add(key));
+            router.post('/follow-ups/read', { ids: unreadIds }, { preserveScroll: true, preserveState: true, only: ['inbox_unread_count'] });
+        }
+    };
 
     // Reply within the open conversation — replies to the same coworker /
     // proposal the thread belongs to.
@@ -95,7 +161,7 @@ export default function FollowUpsIndex({ threads, proposals, users, mailbox }: P
 
     const targetOptions = [
         ...users.map(u => ({ value: `user:${u.id}`, label: `${u.name}` })),
-        { value: 'general', label: 'General — note to self' },
+        { value: 'general', label: 'Daily Summary — note to self' },
         ...proposals.map(p => ({ value: `proposal:${p.id}`, label: `${p.proposal_number} — ${p.project_name}` })),
     ];
 
@@ -124,32 +190,86 @@ export default function FollowUpsIndex({ threads, proposals, users, mailbox }: P
 
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-[20rem_1fr]">
                     {/* Conversation list */}
-                    <div className="card-surface overflow-hidden">
-                        <div className="max-h-[calc(100vh-16rem)] overflow-y-auto">
+                    <div className="card-surface flex max-h-[calc(100vh-16rem)] flex-col overflow-hidden">
+                        {/* Bulk action bar — appears once one or more conversations are ticked */}
+                        {selectedKeys.size > 0 && (
+                            <div className="flex items-center gap-2 border-b border-border bg-secondary/40 px-3 py-2">
+                                <Checkbox
+                                    checked={allSelected}
+                                    indeterminate={!allSelected}
+                                    onChange={toggleSelectAll}
+                                    ariaLabel="Select all conversations"
+                                    title={allSelected ? 'Clear selection' : 'Select all'}
+                                />
+                                <span className="text-xs font-medium text-foreground">{selectedKeys.size} selected</span>
+                                <div className="ml-auto flex items-center gap-1">
+                                    <button type="button" onClick={markSelectedRead} title="Mark as read"
+                                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                                        <CheckCheck className="h-4 w-4" />
+                                    </button>
+                                    <button type="button" onClick={deleteSelected} title="Delete"
+                                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                    <button type="button" onClick={clearSelection} title="Clear selection"
+                                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex-1 overflow-y-auto">
                             {threads.map(t => {
                                 const last = t.messages[t.messages.length - 1];
                                 const preview = (last?.message || last?.subject || '').replace(/\s+/g, ' ').trim();
                                 const active = t.key === selectedKey && !composing;
+                                const unread = threadUnread(t);
+                                const checked = selectedKeys.has(t.key);
                                 const Icon = t.kind === 'direct' ? UserIcon : t.kind === 'proposal' ? FileText : MessageSquare;
                                 return (
-                                    <button
+                                    <div
                                         key={t.key}
-                                        onClick={() => { setSelectedKey(t.key); setComposing(false); }}
                                         className={cn(
-                                            'flex w-full flex-col gap-0.5 border-b border-border px-4 py-3 text-left transition-colors',
-                                            active ? 'bg-primary/[0.06]' : 'hover:bg-secondary/50',
+                                            'group flex items-stretch border-b border-border transition-colors',
+                                            checked ? 'bg-primary/[0.08]' : active ? 'bg-primary/[0.06]' : 'hover:bg-secondary/50',
                                         )}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{t.project_name}</span>
-                                            <span className="shrink-0 text-[11px] text-muted-foreground">{t.last_at ? formatRelativeDate(t.last_at) : ''}</span>
+                                        <div className="flex shrink-0 items-center pl-3">
+                                            <Checkbox checked={checked} onChange={() => toggleThread(t.key)} ariaLabel={`Select ${t.project_name}`} />
                                         </div>
-                                        <span className="truncate pl-5 font-mono text-[11px] text-muted-foreground">
-                                            {t.proposal_number ?? (t.kind === 'direct' ? 'Direct message' : `${t.count} message${t.count === 1 ? '' : 's'}`)}
-                                        </span>
-                                        {preview && <span className="truncate pl-5 text-xs text-muted-foreground">{preview}</span>}
-                                    </button>
+                                        <button
+                                            onClick={() => openThread(t.key)}
+                                            className="flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-3 text-left"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn('h-2 w-2 shrink-0 rounded-full', unread ? 'bg-orange-500' : 'bg-transparent')} aria-hidden={!unread} />
+                                                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                <span className={cn('min-w-0 flex-1 truncate text-sm text-foreground', unread ? 'font-bold' : 'font-semibold')}>{t.project_name}</span>
+                                                <span className="shrink-0 text-[11px] text-muted-foreground">{t.last_at ? formatRelativeDate(t.last_at) : ''}</span>
+                                                {t.kind === 'general' ? (
+                                                    <span title="Always pinned" className="shrink-0 p-0.5 text-primary">
+                                                        <Pin className="h-3.5 w-3.5 fill-current" />
+                                                    </span>
+                                                ) : (
+                                                    <span
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        title={t.pinned ? 'Unpin' : 'Pin to top'}
+                                                        onClick={e => { e.stopPropagation(); togglePin(t.key); }}
+                                                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); togglePin(t.key); } }}
+                                                        className={cn('shrink-0 rounded p-0.5 transition-all hover:text-foreground',
+                                                            t.pinned ? 'text-primary' : 'text-muted-foreground/50 opacity-0 group-hover:opacity-100')}
+                                                    >
+                                                        <Pin className={cn('h-3.5 w-3.5', t.pinned && 'fill-current')} />
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="truncate pl-7 font-mono text-[11px] text-muted-foreground">
+                                                {t.proposal_number ?? (t.kind === 'direct' ? 'Direct message' : `${t.count} message${t.count === 1 ? '' : 's'}`)}
+                                            </span>
+                                            {preview && <span className="truncate pl-7 text-xs text-muted-foreground">{preview}</span>}
+                                        </button>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -211,19 +331,37 @@ export default function FollowUpsIndex({ threads, proposals, users, mailbox }: P
                                     {selected.messages.length === 0 && (
                                         <p className="py-8 text-center text-sm text-muted-foreground">No messages yet — say hello below.</p>
                                     )}
-                                    {selected.messages.map(m => (
-                                        <div key={m.id} className={cn('rounded-xl border p-4', m.mine ? 'border-primary/30 bg-primary/[0.04]' : 'border-border')}>
-                                            <div className="mb-1 flex items-center gap-2">
-                                                <span className={cn('h-2 w-2 shrink-0 rounded-full', STATUS_DOT[m.status] ?? 'bg-slate-400')} />
-                                                <span className="text-sm font-semibold text-foreground">{m.subject || 'Message'}</span>
-                                                {m.automated && <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"><Sparkles className="h-3 w-3" /> auto</span>}
+                                    {selected.messages.map(m => {
+                                        const unread = msgUnread(m);
+                                        return (
+                                        <div key={m.id} className="group flex items-start gap-2">
+                                            <span
+                                                className={cn('mt-4 h-2 w-2 shrink-0 rounded-full', unread ? 'bg-orange-500' : 'bg-transparent')}
+                                                title={unread ? 'Unread' : undefined}
+                                                aria-hidden={!unread}
+                                            />
+                                            <div className={cn('flex-1 rounded-xl border p-4 transition-colors', m.mine ? 'border-primary/30 bg-primary/[0.04]' : 'border-border')}>
+                                                <div className="mb-1 flex items-center gap-2">
+                                                    <span className={cn('h-2 w-2 shrink-0 rounded-full', STATUS_DOT[m.status] ?? 'bg-slate-400')} />
+                                                    <span className={cn('text-sm text-foreground', unread ? 'font-bold' : 'font-semibold')}>{m.subject || 'Message'}</span>
+                                                    {m.automated && <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"><Sparkles className="h-3 w-3" /> auto</span>}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => deleteIds([m.id], 'Delete this message? This cannot be undone.')}
+                                                        title="Delete message"
+                                                        className="ml-auto shrink-0 text-muted-foreground/50 opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                                {m.message && <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{m.message}</p>}
+                                                <p className="mt-2 text-[11px] text-muted-foreground">
+                                                    {[m.mine ? 'You' : m.author, m.contact ? `to ${m.contact}` : null, formatDateTime(m.created_at)].filter(Boolean).join(' · ')}
+                                                </p>
                                             </div>
-                                            {m.message && <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{m.message}</p>}
-                                            <p className="mt-2 text-[11px] text-muted-foreground">
-                                                {[m.mine ? 'You' : m.author, m.contact ? `to ${m.contact}` : null, formatDateTime(m.created_at)].filter(Boolean).join(' · ')}
-                                            </p>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
 
                                 <form onSubmit={sendReply} className="border-t border-border p-3">

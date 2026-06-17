@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Organization;
 use App\Services\Mail\MailboxConnectionService;
+use App\Services\Proposals\ProposalStyleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -100,6 +102,44 @@ class SettingsController extends Controller
             'dashboard' => array_merge(self::DEFAULT_PREFERENCES['dashboard'], $stored['dashboard'] ?? []),
             'channels' => array_merge(self::DEFAULT_PREFERENCES['channels'], $stored['channels'] ?? []),
         ];
+    }
+
+    /**
+     * Org-wide proposal Style Profile (admin only) — the tone, boilerplate,
+     * win themes, writing rules and document formatting the AI writer follows.
+     */
+    public function proposalStyle(Request $request, ProposalStyleService $styles): Response
+    {
+        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        $org = Organization::findOrFail($request->user()->organization_id);
+
+        return Inertia::render('Settings/ProposalStyle', [
+            'style' => $styles->get($org),
+        ]);
+    }
+
+    public function updateProposalStyle(Request $request, ProposalStyleService $styles): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('Super Admin'), 403);
+
+        $validated = $request->validate([
+            'tone' => 'nullable|string|max:500',
+            'voice' => 'nullable|string|max:255',
+            'company_background' => 'nullable|string|max:6000',
+            'win_themes' => 'nullable|string|max:3000',
+            'writing_rules' => 'nullable|string|max:6000',
+            'format' => 'nullable|array',
+            'format.font' => 'nullable|string|max:60',
+            'format.heading_font' => 'nullable|string|max:60',
+            'format.font_size' => 'nullable|numeric|min:6|max:24',
+            'format.line_spacing' => 'nullable|numeric|min:1|max:3',
+            'format.margin_inches' => 'nullable|numeric|min:0.25|max:2',
+            'format.accent_color' => 'nullable|string|max:7',
+        ]);
+
+        $styles->save(Organization::findOrFail($request->user()->organization_id), $validated);
+
+        return back()->with('success', 'Proposal style profile saved.');
     }
 
     public function updateProfile(Request $request): RedirectResponse

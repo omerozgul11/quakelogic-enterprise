@@ -23,7 +23,7 @@ class ProposalDeadlineReminderCommand extends Command
     protected $description = 'Notify owners and team members of proposals whose deadline is approaching.';
 
     /** Statuses that are still in flight — a deadline still applies. */
-    private const OPEN = ['in_progress', 'submitted', 'pending', 'clarification_requested'];
+    private const OPEN = ['in_progress', 'submitted', 'award_pending', 'clarification_requested'];
 
     public function handle(Notifier $notifier): int
     {

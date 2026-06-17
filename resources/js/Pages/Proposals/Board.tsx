@@ -5,8 +5,9 @@ import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { Select } from '@/Components/ui/Select';
+import { SearchInput } from '@/Components/ui/SearchInput';
 import { DateFilter, DateFilterValue } from '@/Components/ui/DateFilter';
-import { cn, formatCurrency, formatDate, getDueDateColor, getDaysUntil, getDaysSince, getElapsedColor } from '@/Lib/utils';
+import { cn, formatCurrency, formatDate, getDueDateColor, getDaysUntil, getDaysSince, getElapsedColor, healthDotClass, ProposalHealth } from '@/Lib/utils';
 import { KanbanSquare, Plus, List, LayoutGrid, GripVertical, Search, X, Wallet, FileText, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -24,6 +25,19 @@ interface Card {
     documents: number;
     company: string | null;
     owner: string | null;
+    health: ProposalHealth | null;
+}
+
+/** Small traffic-light dot for proposal health (days since last client contact). */
+function HealthDot({ health, className }: { health: ProposalHealth | null; className?: string }) {
+    if (!health) return null;
+    return (
+        <span
+            className={cn('inline-block h-2.5 w-2.5 shrink-0 rounded-full', healthDotClass(health.color), className)}
+            title={health.label}
+            aria-label={health.label}
+        />
+    );
 }
 
 interface Props {
@@ -79,7 +93,7 @@ export default function ProposalsBoard({ proposals, statuses, owners, companies,
 
     const hasFilters = Object.values(filters).some(Boolean);
     const setFilter = (key: string, value: string) =>
-        router.get('/proposals/board', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true });
+        router.get('/proposals/board', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
     const setDate = (v: DateFilterValue) =>
         router.get('/proposals/board', { ...filters, date_field: v.date_field, from: v.from, to: v.to }, { preserveState: true, preserveScroll: true });
 
@@ -172,16 +186,12 @@ export default function ProposalsBoard({ proposals, statuses, owners, companies,
                 {/* Filters */}
                 <Card className="mb-4 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                        <div className="relative min-w-0 flex-1 sm:min-w-[16rem]">
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search applications…"
-                                defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && setFilter('search', (e.target as HTMLInputElement).value)}
-                                className="input input-with-icon"
-                            />
-                        </div>
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[16rem]"
+                            initial={filters.search ?? ''}
+                            onSearch={v => setFilter('search', v)}
+                            placeholder="Search applications…"
+                        />
                         <Select
                             value={filters.status ?? ''}
                             onChange={v => setFilter('status', v)}
@@ -266,6 +276,7 @@ export default function ProposalsBoard({ proposals, statuses, owners, companies,
                                                         <p className="truncate text-sm font-semibold leading-snug text-foreground hover:text-primary">{c.project_name}</p>
                                                         <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{c.proposal_number}</p>
                                                     </Link>
+                                                    <HealthDot health={c.health} className="mt-1" />
                                                 </div>
                                                 <div className="mt-1.5 flex items-center justify-between gap-2 pl-5">
                                                     <span className="truncate text-[11px] text-muted-foreground">{c.company ?? c.owner ?? '—'}</span>
@@ -308,10 +319,13 @@ export default function ProposalsBoard({ proposals, statuses, owners, companies,
                                     {listCards.map(c => (
                                         <tr key={c.id} className="row-link">
                                             <td className="td">
-                                                <Link href={`/proposals/${c.id}`} className="block max-w-[28rem]">
-                                                    <p className="line-clamp-2 break-words text-sm font-medium leading-snug text-foreground hover:text-primary">{c.project_name}</p>
-                                                    <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{c.proposal_number}</p>
-                                                </Link>
+                                                <div className="flex items-start gap-2">
+                                                    <HealthDot health={c.health} className="mt-1.5" />
+                                                    <Link href={`/proposals/${c.id}`} className="block max-w-[28rem]">
+                                                        <p className="line-clamp-2 break-words text-sm font-medium leading-snug text-foreground hover:text-primary">{c.project_name}</p>
+                                                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{c.proposal_number}</p>
+                                                    </Link>
+                                                </div>
                                             </td>
                                             <td className="td">
                                                 {can.move ? (

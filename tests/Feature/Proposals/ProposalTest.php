@@ -37,7 +37,8 @@ class ProposalTest extends TestCase
     {
         $response = $this->actingAs($this->proposalManager)->post('/proposals', [
             'project_name' => 'Cyber Security Operations Support',
-            'agency_name' => 'CISA',
+            'company' => 'CISA',
+            'solicitation_number' => 'CISA-2026-0001',
             'proposal_value' => 2500000,
             'due_date' => now()->addDays(45)->format('Y-m-d'),
         ]);
@@ -53,8 +54,10 @@ class ProposalTest extends TestCase
     {
         $this->actingAs($this->proposalManager)->post('/proposals', [
             'project_name' => 'First Proposal',
-            'agency_name' => 'NSA',
+            'company' => 'NSA',
+            'solicitation_number' => 'NSA-2026-0001',
             'proposal_value' => 1000000,
+            'due_date' => now()->addDays(30)->format('Y-m-d'),
         ]);
 
         $proposal = ProposalSubmission::where('organization_id', $this->organization->id)->first();

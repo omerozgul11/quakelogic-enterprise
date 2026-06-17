@@ -47,6 +47,12 @@ class RolesPermissionsSeeder extends Seeder
             // Permission::all() sync below; grant to additional roles here when
             // they should be able to reach Shipments (no Shipments deploy needed).
             'access shipments', 'manage mailings',
+
+            // Contracts & Financials (Phase 5)
+            'view contracts', 'manage contracts',
+
+            // Compliance & Template Library (Phase 7)
+            'view compliance', 'manage compliance', 'view templates', 'manage templates',
         ];
 
         foreach ($permissions as $permission) {
@@ -69,6 +75,8 @@ class RolesPermissionsSeeder extends Seeder
             'view own commissions', 'view all commissions', 'manage commission rules', 'approve commissions', 'export commissions',
             'view dashboards', 'view executive dashboard', 'export reports',
             'use ai assistant', 'run document extraction', 'review ai extraction',
+            'view contracts', 'manage contracts',
+            'view templates', 'manage templates',
         ]);
 
         // Business Development Manager
@@ -82,6 +90,8 @@ class RolesPermissionsSeeder extends Seeder
             'view own commissions', 'view all commissions',
             'view dashboards', 'export reports',
             'use ai assistant', 'run document extraction',
+            'view contracts', 'manage contracts',
+            'view templates', 'manage templates',
         ]);
 
         // Proposal Manager
@@ -94,6 +104,8 @@ class RolesPermissionsSeeder extends Seeder
             'view own commissions',
             'view dashboards',
             'use ai assistant', 'run document extraction', 'review ai extraction',
+            'view contracts', 'manage contracts',
+            'view templates', 'manage templates',
         ]);
 
         // Proposal Writer
@@ -106,6 +118,8 @@ class RolesPermissionsSeeder extends Seeder
             'view own commissions',
             'view dashboards',
             'use ai assistant',
+            'view contracts',
+            'view templates', 'manage templates',
         ]);
 
         // Sales Representative
@@ -118,6 +132,8 @@ class RolesPermissionsSeeder extends Seeder
             'view own commissions',
             'view dashboards',
             'use ai assistant',
+            'view contracts',
+            'view templates',
         ]);
 
         // Finance
@@ -125,6 +141,7 @@ class RolesPermissionsSeeder extends Seeder
         $finance->syncPermissions([
             'view own commissions', 'view all commissions', 'approve commissions', 'export commissions',
             'view dashboards', 'view executive dashboard', 'export reports',
+            'view contracts', 'manage contracts',
         ]);
 
         // Read Only
@@ -132,6 +149,7 @@ class RolesPermissionsSeeder extends Seeder
         $readOnly->syncPermissions([
             'view opportunities', 'view proposals',
             'view crm', 'view follow ups', 'view dashboards',
+            'view contracts', 'view templates',
         ]);
     }
 }

@@ -17,6 +17,10 @@ class FakeAiProvider implements AiProviderInterface
         return true;
     }
 
+    public function supportsVision(): bool { return false; }
+
+    public function extractShipments(string $base64Data, string $mediaType): array { return []; }
+
     /**
      * Extract structured fields from real document text using deterministic
      * heuristics (regex + keyword anchoring). When no usable text is supplied,
@@ -717,6 +721,19 @@ class FakeAiProvider implements AiProviderInterface
             . "[This is a demo AI-generated email — connect a real AI provider for live generation.]";
     }
 
+    public function generateProposalSection(array $context, string $section): string
+    {
+        $label = $context['section_label'] ?? ucwords(str_replace('_', ' ', $section));
+        $project = $context['project_name'] ?? 'this project';
+        $client = $context['client'] ?? 'the client';
+
+        return "## {$label}\n\n"
+            . "QuakeLogic is pleased to present this {$label} in response to {$project} for {$client}. "
+            . "[Draft placeholder] Our team brings the experience, technical depth, and proven delivery record needed to "
+            . "meet the requirements of this effort. [Add specifics: approach, key personnel, past performance.]\n\n"
+            . "[This is a demo draft — set AI_PROVIDER=gemini with a GEMINI_API_KEY to generate full section content.]";
+    }
+
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string
     {
         // Pull the user's latest message out of the conversation prompt.
@@ -727,7 +744,36 @@ class FakeAiProvider implements AiProviderInterface
         $short = Str::limit(trim($msg), 140);
 
         return "Thanks for asking about \"{$short}\". "
-            . "I'm QuakeAI — I can help you analyze proposals, draft summaries, flag key deadlines, and pull details from your uploaded documents. "
-            . "I'm currently in demo mode, so set AI_PROVIDER=anthropic with an ANTHROPIC_API_KEY in your .env to unlock full, live answers.";
+            . "I'm QuakeBot — I can help with your proposals, opportunities, deadlines, follow-ups and mailed-shipment tracking. "
+            . "I'm currently in demo mode, so set AI_PROVIDER=gemini with a GEMINI_API_KEY in your .env to unlock full, live answers.";
+    }
+
+    /**
+     * Deterministic, offline embeddings: a hashed bag-of-words vector per text.
+     * Not as good as a real model, but stable and dependency-free so the
+     * knowledge base / RAG works (and is testable) without an API key.
+     *
+     * @param  array<int,string>  $texts
+     * @return array<int, array<int, float>>
+     */
+    public function extractDocumentVision(string $base64Data, string $mediaType): array { return []; }
+
+    public function research(string $query): string { return ''; }
+
+    public function embed(array $texts): array
+    {
+        $dim = 96;
+        $out = [];
+        foreach ($texts as $t) {
+            $vec = array_fill(0, $dim, 0.0);
+            $tokens = preg_split('/\W+/', strtolower((string) $t), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach ($tokens as $tok) {
+                $vec[crc32($tok) % $dim] += 1.0;
+            }
+            $norm = sqrt(array_sum(array_map(static fn ($x) => $x * $x, $vec))) ?: 1.0;
+            $out[] = array_map(static fn ($x) => $x / $norm, $vec);
+        }
+
+        return $out;
     }
 }

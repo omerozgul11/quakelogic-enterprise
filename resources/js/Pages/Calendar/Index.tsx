@@ -4,7 +4,7 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Card, CardContent } from '@/Components/ui/Card';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import { formatCurrency, formatDate, cn } from '@/Lib/utils';
-import { CalendarDays, ChevronLeft, ChevronRight, FileText, Target } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, FileText, Target, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface CalendarEvent {
@@ -22,6 +22,7 @@ interface CalendarEvent {
 interface Props {
     events: CalendarEvent[];
     counts: { proposals: number; opportunities: number };
+    can: { createProposal: boolean; createOpportunity: boolean };
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -35,7 +36,7 @@ const TYPE_STYLE: Record<CalendarEvent['type'], { chip: string; dot: string; ico
     opportunity: { chip: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400', dot: 'bg-blue-500', icon: Target, label: 'Opportunity' },
 };
 
-export default function CalendarIndex({ events, counts }: Props) {
+export default function CalendarIndex({ events, counts, can }: Props) {
     const today = new Date();
     const todayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -188,6 +189,20 @@ export default function CalendarIndex({ events, counts }: Props) {
                                 {formatDate(selected)}
                                 <span className="ml-1.5 font-normal text-muted-foreground">· {selectedEvents.length} {selectedEvents.length === 1 ? 'item' : 'items'}</span>
                             </p>
+                            {(can.createProposal || can.createOpportunity) && (
+                                <div className="mb-3 flex flex-wrap gap-2">
+                                    {can.createProposal && (
+                                        <Link href={`/proposals/create?due=${selected}`} className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20">
+                                            <Plus className="h-3.5 w-3.5" /> Proposal
+                                        </Link>
+                                    )}
+                                    {can.createOpportunity && (
+                                        <Link href={`/opportunities/create?due=${selected}`} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-500/20 dark:text-blue-400">
+                                            <Plus className="h-3.5 w-3.5" /> Opportunity
+                                        </Link>
+                                    )}
+                                </div>
+                            )}
                             {selectedEvents.length === 0 ? (
                                 <p className="py-6 text-center text-sm text-muted-foreground">Nothing due on this day.</p>
                             ) : (

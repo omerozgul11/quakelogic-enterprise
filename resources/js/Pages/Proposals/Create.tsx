@@ -4,6 +4,7 @@ import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
 import { ArrowLeft, FileText, UploadCloud, Sparkles, Loader2, X, FileCheck2, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 
@@ -13,13 +14,21 @@ interface Props {
     opportunities: Array<{ id: number; title: string; solicitation_number: string | null }>;
     users: Array<{ id: number; name: string }>;
     currencies: CurrencyOption[];
+    proposalTypes: Array<{ value: string; label: string; description: string; has_value: boolean }>;
     isAdmin: boolean;
     currentUser: { id: number; name: string };
+    prefill?: { due_date: string | null };
 }
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png';
 
-export default function ProposalCreate({ opportunities, users, currencies, isAdmin, currentUser }: Props) {
+const SUBMISSION_METHODS: Array<{ value: string; label: string }> = [
+    { value: 'email', label: 'Email' },
+    { value: 'portal', label: 'Portal' },
+    { value: 'mail', label: 'Mail' },
+];
+
+export default function ProposalCreate({ opportunities, users, currencies, proposalTypes, isAdmin, currentUser, prefill }: Props) {
     const [dragging, setDragging] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
 
@@ -30,12 +39,14 @@ export default function ProposalCreate({ opportunities, users, currencies, isAdm
     // Manual creation with an optional attached document.
     const manual = useForm({
         project_name: '',
+        proposal_type: 'proposal',
         opportunity_id: '',
         company: '',
         solicitation_number: '',
         proposal_value: '',
         currency: 'USD',
-        due_date: '',
+        due_date: prefill?.due_date ?? '',
+        submission_methods: [] as string[],
         owner_id: String(currentUser.id),
         team_member_ids: [] as number[],
         description: '',
@@ -44,12 +55,20 @@ export default function ProposalCreate({ opportunities, users, currencies, isAdm
 
     const ownerId = Number(manual.data.owner_id);
     const symbol = currencies.find(c => c.value === manual.data.currency)?.symbol ?? '$';
+    // RFIs are informational only — they carry no proposal value.
+    const typeHasValue = proposalTypes.find(t => t.value === manual.data.proposal_type)?.has_value ?? true;
 
     const toggleMember = (id: number) => {
         if (id === ownerId) return; // the owner is always on the team
         manual.setData('team_member_ids', manual.data.team_member_ids.includes(id)
             ? manual.data.team_member_ids.filter(m => m !== id)
             : [...manual.data.team_member_ids, id]);
+    };
+
+    const toggleMethod = (value: string) => {
+        manual.setData('submission_methods', manual.data.submission_methods.includes(value)
+            ? manual.data.submission_methods.filter(m => m !== value)
+            : [...manual.data.submission_methods, value]);
     };
 
     const submitIntake = (files: File[]) => {
@@ -169,6 +188,17 @@ export default function ProposalCreate({ opportunities, users, currencies, isAdm
                             </div>
 
                             <div>
+                                <label className="label">Type *</label>
+                                <Select
+                                    value={manual.data.proposal_type}
+                                    onChange={v => manual.setData('proposal_type', v)}
+                                    options={proposalTypes.map(t => ({ value: t.value, label: `${t.label} — ${t.description}` }))}
+                                    className="w-full"
+                                />
+                                <p className="mt-1 text-xs text-muted-foreground">What kind of document is this? RFIs are informational and carry no value.</p>
+                            </div>
+
+                            <div>
                                 <label className="label">Project Name *</label>
                                 <input type="text" value={manual.data.project_name} onChange={e => manual.setData('project_name', e.target.value)}
                                     className="input" required placeholder="Full project name as it will appear in the proposal" />
@@ -177,35 +207,60 @@ export default function ProposalCreate({ opportunities, users, currencies, isAdm
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="label">Solicitation #</label>
-                                    <input type="text" value={manual.data.solicitation_number} onChange={e => manual.setData('solicitation_number', e.target.value)} className="input" />
+                                    <label className="label">Solicitation # *</label>
+                                    <input type="text" required value={manual.data.solicitation_number} onChange={e => manual.setData('solicitation_number', e.target.value)} className="input" />
+                                    {manual.errors.solicitation_number && <p className="mt-1 text-xs text-destructive">{manual.errors.solicitation_number}</p>}
                                 </div>
                                 <div>
-                                    <label className="label">Company</label>
-                                    <input type="text" value={manual.data.company} onChange={e => manual.setData('company', e.target.value)}
+                                    <label className="label">Company *</label>
+                                    <input type="text" required value={manual.data.company} onChange={e => manual.setData('company', e.target.value)}
                                         className="input" placeholder="Client / buyer organization" />
                                     {manual.errors.company && <p className="mt-1 text-xs text-destructive">{manual.errors.company}</p>}
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="label">Proposal Value ({symbol})</label>
-                                    <div className="flex gap-2">
-                                        <Select
-                                            value={manual.data.currency}
-                                            onChange={v => manual.setData('currency', v)}
-                                            options={currencies.map(c => ({ value: c.value, label: c.value }))}
-                                            className="w-28 shrink-0"
-                                        />
-                                        <input type="number" value={manual.data.proposal_value} onChange={e => manual.setData('proposal_value', e.target.value)} className="input flex-1" min="0" step="0.01" placeholder="0.00" />
+                                {typeHasValue && (
+                                    <div>
+                                        <label className="label">Proposal Value ({symbol}) *</label>
+                                        <div className="flex gap-2">
+                                            <Select
+                                                value={manual.data.currency}
+                                                onChange={v => manual.setData('currency', v)}
+                                                options={currencies.map(c => ({ value: c.value, label: c.value }))}
+                                                className="w-28 shrink-0"
+                                            />
+                                            <NumberInput value={manual.data.proposal_value} onChange={e => manual.setData('proposal_value', e.target.value)} className="input flex-1" placeholder="0.00" />
+                                        </div>
+                                        {manual.errors.proposal_value && <p className="mt-1 text-xs text-destructive">{manual.errors.proposal_value}</p>}
                                     </div>
-                                    {manual.errors.proposal_value && <p className="mt-1 text-xs text-destructive">{manual.errors.proposal_value}</p>}
-                                </div>
+                                )}
                                 <div>
-                                    <label className="label">Due Date</label>
-                                    <input type="date" value={manual.data.due_date} onChange={e => manual.setData('due_date', e.target.value)} className="input" />
+                                    <label className="label">Due Date *</label>
+                                    <input type="date" required value={manual.data.due_date} onChange={e => manual.setData('due_date', e.target.value)} className="input" />
+                                    {manual.errors.due_date && <p className="mt-1 text-xs text-destructive">{manual.errors.due_date}</p>}
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="label">Submission Method</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {SUBMISSION_METHODS.map(m => {
+                                        const active = manual.data.submission_methods.includes(m.value);
+                                        return (
+                                            <button
+                                                key={m.value}
+                                                type="button"
+                                                onClick={() => toggleMethod(m.value)}
+                                                className={`inline-flex items-center gap-1 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
+                                            >
+                                                {m.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">How will this proposal be submitted? Pick any that apply.</p>
+                                {manual.errors.submission_methods && <p className="mt-1 text-xs text-destructive">{manual.errors.submission_methods}</p>}
                             </div>
 
                             <div>
