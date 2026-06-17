@@ -39,11 +39,16 @@ class CommissionController extends Controller
 
         $commissions = $query->paginate(25)->withQueryString();
 
-        $totalAmount = $query->sum('commission_amount');
+        $totalAmount = (float) $query->sum('commission_amount');
 
         return Inertia::render('Commissions/Index', [
             'commissions' => $commissions,
-            'totalAmount' => (float) $totalAmount,
+            'totalAmount' => $totalAmount,
+            'summary' => [
+                'total' => $totalAmount,
+                'pending' => (float) (clone $query)->where('status', 'pending')->sum('commission_amount'),
+                'approved' => (float) (clone $query)->where('status', 'approved')->sum('commission_amount'),
+            ],
             'filters' => $request->only(['user_id', 'period_month', 'status']),
             'can' => [
                 'viewAll' => $user->can('view all commissions'),

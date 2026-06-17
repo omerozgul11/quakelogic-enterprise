@@ -4,26 +4,53 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* QuakeLogic — signature orange #f26522 on a clean light slate canvas */
+    --background: 213 40% 97%;          /* faintly cool slate canvas */
+    --foreground: 215 28% 17%;          /* slate-800 */
+    --card: 210 38% 99%;                /* near-white with a hair of cool tint */
+    --card-foreground: 215 28% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 215 28% 17%;
+    --primary: 21 80% 51%;              /* QuakeLogic orange — warm, soft (matches the nav-active glass) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;           /* slate-100 */
+    --secondary-foreground: 215 25% 27%;/* slate-700 */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;    /* slate-500 */
+    --accent: 34 100% 95%;              /* orange-50 */
+    --accent-foreground: 20 91% 40%;    /* orange-700 */
+    --destructive: 0 84% 60%;           /* red-500 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 41%;             /* green-600 */
+    --warning: 38 92% 50%;              /* amber-500 */
+    --border: 214 32% 91%;              /* slate-200 */
+    --input: 215 20% 84%;               /* slate-300 */
+    --ring: 24 80% 53%;                 /* orange focus */
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 24% 9%;            /* deep slate canvas */
+    --foreground: 210 22% 92%;          /* soft off-white, easy on the eyes */
+    --card: 222 20% 14%;                /* cards lift slightly above canvas */
+    --card-foreground: 210 22% 92%;
+    --popover: 222 19% 13%;
+    --popover-foreground: 210 22% 92%;
+    --primary: 23 82% 57%;              /* QuakeLogic orange — warm, soft (matches the nav-active glass) */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 16% 19%;
+    --secondary-foreground: 210 16% 82%;
+    --muted: 222 16% 19%;
+    --muted-foreground: 215 15% 64%;    /* readable secondary text on dark */
+    --accent: 24 45% 18%;
+    --accent-foreground: 28 92% 72%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 55% 48%;
+    --warning: 38 92% 56%;
+    --border: 220 14% 23%;
+    --input: 220 13% 28%;
+    --ring: 24 80% 53%;
   }
 }
 
@@ -31,7 +58,253 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui,
+      Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
+  h1, h2, h3, h4 { letter-spacing: -0.015em; }
+
+  /* Seamless light <-> dark transition across the whole UI */
+  body, .card-surface, header, aside, nav, table, thead, tbody, tr, td, th,
+  input, select, textarea, button, a, span, p, h1, h2, h3, h4, div {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
+  }
+
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(215 16% 80%);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 66%); background-clip: content-box; }
+  ::selection { background: hsl(19 74% 50% / 0.20); }
+}
+
+@layer components {
+  .glass {
+    background: hsl(0 0% 100% / 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+  .dark .glass {
+    background: hsl(222 19% 13% / 0.72);
+  }
+
+  /* Liquid-glass chrome: frosted, *tinted* translucent panels separated by tint +
+     blur (no hairline borders). A light top rim + soft shadow gives the raised
+     glass look. Readable over either canvas. */
+  .glass-panel {
+    background: hsl(214 42% 98% / 0.62);
+    backdrop-filter: saturate(185%) blur(22px);
+    -webkit-backdrop-filter: saturate(185%) blur(22px);
+    box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.6), 0 12px 32px -18px hsl(214 45% 28% / 0.22);
+  }
+  .dark .glass-panel {
+    background: hsl(222 26% 15% / 0.6);
+    box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.06), 0 12px 32px -18px hsl(0 0% 0% / 0.55);
+  }
+
+  /* Soft-edged card. The tinted glass treatment comes from .ql-liquid app-wide. */
+  .card-surface {
+    @apply rounded-2xl border border-border bg-card shadow-sm;
+  }
+  .card-hover {
+    @apply transition-shadow duration-200 hover:shadow-md;
+  }
+
+  /* Brand fills */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(120deg, #ec7434 0%, #d65a1c 100%);
+  }
+  /* Buttons / brand fills: a warm, softened orange — smoother top→bottom ramp,
+     less harsh than the old near-neon fill, tuned to the nav-active glass. */
+  .bg-brand-gradient {
+    background-color: hsl(20 83% 50%);
+    background-image: linear-gradient(180deg, hsl(27 91% 58%) 0%, hsl(20 83% 50%) 58%, hsl(15 80% 44%) 100%);
+  }
+  /* Warm brand panel (dashboard hero + split-screen auth pages): a luminous,
+     liquid-glass orange — a warm highlight in one corner, deeper tone in the
+     other, with a soft top rim. Stays rich enough for white text to read. */
+  .bg-sidebar {
+    background-color: hsl(16 78% 39%);
+    background-image:
+      radial-gradient(56% 55% at 96% -12%, hsl(32 90% 56% / 0.28) 0%, transparent 60%),
+      radial-gradient(68% 80% at 0% 118%, hsl(6 72% 28% / 0.5) 0%, transparent 60%),
+      linear-gradient(120deg, hsl(20 80% 43%) 0%, hsl(16 78% 38%) 55%, hsl(12 76% 32%) 100%);
+    box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.14);
+  }
+
+  /* Left-menu nav: thin, very dark scrollbar (overrides the global 11px one). */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.55) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.55);
+    border: 0;
+    border-radius: 9999px;
+    background-clip: padding-box;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.8); }
+  /* Keep it visible on the dark sidebar card (pure-dark would disappear there). */
+  .dark .sidebar-scroll { scrollbar-color: rgba(255, 255, 255, 0.35) transparent; }
+  .dark .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.35); }
+  .dark .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.55); }
+
+  /* Form controls */
+  .input {
+    @apply w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground transition placeholder:text-muted-foreground/70 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary/45;
+  }
+  .input-with-icon { @apply pl-10; }
+  /* Native selects, restyled: no OS chrome, custom chevron, theme-aware
+     popup list (color-scheme). One class styles every dropdown in the app. */
+  .select {
+    @apply cursor-pointer appearance-none rounded-lg border border-input bg-card py-2 pl-3 pr-9 text-sm text-foreground transition hover:border-muted-foreground/40 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary/45 disabled:cursor-not-allowed disabled:opacity-60;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.7rem center;
+    background-repeat: no-repeat;
+    background-size: 0.95em;
+    color-scheme: light;
+  }
+  .dark .select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    color-scheme: dark;
+  }
+  .label { @apply mb-1.5 block text-sm font-medium text-foreground; }
+
+  /* Tables */
+  .th {
+    @apply whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+  .td { @apply px-4 py-3.5 align-middle text-sm text-foreground; }
+  .row-link { @apply transition-colors hover:bg-secondary/70; }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground;
+  }
+
+  /* ── Liquid-glass shell ──────────────────────────────────────────────
+     Scoped to .ql-liquid so only the Shipments section is restyled. A soft,
+     fixed multi-hue ambient sits behind everything; the frosted bars + cards
+     are translucent, so they pick up that hue → "tinted glass". Hues are kept
+     low-saturation + low-opacity: present but easy on the eyes. */
+  .ql-liquid {
+    position: relative;
+    isolation: isolate;
+    background-color: hsl(var(--background));
+  }
+  .ql-liquid::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(48rem 48rem at 4% -8%, hsl(24 90% 56% / 0.09), transparent 60%),
+      radial-gradient(46rem 46rem at 100% 2%, hsl(214 80% 58% / 0.08), transparent 55%),
+      radial-gradient(42rem 42rem at 52% 118%, hsl(258 70% 60% / 0.07), transparent 62%);
+  }
+  .dark .ql-liquid::before {
+    background:
+      radial-gradient(48rem 48rem at 4% -8%, hsl(24 90% 56% / 0.16), transparent 60%),
+      radial-gradient(46rem 46rem at 100% 2%, hsl(214 84% 60% / 0.13), transparent 55%),
+      radial-gradient(42rem 42rem at 52% 118%, hsl(258 74% 62% / 0.13), transparent 62%);
+  }
+
+  /* Tinted glass cards inside the shell — translucent so the ambient shows. */
+  .ql-liquid .card-surface {
+    background-color: hsl(var(--card) / 0.62);
+    border-color: hsl(var(--border) / 0.55);
+    -webkit-backdrop-filter: saturate(150%) blur(14px);
+    backdrop-filter: saturate(150%) blur(14px);
+    box-shadow: 0 1px 1px hsl(222 47% 11% / 0.04), 0 12px 32px -20px hsl(222 47% 11% / 0.35);
+  }
+  .dark .ql-liquid .card-surface {
+    background-color: hsl(var(--card) / 0.52);
+    border-color: hsl(0 0% 100% / 0.06);
+    box-shadow: 0 1px 1px hsl(0 0% 0% / 0.20), 0 16px 40px -24px hsl(0 0% 0% / 0.55);
+  }
+
+  /* Apple-style sidebar nav: borderless, seamless rows — no per-item boxes.
+     Idle items are plain text; hover is a soft translucent wash; the active
+     item is a frosted, brand-tinted "liquid glass" pill (tint + sheen + a
+     hairline inner ring, no hard fill or border). */
+  .nav-chip {
+    @apply relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ease-out;
+  }
+  .nav-chip-idle {
+    @apply text-muted-foreground;
+  }
+  .nav-chip-idle:hover {
+    @apply text-foreground;
+    background-color: hsl(var(--foreground) / 0.05);
+  }
+  .dark .nav-chip-idle:hover {
+    background-color: hsl(0 0% 100% / 0.07);
+  }
+  .nav-chip-active {
+    @apply font-semibold text-primary;
+    background-image: linear-gradient(180deg, hsl(24 90% 55% / 0.18) 0%, hsl(20 85% 50% / 0.09) 100%);
+    -webkit-backdrop-filter: saturate(140%) blur(6px);
+    backdrop-filter: saturate(140%) blur(6px);
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.4),
+      inset 0 0 0 1px hsl(24 85% 55% / 0.14),
+      0 6px 18px -12px hsl(20 80% 45% / 0.5);
+  }
+  .dark .nav-chip-active {
+    background-image: linear-gradient(180deg, hsl(24 90% 58% / 0.26) 0%, hsl(20 85% 52% / 0.13) 100%);
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.1),
+      inset 0 0 0 1px hsl(24 85% 60% / 0.2),
+      0 8px 22px -14px hsl(0 0% 0% / 0.6);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in { animation: fade-in 0.4s ease-out both; }
+  .animate-rise { animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-scale-in { animation: scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-float { animation: float 8s ease-in-out infinite; }
+
+  /* Apple-like menu open: a quick, soft scale + settle. Pair with a Tailwind
+     origin-* utility so it grows from the edge nearest its trigger. */
+  .animate-dropdown { animation: dropdown-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  /* Gentle reveal for inline edit forms / expanding panels. */
+  .animate-panel { animation: panel-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* Page change: a soft fade + lift + settle (keyed on route so it replays). */
+  .animate-page { animation: page-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  .stagger > * { opacity: 0; animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0.03s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.07s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.11s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.15s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.19s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.23s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.27s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.31s; }
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes dropdown-in { from { opacity: 0; transform: scale(0.95) translateY(-6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes panel-in { from { opacity: 0; transform: translateY(-6px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes page-in { from { opacity: 0; transform: translateY(10px) scale(0.994); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes float { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-16px) translateX(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .stagger > * { animation: none !important; transition: none !important; }
 }

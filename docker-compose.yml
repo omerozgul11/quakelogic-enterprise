@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   app:
     build:
@@ -14,7 +12,10 @@ services:
       - ./storage/app:/var/www/storage/app
       - ./storage/logs:/var/www/storage/logs
     environment:
-      - APP_ENV=local
+      # APP_ENV intentionally NOT set here: it is provided by .env (local) for
+      # normal runs, while phpunit.xml forces it to "testing" for the test suite.
+      # Setting it as a container OS var would override phpunit and break CSRF-
+      # exempt test behavior.
       - PHP_OPCACHE_ENABLE=0
     networks:
       - ql_network
@@ -42,6 +43,14 @@ services:
     image: mariadb:11.4
     container_name: ql_enterprise_mariadb
     restart: unless-stopped
+    # Binary logging → point-in-time recovery between nightly dumps. ROW format
+    # is safest for PITR; logs auto-expire after 14 days to bound disk use.
+    command:
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --binlog-expire-logs-seconds=1209600
+      - --server-id=1
+      - --max-binlog-size=256M
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
       MARIADB_DATABASE: ${DB_DATABASE:-quakelogic_enterprise}

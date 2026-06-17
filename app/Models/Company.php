@@ -13,6 +13,7 @@ use Laravel\Scout\Searchable;
 class Company extends Model
 {
     use HasFactory, Searchable, SoftDeletes;
+    use \App\Models\Concerns\Auditable;
 
     protected $fillable = [
         'ulid', 'organization_id', 'created_by', 'owner_id', 'name', 'company_type',

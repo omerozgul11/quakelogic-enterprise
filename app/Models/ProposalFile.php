@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 class ProposalFile extends Model
 {
     use HasFactory, SoftDeletes;
+    use \App\Models\Concerns\Auditable;
 
     protected $fillable = [
         'ulid', 'proposal_submission_id', 'uploaded_by', 'approved_by',

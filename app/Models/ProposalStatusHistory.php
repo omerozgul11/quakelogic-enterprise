@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProposalStatusHistory extends Model
 {
+    protected $table = 'proposal_status_history';
+
+    public $timestamps = false;
+
     protected $fillable = [
         'proposal_submission_id', 'changed_by', 'from_status', 'to_status', 'notes', 'changed_at',
     ];

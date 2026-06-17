@@ -25,7 +25,6 @@ return new class extends Migration
             $table->string('source_url', 1024)->nullable();
 
             $table->string('status')->default('new')->index();
-            $table->string('capture_stage')->nullable()->index();
             $table->string('set_aside_type')->nullable();
             $table->string('contract_type')->nullable();
             $table->string('naics_code', 20)->nullable()->index();

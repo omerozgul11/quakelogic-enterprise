@@ -16,26 +16,34 @@ class OpportunityDeduplicationTest extends TestCase
         $this->service = new OpportunityDeduplicationService();
     }
 
-    public function test_compute_hash_is_deterministic(): void
+    private function makeDto(string $externalId = 'abc123', string $solicitationNumber = 'W911QY-24-R-0001'): BidSourceResultDTO
     {
-        $dto = new BidSourceResultDTO(
-            externalId: 'abc123',
-            solicitationNumber: 'W911QY-24-R-0001',
+        return new BidSourceResultDTO(
+            externalId: $externalId,
+            source: 'sam_gov',
             title: 'Test Opportunity',
-            description: null,
+            solicitationNumber: $solicitationNumber,
             agencyName: 'Army',
-            agencyCode: null,
+            subAgencyName: null,
             naicsCode: '541512',
-            type: null,
-            setAside: null,
-            placeOfPerformance: null,
-            responseDeadline: '2024-06-30',
-            archiveDate: null,
+            pscCode: null,
+            setAsideType: null,
+            contractType: null,
             estimatedValue: null,
+            description: null,
             postedDate: null,
+            dueDate: null,
+            placeOfPerformanceCity: null,
+            placeOfPerformanceState: null,
+            placeOfPerformanceCountry: null,
             sourceUrl: null,
             rawData: [],
         );
+    }
+
+    public function test_compute_hash_is_deterministic(): void
+    {
+        $dto = $this->makeDto();
 
         $hash1 = $this->service->computeHash($dto);
         $hash2 = $this->service->computeHash($dto);
@@ -46,8 +54,8 @@ class OpportunityDeduplicationTest extends TestCase
 
     public function test_different_solicitation_numbers_produce_different_hashes(): void
     {
-        $dto1 = new BidSourceResultDTO('a', 'SOL-001', 'Title', null, 'Agency', null, null, null, null, null, null, null, null, null, null, []);
-        $dto2 = new BidSourceResultDTO('b', 'SOL-002', 'Title', null, 'Agency', null, null, null, null, null, null, null, null, null, null, []);
+        $dto1 = $this->makeDto(externalId: 'same', solicitationNumber: 'SOL-001');
+        $dto2 = $this->makeDto(externalId: 'same', solicitationNumber: 'SOL-002');
 
         $this->assertNotEquals($this->service->computeHash($dto1), $this->service->computeHash($dto2));
     }

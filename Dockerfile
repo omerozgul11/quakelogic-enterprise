@@ -5,6 +5,7 @@ RUN apk add --no-cache \
     bash \
     curl \
     git \
+    mariadb-client \
     libpng-dev \
     libzip-dev \
     libxml2-dev \
@@ -24,10 +25,8 @@ RUN apk add --no-cache \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         bcmath \
-        ctype \
         dom \
         exif \
-        fileinfo \
         gd \
         intl \
         mbstring \
@@ -35,7 +34,6 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         pcntl \
         pdo \
         pdo_mysql \
-        tokenizer \
         xml \
         zip
 
@@ -68,8 +66,9 @@ COPY --chown=appuser:appuser . .
 RUN composer install --no-scripts --no-interaction
 
 # Install Node deps and build assets
-RUN npm ci && npm run build
+RUN npm install && npm run build
 
+RUN mkdir -p storage/app storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
 RUN chown -R appuser:appuser storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
@@ -91,7 +90,7 @@ COPY --chown=appuser:appuser . .
 
 RUN composer install --no-dev --optimize-autoloader --no-scripts --no-interaction
 
-RUN npm ci && npm run build && rm -rf node_modules
+RUN npm install && npm run build && rm -rf node_modules
 
 RUN chown -R appuser:appuser storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache

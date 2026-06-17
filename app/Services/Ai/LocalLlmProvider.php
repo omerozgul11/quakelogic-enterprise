@@ -12,8 +12,8 @@ class LocalLlmProvider implements AiProviderInterface
 
     public function __construct()
     {
-        $this->host = config('ai.local_llm.host', 'http://localhost:11434');
-        $this->model = config('ai.local_llm.model', 'llama3');
+        $this->host = rtrim((string) config('ai.providers.local.base_url', 'http://localhost:11434'), '/');
+        $this->model = config('ai.providers.local.model', 'llama3');
     }
 
     public function getName(): string { return 'local'; }
@@ -26,6 +26,10 @@ class LocalLlmProvider implements AiProviderInterface
             return false;
         }
     }
+
+    public function supportsVision(): bool { return false; }
+
+    public function extractShipments(string $base64Data, string $mediaType): array { return []; }
 
     public function extractDocumentData(string $documentText, array $schema): array
     {
@@ -64,6 +68,16 @@ class LocalLlmProvider implements AiProviderInterface
         return $this->complete("Write professional follow-up emails.", json_encode($context));
     }
 
+    public function generateProposalSection(array $context, string $section): string
+    {
+        $label = $context['section_label'] ?? ucwords(str_replace('_', ' ', $section));
+        return $this->complete(
+            "You are a government proposal writer. Write the \"{$label}\" section in clear prose. Follow 'style_profile', "
+            . "treat 'answers' as authoritative, use only facts in the context, and insert [NEEDS: …] where unknown.",
+            ($context['section_guidance'] ?? '') . "\n\nContext:\n" . json_encode($context)
+        );
+    }
+
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string
     {
         try {
@@ -78,4 +92,11 @@ class LocalLlmProvider implements AiProviderInterface
             throw $e;
         }
     }
+
+    public function extractDocumentVision(string $base64Data, string $mediaType): array { return []; }
+
+    public function research(string $query): string { return ''; }
+
+    /** Embeddings not wired for the local provider here; RAG uses the Gemini tier. */
+    public function embed(array $texts): array { return []; }
 }

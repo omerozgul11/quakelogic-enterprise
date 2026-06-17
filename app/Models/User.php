@@ -6,6 +6,7 @@ use App\Enums\CommissionType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -19,9 +20,12 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, HasRoles, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     protected $fillable = [
-        'ulid', 'organization_id', 'name', 'email', 'title', 'phone',
+        'ulid', 'organization_id', 'name', 'email', 'title', 'phone', 'department',
         'avatar_path', 'password', 'is_active', 'hire_date',
         'commission_rate_override', 'timezone', 'notification_preferences',
+        'pipeline_keywords', 'market_keywords',
+        'product_expertise', 'industry_expertise', 'geographic_focus',
+        'min_opportunity_value', 'max_opportunity_value', 'workload_score', 'workload_updated_at',
     ];
 
     protected $hidden = [
@@ -36,6 +40,15 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'hire_date' => 'date',
             'notification_preferences' => 'array',
+            'pipeline_keywords' => 'array',
+            'market_keywords' => 'array',
+            'product_expertise' => 'array',
+            'industry_expertise' => 'array',
+            'geographic_focus' => 'array',
+            'min_opportunity_value' => 'decimal:2',
+            'max_opportunity_value' => 'decimal:2',
+            'workload_score' => 'integer',
+            'workload_updated_at' => 'datetime',
         ];
     }
 
@@ -55,6 +68,17 @@ class User extends Authenticatable
         return $this->hasMany(Opportunity::class, 'assigned_to');
     }
 
+    /** Opportunities this user owns (claimed / locked). */
+    public function ownedOpportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class, 'owner_id');
+    }
+
+    public function opportunityStates(): HasMany
+    {
+        return $this->hasMany(OpportunityUserState::class);
+    }
+
     public function proposals(): HasMany
     {
         return $this->hasMany(ProposalSubmission::class, 'owner_id');
@@ -68,6 +92,11 @@ class User extends Authenticatable
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'assigned_to');
+    }
+
+    public function emailAccount(): HasOne
+    {
+        return $this->hasOne(EmailAccount::class);
     }
 
     public function followUps(): HasMany

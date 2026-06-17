@@ -11,7 +11,10 @@ class ProposalNumberService
     {
         return DB::transaction(function () use ($organizationId) {
             $year = now()->year;
-            $count = ProposalSubmission::where('organization_id', $organizationId)
+            // Count soft-deleted proposals too — the proposal_number unique index
+            // still includes them, so the sequence must never reuse a number.
+            $count = ProposalSubmission::withTrashed()
+                ->where('organization_id', $organizationId)
                 ->whereYear('created_at', $year)
                 ->lockForUpdate()
                 ->count();

@@ -19,10 +19,9 @@ class OrganizationFactory extends Factory
             'slug' => Str::slug($name) . '-' . $this->faker->randomNumber(4),
             'email' => $this->faker->companyEmail(),
             'phone' => $this->faker->phoneNumber(),
-            'address' => $this->faker->streetAddress(),
             'city' => $this->faker->city(),
             'state' => $this->faker->stateAbbr(),
-            'zip_code' => $this->faker->postcode(),
+            'zip' => $this->faker->postcode(),
             'country' => 'US',
             'settings' => [],
         ];

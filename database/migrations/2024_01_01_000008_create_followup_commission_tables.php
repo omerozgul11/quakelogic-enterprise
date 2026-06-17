@@ -23,7 +23,6 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
             $table->index(['assigned_to', 'status']);
-            $table->index(['taskable_type', 'taskable_id']);
         });
 
         Schema::create('follow_ups', function (Blueprint $table) {

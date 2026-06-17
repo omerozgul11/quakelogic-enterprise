@@ -17,7 +17,11 @@ Route::prefix('v1')->name('api.v1.')->middleware(['auth:sanctum'])->group(functi
     Route::apiResource('contacts', ContactApiController::class)->except(['create', 'edit']);
     Route::apiResource('commissions', CommissionApiController::class)->only(['index', 'show']);
 
-    Route::get('/me', fn(\Illuminate\Http\Request $r) => response()->json(['user' => $r->user()->load('roles')]))->name('me');
+    Route::get('/me', fn(\Illuminate\Http\Request $r) => response()->json($r->user()->load('roles')))->name('me');
 
-    Route::get('/health', fn() => response()->json(['status' => 'ok', 'time' => now()->toISOString()]))->name('health');
+    Route::get('/health', fn() => response()->json([
+        'status' => 'ok',
+        'version' => config('app.version', '1.0.0'),
+        'timestamp' => now()->toISOString(),
+    ]))->name('health');
 });

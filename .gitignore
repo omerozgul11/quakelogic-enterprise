@@ -6,8 +6,19 @@
 /storage/app/private
 /vendor
 .env
+.env.*
+!.env.example
 .env.backup
 .env.production
+.env.bak*
+*.bak.predeploy
+
+# Laravel runtime (do not commit caches, logs, sessions, or DB backups)
+/bootstrap/cache
+/storage/backups
+/storage/logs
+/storage/framework
+/storage/app/public
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -18,3 +29,9 @@ yarn-error.log
 /.idea
 /.vscode
 *.DS_Store
+
+# Third-party CRM app vendored alongside (not part of this Laravel project)
+/crm
+# Generated/derived runtime assets (dompdf font cache, uploaded reference docs)
+/storage/fonts
+/storage/app/reference

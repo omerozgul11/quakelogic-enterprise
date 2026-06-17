@@ -1,5 +1,6 @@
 import { useForm, Head } from '@inertiajs/react';
-import { TrendingUp } from 'lucide-react';
+import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { LogoMark } from '@/Components/ui/Logo';
 
 export default function Login() {
     const { data, setData, post, processing, errors } = useForm({
@@ -16,89 +17,89 @@ export default function Login() {
     return (
         <>
             <Head title="Sign In" />
-            <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
-                <div className="w-full max-w-md">
-                    <div className="text-center mb-8">
-                        <div className="inline-flex items-center gap-3 mb-4">
-                            <div className="h-12 w-12 bg-white rounded-xl flex items-center justify-center">
-                                <TrendingUp className="h-7 w-7 text-blue-600" />
-                            </div>
-                            <span className="text-3xl font-bold text-white">QuakeLogic</span>
+            <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+                {/* Ambient, lively backdrop */}
+                <div className="animate-float pointer-events-none absolute -top-24 left-[15%] h-80 w-80 rounded-full bg-orange-400/30 blur-3xl" />
+                <div className="animate-float pointer-events-none absolute -bottom-20 right-[12%] h-96 w-96 rounded-full bg-amber-400/25 blur-3xl" style={{ animationDelay: '1.6s' }} />
+                <div className="animate-float pointer-events-none absolute bottom-1/3 left-1/2 h-72 w-72 rounded-full bg-rose-400/15 blur-3xl" style={{ animationDelay: '0.8s' }} />
+
+                <div className="relative w-full max-w-[26rem] animate-scale-in">
+                    {/* Brand */}
+                    <div className="mb-7 flex flex-col items-center text-center">
+                        <div className="shadow-glow mb-4 rounded-[16px]">
+                            <LogoMark size={56} />
                         </div>
-                        <p className="text-blue-200 text-lg">Enterprise Bid Intelligence Platform</p>
+                        <h1 className="text-[28px] font-bold tracking-tight text-foreground">Welcome back</h1>
+                        <p className="mt-1.5 text-[15px] text-muted-foreground">
+                            Sign in to <span className="font-semibold text-foreground">QuakeLogic</span> Proposals
+                        </p>
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-2xl p-8">
-                        <h1 className="text-2xl font-bold text-gray-900 mb-6">Sign in to your account</h1>
-
+                    {/* Card */}
+                    <div className="card-surface glass p-7 sm:p-8">
                         <form onSubmit={submit} className="space-y-5">
                             <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Email address
-                                </label>
-                                <input
-                                    id="email"
-                                    type="email"
-                                    value={data.email}
-                                    onChange={e => setData('email', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="you@quakelogic.net"
-                                    required
-                                    autoFocus
-                                />
-                                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+                                <label htmlFor="email" className="label">Email address</label>
+                                <div className="relative">
+                                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        value={data.email}
+                                        onChange={e => setData('email', e.target.value)}
+                                        className="input input-with-icon"
+                                        placeholder="you@quakelogic.net"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                                {errors.email && <p className="mt-1.5 text-sm text-destructive">{errors.email}</p>}
                             </div>
 
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Password
-                                </label>
-                                <input
-                                    id="password"
-                                    type="password"
-                                    value={data.password}
-                                    onChange={e => setData('password', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="••••••••"
-                                    required
-                                />
-                                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
+                                <div className="mb-1.5 flex items-center justify-between">
+                                    <label htmlFor="password" className="label mb-0">Password</label>
+                                    <a href="/forgot-password" className="text-sm font-semibold text-primary hover:underline">Forgot?</a>
+                                </div>
+                                <div className="relative">
+                                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        id="password"
+                                        type="password"
+                                        value={data.password}
+                                        onChange={e => setData('password', e.target.value)}
+                                        className="input input-with-icon"
+                                        placeholder="••••••••"
+                                        required
+                                    />
+                                </div>
+                                {errors.password && <p className="mt-1.5 text-sm text-destructive">{errors.password}</p>}
                             </div>
 
-                            <div className="flex items-center justify-between">
-                                <label className="flex items-center gap-2 text-sm text-gray-600">
-                                    <input
-                                        type="checkbox"
-                                        checked={data.remember}
-                                        onChange={e => setData('remember', e.target.checked)}
-                                        className="rounded border-gray-300"
-                                    />
-                                    Remember me
-                                </label>
-                                <a href="/forgot-password" className="text-sm text-blue-600 hover:underline">
-                                    Forgot password?
-                                </a>
-                            </div>
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={data.remember}
+                                    onChange={e => setData('remember', e.target.checked)}
+                                    className="h-4 w-4 rounded-md border-input text-primary focus:ring-primary/30"
+                                />
+                                Keep me signed in
+                            </label>
 
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors"
+                                className="bg-brand-gradient shadow-glow group flex w-full items-center justify-center gap-2 rounded-full py-3 px-4 text-sm font-semibold text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.4,0.5,1)] hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0 active:scale-[0.99] disabled:opacity-60"
                             >
-                                {processing ? 'Signing in...' : 'Sign in'}
+                                {processing ? 'Signing in…' : 'Sign in'}
+                                {!processing && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
                             </button>
                         </form>
-
-                        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                            <p className="text-xs text-gray-500 font-medium mb-2">Demo Credentials:</p>
-                            <div className="space-y-1 text-xs text-gray-600">
-                                <div><span className="font-medium">CEO:</span> ceo@quakelogic.net / password123!</div>
-                                <div><span className="font-medium">BD Manager:</span> bdm@quakelogic.net / password123!</div>
-                                <div><span className="font-medium">Proposal Mgr:</span> pm@quakelogic.net / password123!</div>
-                                <div><span className="font-medium">Sales:</span> sales@quakelogic.net / password123!</div>
-                            </div>
-                        </div>
                     </div>
+
+                    <p className="mt-6 text-center text-xs text-muted-foreground">
+                        © {new Date().getFullYear()} QuakeLogic Proposals. All rights reserved.
+                    </p>
                 </div>
             </div>
         </>

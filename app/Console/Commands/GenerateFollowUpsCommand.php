@@ -57,20 +57,23 @@ class GenerateFollowUpsCommand extends Command
                 }
 
                 $assignedTo = $schedule->assign_to_owner
-                    ? $proposal->owner_user_id
+                    ? $proposal->owner_id
                     : $schedule->assign_to_user_id;
 
                 if (!$this->option('dry-run')) {
                     FollowUp::create([
                         'organization_id' => $schedule->organization_id,
                         'type' => $schedule->follow_up_type,
-                        'subject' => $this->renderTemplate($schedule->subject_template, $proposal),
+                        'subject' => $this->renderTemplate((string) $schedule->subject_template, $proposal),
                         'message' => $this->renderTemplate($schedule->message_template ?? '', $proposal),
                         'scheduled_date' => now()->addDays($schedule->delay_days),
-                        'assigned_to' => $assignedTo,
+                        'assigned_to' => $assignedTo ?? $proposal->owner_id ?? $proposal->created_by,
                         'proposal_submission_id' => $proposal->id,
                         'status' => 'scheduled',
-                        'created_by' => null,
+                        'is_automated' => true,
+                        // created_by is NOT NULL; attribute the automated row to
+                        // the proposal's owner (falling back to its creator).
+                        'created_by' => $proposal->owner_id ?? $proposal->created_by,
                     ]);
                 }
 

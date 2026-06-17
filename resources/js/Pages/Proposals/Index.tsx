@@ -1,142 +1,264 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
-import { formatCurrency, formatDate, getDueDateLabel, getDueDateColor } from '@/Lib/utils';
+import { Select } from '@/Components/ui/Select';
+import { SearchInput } from '@/Components/ui/SearchInput';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Button } from '@/Components/ui/Button';
+import { Card } from '@/Components/ui/Card';
+import { DateFilter, DateFilterValue } from '@/Components/ui/DateFilter';
+import { EmptyState } from '@/Components/ui/EmptyState';
+import { Pagination } from '@/Components/ui/Pagination';
+import { cn, formatCurrency, getDueDateLabel, getDueDateColor, proposalTypeLabel, proposalTypeColor } from '@/Lib/utils';
 import { PaginatedResponse, ProposalSubmission } from '@/Types';
-import { Plus, Search, X, FileText, ExternalLink } from 'lucide-react';
+import { Plus, Search, X, FileText, ExternalLink, Trash2, KanbanSquare, ChevronUp, ChevronDown, ChevronsUpDown, TrendingUp } from 'lucide-react';
+
+interface MarginRollup {
+    bid: number;
+    cost: number;
+    profit: number;
+    margin: number | null;
+    count: number;
+    currency: string;
+}
 
 interface Props {
     proposals: PaginatedResponse<ProposalSubmission>;
     filters: Record<string, string>;
     statuses: Array<{ value: string; label: string; color: string }>;
-    can: { create: boolean };
+    types: Array<{ value: string; label: string; description: string; has_value: boolean }>;
+    margins: MarginRollup;
+    can: { create: boolean; delete: boolean };
 }
 
-export default function ProposalsIndex({ proposals, filters, statuses, can }: Props) {
+/** Per-bid dollar profit (bid − cost), or null when there's no bid or no cost estimate. */
+function rowProfit(p: ProposalSubmission): number | null {
+    const bid = Number(p.proposal_value ?? 0);
+    const cost = Number(p.estimated_cost ?? 0);
+    if (bid <= 0 || cost <= 0) return null;
+    return Math.round((bid - cost) * 100) / 100;
+}
+
+const signClass = (v: number | null) =>
+    v == null ? 'text-muted-foreground' : v > 0 ? 'text-emerald-600' : v < 0 ? 'text-red-600' : 'text-foreground';
+
+const DEFAULT_DIR: Record<string, 'asc' | 'desc'> = {
+    name: 'asc', company: 'asc', owner: 'asc', status: 'asc', value: 'desc', due_date: 'asc', date: 'desc',
+};
+
+export default function ProposalsIndex({ proposals, filters, statuses, types, margins, can }: Props) {
+    const sort = typeof filters.sort === 'string' ? filters.sort : 'date';
+    const direction = filters.direction === 'asc' ? 'asc' : 'desc';
+
+    const setSort = (field: string) => {
+        const dir = sort === field ? (direction === 'asc' ? 'desc' : 'asc') : (DEFAULT_DIR[field] ?? 'asc');
+        router.get('/proposals', { ...filters, sort: field, direction: dir }, { preserveState: true, preserveScroll: true });
+    };
+
+    const SortHeader = ({ field, label, className }: { field: string; label: string; className?: string }) => (
+        <th className={cn('th cursor-pointer select-none transition-colors hover:text-foreground', className)} onClick={() => setSort(field)}>
+            <span className="inline-flex items-center gap-1">
+                {label}
+                {sort === field
+                    ? (direction === 'asc' ? <ChevronUp className="h-3.5 w-3.5 text-primary" /> : <ChevronDown className="h-3.5 w-3.5 text-primary" />)
+                    : <ChevronsUpDown className="h-3 w-3 text-muted-foreground/40" />}
+            </span>
+        </th>
+    );
+
     const handleFilter = (key: string, value: string) => {
-        router.get('/proposals', { ...filters, [key]: value || undefined }, { preserveState: true });
+        router.get('/proposals', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const handleDate = (v: DateFilterValue) => {
+        router.get('/proposals', { ...filters, date_field: v.date_field, from: v.from, to: v.to }, { preserveState: true });
+    };
+
+    const handleDelete = (e: React.MouseEvent, proposal: ProposalSubmission) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`Delete proposal ${proposal.proposal_number}? This cannot be undone.`)) {
+            router.delete(`/proposals/${proposal.id}`, { preserveScroll: true });
+        }
     };
 
     return (
         <AppLayout>
             <Head title="Proposals" />
-            <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Proposals</h1>
-                        <p className="text-gray-500 mt-1">{proposals.total} total proposals</p>
-                    </div>
-                    {can.create && (
-                        <Link href="/proposals/create" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                            <Plus className="h-4 w-4" />
-                            New Proposal
-                        </Link>
-                    )}
-                </div>
+            <div className="p-4 sm:p-6">
+                <PageHeader
+                    icon={FileText}
+                    title="Proposals"
+                    description={`${proposals.total} ${proposals.total === 1 ? 'proposal' : 'proposals'} total`}
+                    actions={
+                        <>
+                            <Button href="/proposals/board" variant="secondary" icon={KanbanSquare}>Board view</Button>
+                            {can.create && (
+                                <Button href="/proposals/create" icon={Plus}>
+                                    New Proposal
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
 
-                <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-                    <div className="flex flex-wrap gap-3">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Search proposals..."
-                                defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-72"
-                            />
-                        </div>
-                        <select
+                {/* Filters */}
+                <Card className="mb-4 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[18rem]"
+                            initial={filters.search ?? ''}
+                            onSearch={v => handleFilter('search', v)}
+                            placeholder="Search proposals…"
+                        />
+                        <Select
+                            value={filters.type ?? ''}
+                            onChange={v => handleFilter('type', v)}
+                            options={types.map(t => ({ value: t.value, label: t.label }))}
+                            placeholder="All Types"
+                            className="w-full sm:w-40"
+                        />
+                        <Select
                             value={filters.status ?? ''}
-                            onChange={e => handleFilter('status', e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="">All Statuses</option>
-                            {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                        </select>
-                        {Object.keys(filters).length > 0 && (
-                            <button onClick={() => router.get('/proposals')} className="flex items-center gap-1 text-sm text-red-600">
-                                <X className="h-4 w-4" /> Clear
-                            </button>
-                        )}
+                            onChange={v => handleFilter('status', v)}
+                            options={statuses.map(s => ({ value: s.value, label: s.label }))}
+                            placeholder="All Statuses"
+                            className="w-full sm:w-44"
+                        />
+                        <button onClick={() => router.get('/proposals')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
+                            <X className="h-4 w-4" /> Clear
+                        </button>
                     </div>
-                </div>
+                    <div className="mt-3 border-t border-border pt-3">
+                        <DateFilter
+                            value={{ date_field: filters.date_field, from: filters.from, to: filters.to }}
+                            onChange={handleDate}
+                        />
+                    </div>
+                </Card>
 
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Proposal #</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Project</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Agency</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Status</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Value</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Due Date</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Owner</th>
-                                <th className="px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {proposals.data.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="text-center py-12 text-gray-500">
-                                        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                        <p className="font-medium">No proposals found</p>
-                                        <p className="text-sm mt-1">Create your first proposal to get started</p>
-                                    </td>
-                                </tr>
-                            ) : proposals.data.map(proposal => (
-                                <tr key={proposal.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <Link href={`/proposals/${proposal.id}`} className="text-sm font-mono text-blue-600 hover:underline">
-                                            {proposal.proposal_number}
-                                        </Link>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <p className="text-sm font-medium text-gray-900 line-clamp-2">{proposal.project_name}</p>
-                                        {proposal.solicitation_number && (
-                                            <p className="text-xs text-gray-500">{proposal.solicitation_number}</p>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-700">{proposal.agency?.name ?? '—'}</td>
-                                    <td className="px-4 py-3">
-                                        <StatusBadge status={typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'draft'} />
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-700">
-                                        {proposal.award_value ? (
-                                            <span className="text-green-700 font-medium">{formatCurrency(proposal.award_value)}</span>
-                                        ) : formatCurrency(proposal.proposal_value)}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`text-sm ${getDueDateColor(proposal.due_date)}`}>
-                                            {proposal.due_date ? getDueDateLabel(proposal.due_date) : '—'}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-700">{proposal.owner?.name ?? '—'}</td>
-                                    <td className="px-4 py-3">
-                                        <Link href={`/proposals/${proposal.id}`} className="text-gray-400 hover:text-gray-600">
-                                            <ExternalLink className="h-4 w-4" />
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-
-                    {proposals.last_page > 1 && (
-                        <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between">
-                            <p className="text-sm text-gray-500">Showing {proposals.from}–{proposals.to} of {proposals.total}</p>
-                            <div className="flex gap-2">
-                                {proposals.links.map((link, i) => (
-                                    <button key={i} onClick={() => link.url && router.get(link.url)} disabled={!link.url}
-                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                        className={`px-3 py-1 text-sm rounded ${link.active ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100 disabled:opacity-50'}`}
-                                    />
-                                ))}
+                {/* Overall profit-margin roll-up across the filtered set (USD) */}
+                {margins.count > 0 && (
+                    <Card className="mb-4 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <TrendingUp className="h-4 w-4 text-primary" />
+                                Estimated profit margin
+                                <span className="text-xs font-normal text-muted-foreground">
+                                    across {margins.count} {margins.count === 1 ? 'proposal' : 'proposals'} with a cost estimate · USD
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-8">
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total bid</p>
+                                    <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(margins.bid, 'USD')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Est. cost</p>
+                                    <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(margins.cost, 'USD')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Potential profit</p>
+                                    <p className={`text-base font-bold tabular-nums ${signClass(margins.profit)}`}>{formatCurrency(margins.profit, 'USD')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Blended margin</p>
+                                    <p className={`text-base font-bold tabular-nums ${signClass(margins.margin)}`}>{margins.margin != null ? `${margins.margin}%` : '—'}</p>
+                                </div>
                             </div>
                         </div>
-                    )}
-                </div>
+                    </Card>
+                )}
+
+                {/* Table */}
+                <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="border-b border-border bg-secondary/40">
+                                <tr>
+                                    <th className="th">Proposal #</th>
+                                    <SortHeader field="name" label="Project" />
+                                    <SortHeader field="company" label="Company" className="hidden md:table-cell" />
+                                    <SortHeader field="status" label="Status" />
+                                    <SortHeader field="value" label="Value" />
+                                    <th className="th hidden sm:table-cell">Profit</th>
+                                    <SortHeader field="due_date" label="Due Date" className="hidden sm:table-cell" />
+                                    <SortHeader field="owner" label="Owner" className="hidden lg:table-cell" />
+                                    <th className="th" />
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {proposals.data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={9}>
+                                            <EmptyState
+                                                icon={FileText}
+                                                title="No proposals found"
+                                                description="Create your first proposal to get started."
+                                                action={can.create && <Button href="/proposals/create" icon={Plus}>New Proposal</Button>}
+                                            />
+                                        </td>
+                                    </tr>
+                                ) : proposals.data.map(proposal => (
+                                    <tr key={proposal.id} className="row-link">
+                                        <td className="td">
+                                            <Link href={`/proposals/${proposal.id}`} className="font-mono text-sm font-medium text-primary hover:underline">
+                                                {proposal.proposal_number}
+                                            </Link>
+                                        </td>
+                                        <td className="td max-w-md">
+                                            <div className="flex items-start gap-2">
+                                                <span className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${proposalTypeColor(proposal.proposal_type)}`}>
+                                                    {proposalTypeLabel(proposal.proposal_type)}
+                                                </span>
+                                                <p className="font-medium text-foreground line-clamp-2">{proposal.project_name}</p>
+                                            </div>
+                                            {proposal.solicitation_number && (
+                                                <p className="mt-0.5 text-xs text-muted-foreground">{proposal.solicitation_number}</p>
+                                            )}
+                                        </td>
+                                        <td className="td hidden text-muted-foreground md:table-cell">{proposal.company?.name ?? proposal.agency?.name ?? '—'}</td>
+                                        <td className="td">
+                                            <StatusBadge status={typeof proposal.status === 'string' ? proposal.status : (proposal.status as any)?.value ?? 'in_progress'} />
+                                        </td>
+                                        <td className="td font-medium">
+                                            {proposal.award_value ? (
+                                                <span className="text-emerald-600">{formatCurrency(proposal.award_value, proposal.currency)}</span>
+                                            ) : formatCurrency(proposal.proposal_value, proposal.currency)}
+                                        </td>
+                                        <td className="td hidden font-medium sm:table-cell">
+                                            {(() => {
+                                                const profit = rowProfit(proposal);
+                                                return profit != null
+                                                    ? <span className={`text-sm font-semibold tabular-nums ${signClass(profit)}`}>{formatCurrency(profit, proposal.currency)}</span>
+                                                    : <span className="text-sm text-muted-foreground">—</span>;
+                                            })()}
+                                        </td>
+                                        <td className="td hidden sm:table-cell">
+                                            <span className={`text-sm font-medium ${getDueDateColor(proposal.due_date)}`}>
+                                                {proposal.due_date ? getDueDateLabel(proposal.due_date) : '—'}
+                                            </span>
+                                        </td>
+                                        <td className="td hidden text-muted-foreground lg:table-cell">{proposal.owner?.name ?? '—'}</td>
+                                        <td className="td">
+                                            <div className="flex items-center gap-2">
+                                                <Link href={`/proposals/${proposal.id}`} title="Open" className="text-muted-foreground transition-colors hover:text-primary">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                                {can.delete && (
+                                                    <button onClick={e => handleDelete(e, proposal)} title="Delete" className="text-muted-foreground transition-colors hover:text-destructive">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <Pagination from={proposals.from} to={proposals.to} total={proposals.total} links={proposals.links} />
+                </Card>
             </div>
         </AppLayout>
     );

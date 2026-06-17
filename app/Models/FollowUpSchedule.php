@@ -8,14 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FollowUpSchedule extends Model
 {
     protected $fillable = [
-        'organization_id', 'name', 'trigger_event', 'delay_days',
-        'follow_up_type', 'subject_template', 'message_template',
+        'organization_id', 'proposal_submission_id', 'name', 'trigger_event', 'delay_days',
+        'follow_up_type', 'subject_template', 'message_template', 'template_type', 'intervals_days',
         'is_active', 'assign_to_owner', 'assign_to_user_id',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'assign_to_owner' => 'boolean',
+        'intervals_days' => 'array',
     ];
 
     public function organization(): BelongsTo

@@ -3,10 +3,11 @@ import { AppLayout } from '@/Components/layout/AppLayout';
 import { formatCurrency, formatPercent } from '@/Lib/utils';
 import { StatusBadge } from '@/Components/ui/StatusBadge';
 import {
-    BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { TrendingUp, TrendingDown, Target, Trophy, DollarSign, AlertCircle, Clock } from 'lucide-react';
+import { ChartGradients, ChartTooltip, CHART_COLORS, AXIS_TICK, GRID_STROKE } from '@/Components/ui/ChartKit';
+import { TrendingUp, TrendingDown, Target, Trophy, DollarSign, AlertCircle } from 'lucide-react';
 
 interface ExecutiveMetrics {
     totalProposals: number;
@@ -29,9 +30,11 @@ interface ExecutiveMetrics {
     monthlyTrend: Array<{ month: string; submitted: number; awarded: number }>;
     topUsers: Array<{ user: string; total_proposals: number; total_value: number; won: number }>;
     sourceAnalysis: Record<string, number>;
+    expectedMonthlyRevenue: number;
+    avgAwardCycleDays: number;
 }
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
+const COLORS = CHART_COLORS;
 
 function KpiCard({ title, value, subtitle, icon: Icon, trend }: {
     title: string; value: string; subtitle?: string;
@@ -39,12 +42,12 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend }: {
     trend?: { value: number; positive: boolean };
 }) {
     return (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-card rounded-xl border border-border p-5">
             <div className="flex items-start justify-between">
                 <div>
-                    <p className="text-sm font-medium text-gray-500">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-                    {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+                    <p className="text-sm font-medium text-muted-foreground">{title}</p>
+                    <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
+                    {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
                 </div>
                 <Icon className="h-6 w-6 text-blue-500" />
             </div>
@@ -62,7 +65,7 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
     const statusChartData = Object.entries(metrics.proposalsByStatus).map(([status, count]) => ({
         name: status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
         value: count,
-    }));
+    })).filter(d => d.value > 0);
 
     const sourceData = Object.entries(metrics.sourceAnalysis).map(([source, count]) => ({
         name: source.replace(/_/g, ' ').toUpperCase(),
@@ -75,8 +78,8 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
             <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Executive Dashboard</h1>
-                        <p className="text-gray-500 mt-1">Company-wide performance overview</p>
+                        <h1 className="text-2xl font-bold text-foreground">Executive Dashboard</h1>
+                        <p className="text-muted-foreground mt-1">Company-wide performance overview</p>
                     </div>
                     <Link href="/" className="text-sm text-blue-600 hover:underline">← My Dashboard</Link>
                 </div>
@@ -85,7 +88,7 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <KpiCard title="Win Rate" value={formatPercent(metrics.winRate)} subtitle={`${metrics.awarded} won / ${metrics.awarded + metrics.lost} closed`} icon={Trophy} />
                     <KpiCard title="Pipeline Value" value={formatCurrency(metrics.pipelineValue)} subtitle="Active proposals" icon={Target} />
-                    <KpiCard title="Award Value (All Time)" value={formatCurrency(metrics.awardValue)} subtitle="Total contract value awarded" icon={DollarSign} />
+                    <KpiCard title="Earnings (YTD)" value={formatCurrency(metrics.awardValue)} subtitle="Contracts awarded this year" icon={DollarSign} />
                     <KpiCard title="Total Proposals" value={String(metrics.totalProposals)} subtitle="All time" icon={Target} />
                 </div>
 
@@ -97,33 +100,42 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
                     <KpiCard title="Overdue Items" value={String(metrics.overdueTasks + metrics.overdueFollowUps)} subtitle={`${metrics.overdueTasks} tasks, ${metrics.overdueFollowUps} follow-ups`} icon={AlertCircle} />
                 </div>
 
+                {/* KPI Row 3 — forecasting (Phase 4) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <KpiCard title="Expected Revenue (This Month)" value={formatCurrency(metrics.expectedMonthlyRevenue)} subtitle="Open bids weighted by win probability, due this month" icon={DollarSign} />
+                    <KpiCard title="Avg. Award Cycle" value={metrics.avgAwardCycleDays > 0 ? `${metrics.avgAwardCycleDays} days` : '—'} subtitle="Submission → award, won this year" icon={TrendingUp} />
+                </div>
+
                 {/* Charts Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     {/* Monthly Trend */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposal Activity (12 Months)</h2>
-                        <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={metrics.monthlyTrend}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                                <YAxis tick={{ fontSize: 11 }} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="submitted" fill="#3B82F6" name="Submitted" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="awarded" fill="#10B981" name="Awarded" radius={[4, 4, 0, 0]} />
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Proposal Activity (12 Months)</h2>
+                        <ResponsiveContainer width="100%" height={260}>
+                            <BarChart data={metrics.monthlyTrend} barGap={6}>
+                                <ChartGradients />
+                                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                                <XAxis dataKey="month" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+                                <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                                <Tooltip cursor={{ fill: 'hsl(var(--muted-foreground))', opacity: 0.08 }} content={<ChartTooltip />} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                                <Bar dataKey="submitted" fill="url(#cg-0)" name="Submitted" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                                <Bar dataKey="awarded" fill="url(#cg-2)" name="Awarded" radius={[6, 6, 0, 0]} maxBarSize={26} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
 
                     {/* Proposals by Status */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposals by Status</h2>
-                        <ResponsiveContainer width="100%" height={250}>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Proposals by Status</h2>
+                        <ResponsiveContainer width="100%" height={260}>
                             <PieChart>
-                                <Pie data={statusChartData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
+                                <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={52} outerRadius={84} paddingAngle={2} cornerRadius={4} dataKey="value" nameKey="name"
+                                    stroke="hsl(var(--card))" strokeWidth={2}>
                                     {statusChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                 </Pie>
-                                <Tooltip />
+                                <Tooltip content={<ChartTooltip nameKey="name" />} />
+                                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -131,38 +143,38 @@ export default function ExecutiveDashboard({ metrics }: { metrics: ExecutiveMetr
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Top Users */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Top BD Performance</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Top BD Performance</h2>
                         <div className="space-y-3">
                             {metrics.topUsers.length === 0 ? (
-                                <p className="text-sm text-gray-500 text-center py-6">No data yet</p>
+                                <p className="text-sm text-muted-foreground text-center py-6">No data yet</p>
                             ) : metrics.topUsers.map((u, i) => (
-                                <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div key={i} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <span className="h-7 w-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
                                             {i + 1}
                                         </span>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-900">{u.user}</p>
-                                            <p className="text-xs text-gray-500">{u.total_proposals} proposals · {u.won} won</p>
+                                            <p className="text-sm font-medium text-foreground">{u.user}</p>
+                                            <p className="text-xs text-muted-foreground">{u.total_proposals} proposals · {u.won} won</p>
                                         </div>
                                     </div>
-                                    <span className="text-sm font-semibold text-gray-900">{formatCurrency(u.total_value)}</span>
+                                    <span className="text-sm font-semibold text-foreground">{formatCurrency(u.total_value)}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
                     {/* Source Analysis */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Opportunity Sources</h2>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                        <h2 className="text-lg font-semibold text-foreground mb-4">Opportunity Sources</h2>
                         <div className="space-y-3">
                             {sourceData.map((s, i) => (
                                 <div key={i} className="flex items-center gap-3">
                                     <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                    <span className="text-sm text-gray-700 flex-1">{s.name}</span>
-                                    <span className="text-sm font-semibold text-gray-900">{s.count}</span>
-                                    <div className="w-24 bg-gray-100 rounded-full h-2">
+                                    <span className="text-sm text-foreground flex-1">{s.name}</span>
+                                    <span className="text-sm font-semibold text-foreground">{s.count}</span>
+                                    <div className="w-24 bg-secondary rounded-full h-2">
                                         <div
                                             className="h-2 rounded-full"
                                             style={{

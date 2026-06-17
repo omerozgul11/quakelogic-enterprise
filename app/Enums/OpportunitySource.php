@@ -26,7 +26,7 @@ enum OpportunitySource: string
     {
         return match($this) {
             self::Manual => 'Manual Entry',
-            self::SamGov => 'SAM.gov',
+            self::SamGov => 'SAM',
             self::BidPrime => 'BidPrime',
             self::GovWin => 'GovWin IQ',
             self::Merx => 'MERX',

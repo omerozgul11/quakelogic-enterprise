@@ -1,7 +1,12 @@
 import { Head, Link } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Card } from '@/Components/ui/Card';
+import { EmptyState } from '@/Components/ui/EmptyState';
+import { FilePreviewModal, PreviewFile } from '@/Components/ui/FilePreviewModal';
 import { formatDate } from '@/Lib/utils';
-import { FileText, Download, ExternalLink } from 'lucide-react';
+import { FileText, FileSpreadsheet, FileImage, File, Download, Eye } from 'lucide-react';
+import { useState } from 'react';
 
 interface ProposalFile {
     id: number;
@@ -24,82 +29,116 @@ interface Props {
     };
 }
 
-const MIME_ICONS: Record<string, string> = {
-    'application/pdf': '📄',
-    'application/msword': '📝',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📝',
-    'application/vnd.ms-excel': '📊',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
-    'application/vnd.ms-powerpoint': '📊',
-    'image/png': '🖼️',
-    'image/jpeg': '🖼️',
+const MIME_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+    'application/pdf': FileText,
+    'application/msword': FileText,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': FileText,
+    'application/vnd.ms-excel': FileSpreadsheet,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': FileSpreadsheet,
+    'application/vnd.ms-powerpoint': FileSpreadsheet,
+    'image/png': FileImage,
+    'image/jpeg': FileImage,
 };
 
 export default function DocumentsIndex({ files }: Props) {
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
     return (
         <AppLayout>
             <Head title="Documents" />
             <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-                        <p className="text-gray-500 mt-1">{files.total} files across all proposals</p>
-                    </div>
-                </div>
+                <PageHeader
+                    icon={FileText}
+                    title="Documents"
+                    description={`${files.total} ${files.total === 1 ? 'file' : 'files'} across all proposals`}
+                />
 
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">File</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Proposal</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Type</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Size</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Uploaded</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">By</th>
-                                <th className="px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {files.data.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-12 text-gray-500">
-                                    <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                    <p>No documents uploaded yet.</p>
-                                </td></tr>
-                            ) : files.data.map(file => (
-                                <tr key={file.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-lg">{MIME_ICONS[file.mime_type] ?? '📎'}</span>
-                                            <span className="text-sm font-medium text-gray-900 max-w-xs truncate">{file.display_name}</span>
-                                            {file.version > 1 && <span className="text-xs text-gray-400">v{file.version}</span>}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {file.proposal ? (
-                                            <Link href={`/proposals/${file.proposal.id}`} className="text-sm text-blue-600 hover:underline font-mono">
-                                                {file.proposal.proposal_number}
-                                            </Link>
-                                        ) : '—'}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{file.document_type ?? '—'}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{file.file_size_formatted}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-500">{formatDate(file.created_at)}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{file.uploaded_by_user?.name ?? '—'}</td>
-                                    <td className="px-4 py-3">
-                                        {file.proposal && (
-                                            <a href={`/proposals/${file.proposal.id}/files/${file.id}/download`}
-                                                className="text-gray-400 hover:text-blue-600">
-                                                <Download className="h-4 w-4" />
-                                            </a>
-                                        )}
-                                    </td>
+                <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="border-b border-border bg-secondary/40">
+                                <tr>
+                                    <th className="th">File</th>
+                                    <th className="th">Proposal</th>
+                                    <th className="th">Type</th>
+                                    <th className="th">Size</th>
+                                    <th className="th">Uploaded</th>
+                                    <th className="th">By</th>
+                                    <th className="th" />
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {files.data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7}>
+                                            <EmptyState
+                                                icon={FileText}
+                                                title="No documents uploaded yet"
+                                                description="Files attached to your proposals will appear here."
+                                            />
+                                        </td>
+                                    </tr>
+                                ) : files.data.map(file => {
+                                    const FileIcon = MIME_ICONS[file.mime_type] ?? File;
+                                    return (
+                                        <tr key={file.id} className="row-link">
+                                            <td className="td">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary/60">
+                                                        <FileIcon className="h-[18px] w-[18px] text-muted-foreground" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <span className="block max-w-xs truncate font-medium text-foreground">{file.display_name}</span>
+                                                        {file.version > 1 && <span className="text-xs text-muted-foreground">v{file.version}</span>}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="td">
+                                                {file.proposal ? (
+                                                    <Link href={`/proposals/${file.proposal.id}`} className="font-mono text-sm text-primary hover:underline">
+                                                        {file.proposal.proposal_number}
+                                                    </Link>
+                                                ) : '—'}
+                                            </td>
+                                            <td className="td">
+                                                {file.document_type ? <span className="chip">{file.document_type}</span> : <span className="text-muted-foreground">—</span>}
+                                            </td>
+                                            <td className="td">
+                                                <span className="chip">{file.file_size_formatted}</span>
+                                            </td>
+                                            <td className="td text-muted-foreground">{formatDate(file.created_at)}</td>
+                                            <td className="td text-muted-foreground">{file.uploaded_by_user?.name ?? '—'}</td>
+                                            <td className="td">
+                                                {file.proposal && (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreview({
+                                                                name: file.display_name,
+                                                                mimeType: file.mime_type,
+                                                                previewUrl: `/proposals/${file.proposal!.id}/files/${file.id}/preview`,
+                                                                downloadUrl: `/proposals/${file.proposal!.id}/files/${file.id}/download`,
+                                                            })}
+                                                            title="Preview"
+                                                            className="text-muted-foreground transition-colors hover:text-primary"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </button>
+                                                        <a href={`/proposals/${file.proposal.id}/files/${file.id}/download`} title="Download"
+                                                            className="text-muted-foreground transition-colors hover:text-primary">
+                                                            <Download className="h-4 w-4" />
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
             </div>
+            <FilePreviewModal file={preview} onClose={() => setPreview(null)} />
         </AppLayout>
     );
 }

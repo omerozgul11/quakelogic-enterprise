@@ -1,114 +1,393 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
-import { Settings, Lock, User } from 'lucide-react';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Button } from '@/Components/ui/Button';
+import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
+import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
+import { TwoFactor } from '@/Components/settings/TwoFactor';
+import { cn } from '@/Lib/utils';
+import { Settings, Lock, User, Palette, LayoutDashboard, Bell, Mail, Check, Circle, RefreshCw, Eye, EyeOff } from 'lucide-react';
+
+const PW_LENGTH = 16;
+/** Generate a strong password that satisfies every rule in the legend. */
+function generatePassword(): string {
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const nums = '23456789';
+    const special = '!@#$%^&*-_=+?';
+    const all = lower + upper + nums + special;
+    const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+    const chars = [pick(lower), pick(upper), pick(nums), pick(special)];
+    while (chars.length < PW_LENGTH) chars.push(pick(all));
+    for (let i = chars.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [chars[i], chars[j]] = [chars[j], chars[i]]; }
+    return chars.join('');
+}
+
+const PW_RULES: Array<{ label: string; test: (s: string) => boolean }> = [
+    { label: 'At least 12 characters', test: s => s.length >= 12 },
+    { label: 'Uppercase letter', test: s => /[A-Z]/.test(s) },
+    { label: 'Lowercase letter', test: s => /[a-z]/.test(s) },
+    { label: 'Number', test: s => /[0-9]/.test(s) },
+    { label: 'Special character', test: s => /[^A-Za-z0-9]/.test(s) },
+];
+
+/** Live password-compliance legend — icons flip green as each rule is met. */
+function PasswordRules({ value }: { value: string }) {
+    return (
+        <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {PW_RULES.map(r => {
+                const ok = r.test(value);
+                return (
+                    <li key={r.label} className={cn('flex items-center gap-1.5 text-xs transition-colors', ok ? 'text-emerald-600' : 'text-muted-foreground')}>
+                        {ok ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Circle className="h-3.5 w-3.5 shrink-0" />}
+                        {r.label}
+                    </li>
+                );
+            })}
+        </ul>
+    );
+}
+
+interface Preferences {
+    display: { theme: 'system' | 'light' | 'dark'; density: 'comfortable' | 'compact' };
+    dashboard: { default_view: 'personal' | 'executive'; eur_usd_threshold: number | null };
+    channels: { new_proposal: boolean; new_opportunity: boolean; desktop: boolean; sound: boolean };
+}
 
 interface Props {
-    user: {
-        id: number;
-        name: string;
-        email: string;
-        commission_rate_override: number | null;
+    user: { id: number; name: string; email: string; commission_rate_override: number | null };
+    preferences: Preferences;
+    twoFactor: { enabled: boolean; confirmed: boolean };
+    mailbox: {
+        connected: boolean;
+        provider: string | null;
+        email: string | null;
+        from_name: string | null;
+        smtp_host: string | null;
+        smtp_port: number | null;
+        smtp_encryption: string | null;
+        smtp_username: string | null;
     };
 }
 
-export default function SettingsIndex({ user }: Props) {
+const SMTP_PRESETS: Record<string, { host: string; port: string; enc: string }> = {
+    gmail: { host: 'smtp.gmail.com', port: '587', enc: 'tls' },
+    office365: { host: 'smtp.office365.com', port: '587', enc: 'tls' },
+};
+
+function applyTheme(theme: string) {
+    try {
+        const el = document.documentElement;
+        if (theme === 'system') {
+            localStorage.removeItem('theme');
+            el.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } else {
+            localStorage.setItem('theme', theme);
+            el.classList.toggle('dark', theme === 'dark');
+        }
+    } catch { /* ignore */ }
+}
+
+function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+    return (
+        <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-2 text-left">
+            <span>
+                <span className="block text-sm font-medium text-foreground">{label}</span>
+                {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
+            </span>
+            <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-secondary'}`}>
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? 'left-[22px]' : 'left-0.5'}`} />
+            </span>
+        </button>
+    );
+}
+
+export default function SettingsIndex({ user, preferences, twoFactor, mailbox }: Props) {
     const profileForm = useForm({ name: user.name, email: user.email });
     const passwordForm = useForm({ current_password: '', password: '', password_confirmation: '' });
-
-    const handleProfileSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        profileForm.patch('/settings/profile');
+    const [showPw, setShowPw] = useState(false);
+    const generate = () => {
+        const pw = generatePassword();
+        passwordForm.setData({ ...passwordForm.data, password: pw, password_confirmation: pw });
+        setShowPw(true);
     };
 
-    const handlePasswordSubmit = (e: React.FormEvent) => {
+    const mailboxForm = useForm({
+        email: mailbox.email ?? user.email,
+        from_name: mailbox.from_name ?? user.name,
+        smtp_host: mailbox.smtp_host ?? '',
+        smtp_port: mailbox.smtp_port ? String(mailbox.smtp_port) : '587',
+        smtp_encryption: mailbox.smtp_encryption ?? 'tls',
+        smtp_username: mailbox.smtp_username ?? '',
+        smtp_password: '',
+    });
+    const applyPreset = (k: string) => {
+        const p = SMTP_PRESETS[k];
+        if (p) mailboxForm.setData(d => ({ ...d, smtp_host: p.host, smtp_port: p.port, smtp_encryption: p.enc }));
+    };
+    const saveMailbox = (e: React.FormEvent) => {
         e.preventDefault();
-        passwordForm.post('/settings/password', {
-            onSuccess: () => passwordForm.reset(),
-        });
+        mailboxForm.post('/settings/mailbox', { preserveScroll: true, onSuccess: () => mailboxForm.setData('smtp_password', '') });
+    };
+    const testMailbox = () => router.post('/settings/mailbox/test', {}, { preserveScroll: true });
+    const disconnectMailbox = () => { if (confirm('Disconnect your work email?')) router.delete('/settings/mailbox', { preserveScroll: true }); };
+    const prefs = useForm<Preferences>(preferences);
+
+    const handleProfileSubmit = (e: React.FormEvent) => { e.preventDefault(); profileForm.patch('/settings/profile'); };
+    const handlePasswordSubmit = (e: React.FormEvent) => { e.preventDefault(); passwordForm.put('/settings/password', { onSuccess: () => passwordForm.reset() }); };
+    const savePrefs = (e: React.FormEvent) => { e.preventDefault(); prefs.put('/settings/preferences'); };
+
+    const setChannel = (key: keyof Preferences['channels'], v: boolean) => {
+        prefs.setData('channels', { ...prefs.data.channels, [key]: v });
+        if (key === 'desktop' && v && 'Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
     };
 
     return (
         <AppLayout>
             <Head title="Settings" />
-            <div className="p-6 max-w-3xl mx-auto">
-                <div className="flex items-center gap-2 mb-6">
-                    <Settings className="h-6 w-6 text-gray-500" />
-                    <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-                </div>
+            <div className="mx-auto max-w-3xl p-6">
+                <PageHeader icon={Settings} title="Settings" description="Manage your profile, preferences, and notifications" />
 
                 {/* Profile */}
-                <form onSubmit={handleProfileSubmit} className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-                    <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <User className="h-5 w-5 text-gray-400" /> Profile
-                    </h2>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                            <input type="text" value={profileForm.data.name} onChange={e => profileForm.setData('name', e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                            {profileForm.errors.name && <p className="text-red-600 text-xs mt-1">{profileForm.errors.name}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            <input type="email" value={profileForm.data.email} onChange={e => profileForm.setData('email', e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                            {profileForm.errors.email && <p className="text-red-600 text-xs mt-1">{profileForm.errors.email}</p>}
-                        </div>
-                        {user.commission_rate_override != null && (
+                <form onSubmit={handleProfileSubmit}>
+                    <Card className="mb-6">
+                        <CardHeader><CardTitle className="flex items-center gap-2"><User className="h-5 w-5 text-muted-foreground" /> Profile</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate Override</label>
-                                <p className="text-sm text-gray-600">{user.commission_rate_override}% (set by administrator)</p>
+                                <label className="label">Full Name</label>
+                                <input type="text" value={profileForm.data.name} onChange={e => profileForm.setData('name', e.target.value)} className="input" required />
+                                {profileForm.errors.name && <p className="mt-1 text-xs text-destructive">{profileForm.errors.name}</p>}
                             </div>
-                        )}
-                        <div className="flex justify-end">
-                            <button type="submit" disabled={profileForm.processing}
-                                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                                {profileForm.processing ? 'Saving...' : 'Save Profile'}
-                            </button>
-                        </div>
-                    </div>
-                    {profileForm.recentlySuccessful && (
-                        <p className="text-green-600 text-sm mt-3">Profile updated successfully.</p>
-                    )}
+                            <div>
+                                <label className="label">Email</label>
+                                <input type="email" value={profileForm.data.email} onChange={e => profileForm.setData('email', e.target.value)} className="input" required />
+                                {profileForm.errors.email && <p className="mt-1 text-xs text-destructive">{profileForm.errors.email}</p>}
+                            </div>
+                            {user.commission_rate_override != null && (
+                                <div>
+                                    <label className="label">Commission Rate Override</label>
+                                    <p className="text-sm text-muted-foreground">{user.commission_rate_override}% (set by administrator)</p>
+                                </div>
+                            )}
+                            <div className="flex items-center justify-end gap-3">
+                                {profileForm.recentlySuccessful && <p className="text-sm font-medium text-emerald-600">Saved.</p>}
+                                <Button type="submit" disabled={profileForm.processing}>{profileForm.processing ? 'Saving...' : 'Save Profile'}</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </form>
 
-                {/* Password */}
-                <form onSubmit={handlePasswordSubmit} className="bg-white rounded-xl border border-gray-200 p-6">
-                    <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <Lock className="h-5 w-5 text-gray-400" /> Change Password
-                    </h2>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-                            <input type="password" value={passwordForm.data.current_password}
-                                onChange={e => passwordForm.setData('current_password', e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                            {passwordForm.errors.current_password && <p className="text-red-600 text-xs mt-1">{passwordForm.errors.current_password}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                            <input type="password" value={passwordForm.data.password}
-                                onChange={e => passwordForm.setData('password', e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                            {passwordForm.errors.password && <p className="text-red-600 text-xs mt-1">{passwordForm.errors.password}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                            <input type="password" value={passwordForm.data.password_confirmation}
-                                onChange={e => passwordForm.setData('password_confirmation', e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                        </div>
-                        <div className="flex justify-end">
-                            <button type="submit" disabled={passwordForm.processing}
-                                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                                {passwordForm.processing ? 'Changing...' : 'Change Password'}
-                            </button>
-                        </div>
-                    </div>
-                    {passwordForm.recentlySuccessful && (
-                        <p className="text-green-600 text-sm mt-3">Password changed successfully.</p>
-                    )}
+                {/* Preferences */}
+                <form onSubmit={savePrefs}>
+                    <Card className="mb-6">
+                        <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5 text-muted-foreground" /> Display &amp; Dashboard</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                <div>
+                                    <label className="label">Theme</label>
+                                    <Select className="w-full" value={prefs.data.display.theme}
+                                        onChange={v => { const t = v as Preferences['display']['theme']; prefs.setData('display', { ...prefs.data.display, theme: t }); applyTheme(t); }}
+                                        options={[
+                                            { value: 'system', label: 'System' },
+                                            { value: 'light', label: 'Light' },
+                                            { value: 'dark', label: 'Dark' },
+                                        ]}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Density</label>
+                                    <Select className="w-full" value={prefs.data.display.density}
+                                        onChange={v => prefs.setData('display', { ...prefs.data.display, density: v as Preferences['display']['density'] })}
+                                        options={[
+                                            { value: 'comfortable', label: 'Comfortable' },
+                                            { value: 'compact', label: 'Compact' },
+                                        ]}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label flex items-center gap-1"><LayoutDashboard className="h-3.5 w-3.5" /> Default dashboard</label>
+                                    <Select className="w-full" value={prefs.data.dashboard.default_view}
+                                        onChange={v => prefs.setData('dashboard', { ...prefs.data.dashboard, default_view: v as Preferences['dashboard']['default_view'] })}
+                                        options={[
+                                            { value: 'personal', label: 'Personal' },
+                                            { value: 'executive', label: 'Executive' },
+                                        ]}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label flex items-center gap-1">EUR/USD alert threshold</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        className="input"
+                                        value={prefs.data.dashboard.eur_usd_threshold ?? ''}
+                                        placeholder="1.14"
+                                        onChange={e => prefs.setData('dashboard', {
+                                            ...prefs.data.dashboard,
+                                            eur_usd_threshold: e.target.value === '' ? null : parseFloat(e.target.value),
+                                        })}
+                                    />
+                                    <p className="mt-1 text-xs text-muted-foreground">Dashboard shows EUR→USD green when it's under this rate.</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-3">
+                                {prefs.recentlySuccessful && <p className="text-sm font-medium text-emerald-600">Saved.</p>}
+                                <Button type="submit" disabled={prefs.processing}>{prefs.processing ? 'Saving...' : 'Save Preferences'}</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </form>
+
+                {/* Notification channels */}
+                <Card className="mb-6">
+                    <CardHeader><CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-muted-foreground" /> Notification Channels</CardTitle></CardHeader>
+                    <CardContent className="divide-y divide-border">
+                        <Toggle label="New proposals" hint="Get alerted when a proposal is created" checked={prefs.data.channels.new_proposal} onChange={v => setChannel('new_proposal', v)} />
+                        <Toggle label="New opportunities" hint="Get alerted when an opportunity is added" checked={prefs.data.channels.new_opportunity} onChange={v => setChannel('new_opportunity', v)} />
+                        <Toggle label="Desktop notifications" hint="Show a desktop popup when you're away (Windows & Mac)" checked={prefs.data.channels.desktop} onChange={v => setChannel('desktop', v)} />
+                        <Toggle label="Notification sound" hint="Play a sound for new notifications" checked={prefs.data.channels.sound} onChange={v => setChannel('sound', v)} />
+                        <div className="flex items-center justify-end gap-3 pt-3">
+                            <Button type="button" onClick={savePrefs} disabled={prefs.processing}>{prefs.processing ? 'Saving...' : 'Save Channels'}</Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Password */}
+                <form onSubmit={handlePasswordSubmit}>
+                    <Card>
+                        <CardHeader><CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5 text-muted-foreground" /> Change Password</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
+                            {/* Hidden username so the browser/passkey manager associates the saved credential */}
+                            <input type="text" name="username" autoComplete="username" value={user.email} readOnly hidden />
+                            <div>
+                                <label className="label">Current Password</label>
+                                <input type="password" autoComplete="current-password" value={passwordForm.data.current_password} onChange={e => passwordForm.setData('current_password', e.target.value)} className="input" required />
+                                {passwordForm.errors.current_password && <p className="mt-1 text-xs text-destructive">{passwordForm.errors.current_password}</p>}
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <label className="label">New Password</label>
+                                    <button type="button" onClick={generate} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                                        <RefreshCw className="h-3.5 w-3.5" /> Generate strong password
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type={showPw ? 'text' : 'password'}
+                                        autoComplete="new-password"
+                                        value={passwordForm.data.password}
+                                        onChange={e => passwordForm.setData('password', e.target.value)}
+                                        className="input pr-10 font-mono"
+                                        required
+                                    />
+                                    <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" title={showPw ? 'Hide' : 'Show'}>
+                                        {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                                <PasswordRules value={passwordForm.data.password} />
+                                {passwordForm.errors.password && <p className="mt-1 text-xs text-destructive">{passwordForm.errors.password}</p>}
+                            </div>
+                            <div>
+                                <label className="label">Confirm New Password</label>
+                                <input type={showPw ? 'text' : 'password'} autoComplete="new-password" value={passwordForm.data.password_confirmation} onChange={e => passwordForm.setData('password_confirmation', e.target.value)} className="input font-mono" required />
+                            </div>
+                            <p className="text-xs text-muted-foreground">After saving, your browser will offer to store this in your password manager / passkeys.</p>
+                            <div className="flex items-center justify-end gap-3">
+                                {passwordForm.recentlySuccessful && <p className="text-sm font-medium text-emerald-600">Password changed.</p>}
+                                <Button type="submit" disabled={passwordForm.processing}>{passwordForm.processing ? 'Changing...' : 'Change Password'}</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </form>
+
+                {/* Two-factor authentication (optional) */}
+                <div className="mt-6">
+                    <TwoFactor enabled={twoFactor.enabled} confirmed={twoFactor.confirmed} />
+                </div>
+
+                {/* Work email connection */}
+                <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Mail className="h-5 w-5 text-muted-foreground" /> Work Email
+                            {mailbox.connected && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600">Connected</span>}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {mailbox.connected && (
+                            <p className="mb-4 flex items-center gap-2 text-sm text-foreground">
+                                <Check className="h-4 w-4 text-emerald-600" />
+                                Connected as <span className="font-semibold">{mailbox.email}</span> — follow-ups &amp; your daily digest send from this address.
+                            </p>
+                        )}
+                        <p className="mb-4 text-sm text-muted-foreground">
+                            Connect your own work email so proposal follow-ups and your daily opportunity digest send from your
+                            address (replies come back to you). Most providers need an <span className="font-medium text-foreground">app password</span>,
+                            not your normal login password.
+                        </p>
+
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                            <span className="self-center text-xs font-medium text-muted-foreground">Quick setup:</span>
+                            <button type="button" onClick={() => applyPreset('gmail')} className="rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-secondary">Gmail / Workspace</button>
+                            <button type="button" onClick={() => applyPreset('office365')} className="rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-secondary">Microsoft 365</button>
+                        </div>
+
+                        <form onSubmit={saveMailbox} className="space-y-4">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="label">From email *</label>
+                                    <input type="email" value={mailboxForm.data.email} onChange={e => mailboxForm.setData('email', e.target.value)} className="input" required />
+                                    {mailboxForm.errors.email && <p className="mt-1 text-xs text-destructive">{mailboxForm.errors.email}</p>}
+                                </div>
+                                <div>
+                                    <label className="label">From name</label>
+                                    <input type="text" value={mailboxForm.data.from_name} onChange={e => mailboxForm.setData('from_name', e.target.value)} className="input" />
+                                </div>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-3">
+                                <div className="sm:col-span-2">
+                                    <label className="label">SMTP host *</label>
+                                    <input type="text" value={mailboxForm.data.smtp_host} onChange={e => mailboxForm.setData('smtp_host', e.target.value)} className="input" placeholder="smtp.gmail.com" required />
+                                    {mailboxForm.errors.smtp_host && <p className="mt-1 text-xs text-destructive">{mailboxForm.errors.smtp_host}</p>}
+                                </div>
+                                <div>
+                                    <label className="label">Port *</label>
+                                    <NumberInput allowDecimal={false} value={mailboxForm.data.smtp_port} onChange={e => mailboxForm.setData('smtp_port', e.target.value)} className="input" required />
+                                </div>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="label">Encryption</label>
+                                    <Select
+                                        value={mailboxForm.data.smtp_encryption}
+                                        onChange={v => mailboxForm.setData('smtp_encryption', v)}
+                                        options={[{ value: 'tls', label: 'TLS / STARTTLS (587)' }, { value: 'ssl', label: 'SSL (465)' }, { value: 'none', label: 'None' }]}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Username <span className="font-normal text-muted-foreground">(defaults to your email)</span></label>
+                                    <input type="text" value={mailboxForm.data.smtp_username} onChange={e => mailboxForm.setData('smtp_username', e.target.value)} className="input" placeholder={mailboxForm.data.email} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="label">App password {mailbox.connected ? <span className="font-normal text-muted-foreground">(leave blank to keep current)</span> : '*'}</label>
+                                <input type="password" value={mailboxForm.data.smtp_password} onChange={e => mailboxForm.setData('smtp_password', e.target.value)} className="input" autoComplete="new-password" placeholder="••••••••••••••••" />
+                                {mailboxForm.errors.smtp_password && <p className="mt-1 text-xs text-destructive">{mailboxForm.errors.smtp_password}</p>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button type="submit" disabled={mailboxForm.processing}>{mailboxForm.processing ? 'Saving…' : mailbox.connected ? 'Update' : 'Connect'}</Button>
+                                {mailbox.connected && <Button type="button" variant="secondary" onClick={testMailbox}>Send test email</Button>}
+                                {mailbox.connected && <Button type="button" variant="danger" onClick={disconnectMailbox}>Disconnect</Button>}
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
             </div>
         </AppLayout>
     );

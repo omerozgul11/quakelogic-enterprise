@@ -1,112 +1,174 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { AppLayout } from '@/Components/layout/AppLayout';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Button } from '@/Components/ui/Button';
+import { Card } from '@/Components/ui/Card';
+import { EmptyState } from '@/Components/ui/EmptyState';
+import { Pagination } from '@/Components/ui/Pagination';
+import { ConfirmDialog } from '@/Components/ui/Modal';
+import { Select } from '@/Components/ui/Select';
+import { CompanyFormModal, EditableCompany } from '@/Components/crm/CompanyFormModal';
+import { SearchInput } from '@/Components/ui/SearchInput';
+import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { Company, PaginatedResponse } from '@/Types';
-import { Building2, ExternalLink, Search, X, Plus } from 'lucide-react';
+import { Building2, ExternalLink, Search, X, Plus, Pencil, Trash2 } from 'lucide-react';
 
-const TYPE_COLORS: Record<string, string> = {
-    competitor: 'bg-red-100 text-red-700',
-    partner: 'bg-green-100 text-green-700',
-    vendor: 'bg-purple-100 text-purple-700',
-    subcontractor: 'bg-blue-100 text-blue-700',
-    teaming_partner: 'bg-amber-100 text-amber-700',
-};
+type CompanyRow = Company & EditableCompany & { contacts_count: number };
 
 interface Props {
-    companies: PaginatedResponse<Company & { contacts_count: number }>;
+    companies: PaginatedResponse<CompanyRow>;
     filters: Record<string, string>;
-    can: { create: boolean };
+    can: { create: boolean; manage: boolean };
 }
 
+const TYPES = ['competitor', 'partner', 'vendor', 'subcontractor', 'teaming_partner'];
+
 export default function CompaniesIndex({ companies, filters, can }: Props) {
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<CompanyRow | null>(null);
+    const [deleting, setDeleting] = useState<CompanyRow | null>(null);
+    const [processing, setProcessing] = useState(false);
+
+    const openAdd = () => { setEditing(null); setFormOpen(true); };
+    const openEdit = (c: CompanyRow) => { setEditing(c); setFormOpen(true); };
+    const confirmDelete = () => {
+        if (!deleting) return;
+        setProcessing(true);
+        router.delete(`/companies/${deleting.id}`, {
+            preserveScroll: true,
+            onFinish: () => { setProcessing(false); setDeleting(null); },
+        });
+    };
+
     const handleFilter = (key: string, value: string) => {
-        router.get('/companies', { ...filters, [key]: value || undefined }, { preserveState: true });
+        router.get('/companies', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     return (
         <AppLayout>
             <Head title="Companies" />
-            <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Companies</h1>
-                        <p className="text-gray-500 mt-1">{companies.total} companies in CRM</p>
-                    </div>
-                    {can.create && (
-                        <Link href="/companies/create" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                            <Plus className="h-4 w-4" /> Add Company
-                        </Link>
-                    )}
-                </div>
+            <div className="p-4 sm:p-6">
+                <PageHeader
+                    icon={Building2}
+                    title="Companies"
+                    description={`${companies.total} ${companies.total === 1 ? 'company' : 'companies'} in your CRM`}
+                    actions={
+                        can.create && (
+                            <Button onClick={openAdd} icon={Plus}>
+                                Add Company
+                            </Button>
+                        )
+                    }
+                />
 
-                <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-                    <div className="flex gap-3">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <input type="text" placeholder="Search companies..." defaultValue={filters.search ?? ''}
-                                onKeyDown={e => e.key === 'Enter' && handleFilter('search', (e.target as HTMLInputElement).value)}
-                                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64" />
-                        </div>
-                        <select value={filters.type ?? ''} onChange={e => handleFilter('type', e.target.value)}
-                            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">All Types</option>
-                            {Object.keys(TYPE_COLORS).map(t => (
-                                <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
-                            ))}
-                        </select>
+                {/* Filters */}
+                <Card className="mb-4 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <SearchInput
+                            className="min-w-0 flex-1 sm:min-w-[18rem]"
+                            initial={filters.search ?? ''}
+                            onSearch={v => handleFilter('search', v)}
+                            placeholder="Search companies…"
+                        />
+                        <Select
+                            value={filters.type ?? ''}
+                            onChange={v => handleFilter('type', v)}
+                            options={TYPES.map(t => ({ value: t, label: t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }))}
+                            placeholder="All Types"
+                            className="w-full sm:w-44"
+                        />
                         {Object.keys(filters).length > 0 && (
-                            <button onClick={() => router.get('/companies')} className="flex items-center gap-1 text-sm text-red-600">
+                            <button onClick={() => router.get('/companies')} className="inline-flex items-center gap-1 text-sm font-medium text-destructive hover:underline">
                                 <X className="h-4 w-4" /> Clear
                             </button>
                         )}
                     </div>
-                </div>
+                </Card>
 
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Company</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Type</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Contacts</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Location</th>
-                                <th className="px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {companies.data.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-12 text-gray-500">
-                                    <Building2 className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                                    <p>No companies found</p>
-                                </td></tr>
-                            ) : companies.data.map(company => (
-                                <tr key={company.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <Link href={`/companies/${company.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-                                            {company.name}
-                                        </Link>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        {company.type && (
-                                            <span className={`text-xs px-2 py-1 rounded-full ${TYPE_COLORS[company.type] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                {company.type.replace(/_/g, ' ')}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-700">{company.contacts_count}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-500">
-                                        {[company.city, company.state].filter(Boolean).join(', ') || '—'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <Link href={`/companies/${company.id}`} className="text-gray-400 hover:text-gray-600">
-                                            <ExternalLink className="h-4 w-4" />
-                                        </Link>
-                                    </td>
+                {/* Table */}
+                <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="border-b border-border bg-secondary/40">
+                                <tr>
+                                    <th className="th">Company</th>
+                                    <th className="th">Type</th>
+                                    <th className="th hidden sm:table-cell">Contacts</th>
+                                    <th className="th hidden md:table-cell">Location</th>
+                                    <th className="th" />
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {companies.data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5}>
+                                            <EmptyState
+                                                icon={Building2}
+                                                title="No companies found"
+                                                description="Try adjusting your filters, or add a new company to your CRM."
+                                                action={can.create && <Button onClick={openAdd} icon={Plus}>Add Company</Button>}
+                                            />
+                                        </td>
+                                    </tr>
+                                ) : companies.data.map(company => (
+                                    <tr key={company.id} className="row-link">
+                                        <td className="td">
+                                            <div className="flex items-center gap-3">
+                                                <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white', avatarGradient(company.name))}>
+                                                    {getInitials(company.name)}
+                                                </div>
+                                                <Link href={`/companies/${company.id}`} className="font-medium text-foreground hover:text-primary">
+                                                    {company.name}
+                                                </Link>
+                                            </div>
+                                        </td>
+                                        <td className="td">
+                                            {company.company_type && (
+                                                <span className="chip capitalize">{company.company_type.replace(/_/g, ' ')}</span>
+                                            )}
+                                        </td>
+                                        <td className="td hidden text-muted-foreground sm:table-cell">{company.contacts_count}</td>
+                                        <td className="td hidden text-muted-foreground md:table-cell">
+                                            {[company.city, company.state].filter(Boolean).join(', ') || '—'}
+                                        </td>
+                                        <td className="td">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Link href={`/companies/${company.id}`} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title="View">
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </Link>
+                                                {can.manage && (
+                                                    <>
+                                                        <button onClick={() => openEdit(company)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" title="Edit">
+                                                            <Pencil className="h-4 w-4" />
+                                                        </button>
+                                                        <button onClick={() => setDeleting(company)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <Pagination from={companies.from} to={companies.to} total={companies.total} links={companies.links} />
+                </Card>
             </div>
+
+            {formOpen && (
+                <CompanyFormModal key={editing?.id ?? 'new'} open onClose={() => setFormOpen(false)} company={editing} />
+            )}
+            <ConfirmDialog
+                open={!!deleting}
+                onClose={() => setDeleting(null)}
+                onConfirm={confirmDelete}
+                processing={processing}
+                title="Delete company?"
+                message={deleting ? <>This will remove <span className="font-medium text-foreground">{deleting.name}</span> from your CRM. Linked contacts are kept.</> : ''}
+            />
         </AppLayout>
     );
 }

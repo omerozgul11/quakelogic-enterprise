@@ -17,7 +17,7 @@ class FollowUpSeeder extends Seeder
         $sales = User::where('email', 'sales@quakelogic.net')->first();
 
         $submittedProposals = ProposalSubmission::where('organization_id', $org->id)
-            ->whereIn('status', ['submitted', 'pending', 'awarded', 'lost'])
+            ->whereIn('status', ['submitted', 'award_pending', 'awarded', 'lost'])
             ->get();
 
         foreach ($submittedProposals as $proposal) {

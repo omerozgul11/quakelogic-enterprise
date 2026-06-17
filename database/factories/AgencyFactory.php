@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Agency;
 use App\Models\Organization;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -16,6 +17,7 @@ class AgencyFactory extends Factory
         return [
             'ulid' => (string) Str::ulid(),
             'organization_id' => Organization::factory(),
+            'created_by' => User::factory(),
             'name' => $this->faker->company() . ' Agency',
             'acronym' => strtoupper($this->faker->lexify('???')),
             'agency_type' => $this->faker->randomElement(['federal', 'state', 'local', 'international']),

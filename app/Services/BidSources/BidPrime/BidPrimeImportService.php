@@ -6,10 +6,10 @@ use App\Models\BidprimeImport;
 use App\Models\BidprimeImportItem;
 use App\Models\Opportunity;
 use App\Models\Organization;
+use App\Models\User;
 use App\Services\BidSources\OpportunityDeduplicationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class BidPrimeImportService
 {
@@ -32,12 +32,17 @@ class BidPrimeImportService
             'started_at' => now(),
         ]);
 
+        // Imported opportunities need a creator (created_by is NOT NULL). Use a
+        // system user from the org, mirroring the SAM.gov importer.
+        $createdBy = User::where('organization_id', $organization->id)->where('is_active', true)->value('id')
+            ?? User::where('organization_id', $organization->id)->value('id');
+
         try {
             $results = $this->connector->fetchOpportunities($filters);
             $import->update(['total_fetched' => count($results)]);
 
             foreach ($results as $dto) {
-                $this->processResult($import, $organization, $dto);
+                $this->processResult($import, $organization, $dto, $createdBy);
             }
 
             $import->update(['status' => 'completed', 'completed_at' => now()]);
@@ -49,12 +54,12 @@ class BidPrimeImportService
         return $import;
     }
 
-    private function processResult(BidprimeImport $import, Organization $organization, $dto): void
+    private function processResult(BidprimeImport $import, Organization $organization, $dto, ?int $createdBy): void
     {
         try {
-            DB::transaction(function () use ($import, $organization, $dto) {
+            DB::transaction(function () use ($import, $organization, $dto, $createdBy) {
                 $hash = $this->deduplication->computeHash($dto);
-                $duplicate = $this->deduplication->findDuplicate($organization->id, $hash, $dto->externalId, $dto->solicitationNumber);
+                $duplicate = $this->deduplication->findDuplicate($organization->id, $dto);
 
                 if ($duplicate) {
                     $import->increment('total_skipped');
@@ -74,34 +79,27 @@ class BidPrimeImportService
                     ->first();
 
                 if ($existing) {
-                    $existing->update([
+                    // Refresh volatile fields only; never null-out existing data.
+                    $existing->update(array_filter([
                         'title' => $dto->title,
-                        'due_date' => $dto->responseDeadline,
+                        'due_date' => $dto->dueDate,
+                        'estimated_value' => $dto->estimatedValue,
+                        'description' => $dto->description,
                         'raw_source_data' => $dto->rawData,
-                    ]);
+                    ], fn ($v) => $v !== null && $v !== []));
                     $import->increment('total_updated');
                     $action = 'updated';
                     $opportunityId = $existing->id;
                 } else {
+                    // $dto->toArray() already maps to the real columns
+                    // (place_of_performance_city/state/country, set_aside_type, due_date…).
                     $opportunity = Opportunity::create([
-                        'ulid' => (string) Str::ulid(),
+                        ...$dto->toArray(),
                         'organization_id' => $organization->id,
-                        'source' => 'bidprime',
-                        'external_id' => $dto->externalId,
+                        'created_by' => $createdBy,
                         'canonical_hash' => $hash,
-                        'solicitation_number' => $dto->solicitationNumber,
-                        'title' => $dto->title,
-                        'description' => $dto->description,
-                        'agency_name' => $dto->agencyName,
-                        'naics_code' => $dto->naicsCode,
-                        'set_aside_type' => $dto->setAside,
-                        'place_of_performance' => $dto->placeOfPerformance,
-                        'due_date' => $dto->responseDeadline,
-                        'posted_date' => $dto->postedDate,
-                        'source_url' => $dto->sourceUrl,
                         'raw_source_data' => $dto->rawData,
                         'status' => 'new',
-                        'capture_stage' => 'discovery',
                     ]);
                     $import->increment('total_created');
                     $action = 'created';

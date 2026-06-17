@@ -18,17 +18,23 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_KEY" value="base64:testingkeyfortestingonlythisisnotreal="/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_KEY" value="base64:UvoAmsEt/pAYFk+efMnvI1BTVufPe4+F/Jxmbt82oX8="/>
         <env name="DB_CONNECTION" value="mysql"/>
         <env name="DB_DATABASE" value="quakelogic_test"/>
         <env name="CACHE_DRIVER" value="array"/>
+        <!-- Laravel 12 reads CACHE_STORE (CACHE_DRIVER alone is ignored); pin tests
+             to the in-memory array store so a test run never touches the shared
+             redis cache (which would poison the live Spatie permission cache). -->
+        <env name="CACHE_STORE" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
-        <env name="SCOUT_DRIVER" value="array"/>
+        <env name="SCOUT_DRIVER" value="null"/>
+        <env name="SCOUT_QUEUE" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="AI_PROVIDER" value="fake"/>
         <env name="SAM_GOV_SYNC_ENABLED" value="false"/>
         <env name="BIDPRIME_SYNC_ENABLED" value="false"/>
+        <env name="EXCHANGE_RATES_ENABLED" value="false"/>
     </php>
 </phpunit>

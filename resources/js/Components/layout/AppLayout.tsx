@@ -1,246 +1,494 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Target, FileText, Shield, Building2,
-    Users, Bell, ChevronDown, Menu, X, Search, LogOut,
-    Settings, TrendingUp, Zap, FileSearch, MessageSquare,
-    DollarSign, BarChart3, Puzzle, User, ChevronRight
+    LayoutDashboard, Target, FileText, Building2,
+    Users, Bell, LogOut, Settings, FileSearch, MessageSquare,
+    BarChart3, Puzzle, Sparkles, ShieldCheck, KanbanSquare,
+    Menu, X, Sun, Moon, ChevronDown, TrendingUp, Activity, BookOpen,
+    CalendarDays, Inbox, FileSignature, LibraryBig, ScrollText, PenLine, Gauge,
 } from 'lucide-react';
-import { cn } from '@/Lib/utils';
+import { cn, getInitials, avatarGradient } from '@/Lib/utils';
+import { clearChat } from '@/Lib/chatStore';
+import { AppSwitcher } from '@/Components/layout/AppSwitcher';
+import { GlobalSearch } from '@/Components/layout/GlobalSearch';
+import { PwaControls } from '@/Components/layout/PwaControls';
+import { QuakeAiChat } from '@/Components/layout/QuakeAiChat';
+import { HeaderClock } from '@/Components/layout/HeaderClock';
 
 interface NavItem {
     label: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
     permission?: string;
-    children?: NavItem[];
 }
 
-const navigation: NavItem[] = [
-    { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { label: 'Opportunities', href: '/opportunities', icon: Target, permission: 'view opportunities' },
-    { label: 'Capture', href: '/capture', icon: Shield, permission: 'view capture plans' },
-    { label: 'Proposals', href: '/proposals', icon: FileText, permission: 'view proposals' },
-    { label: 'Documents', href: '/documents', icon: FileSearch, permission: 'view proposals' },
+interface NavSection {
+    title?: string;
+    items: NavItem[];
+    /** Render as a collapsible dropdown (closed by default) to save space. */
+    collapsible?: boolean;
+}
+
+const sections: NavSection[] = [
+    { items: [
+        { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+        { label: 'Calendar', href: '/calendar', icon: CalendarDays },
+        { label: 'QuakeAI', href: '/ai', icon: Sparkles, permission: 'use ai assistant' },
+        { label: 'Proposal Writer', href: '/ai/writer', icon: PenLine, permission: 'use ai assistant' },
+    ] },
     {
-        label: 'CRM', href: '/agencies', icon: Building2, permission: 'view crm',
-        children: [
-            { label: 'Agencies', href: '/agencies', icon: Building2 },
-            { label: 'Companies', href: '/companies', icon: Building2 },
-            { label: 'Contacts', href: '/contacts', icon: Users },
-        ]
+        title: 'Pipeline',
+        items: [
+            { label: 'Opportunities', href: '/opportunities', icon: Target, permission: 'view opportunities' },
+            { label: 'Command Center', href: '/dashboard/opportunities', icon: Gauge, permission: 'view executive dashboard' },
+            { label: 'Applications', href: '/proposals/board', icon: KanbanSquare, permission: 'view proposals' },
+            { label: 'Proposals', href: '/proposals', icon: FileText, permission: 'view proposals' },
+            { label: 'Documents', href: '/documents', icon: FileSearch, permission: 'view proposals' },
+            { label: 'Contracts', href: '/contracts', icon: FileSignature, permission: 'view contracts' },
+        ],
     },
-    { label: 'Follow-Ups', href: '/follow-ups', icon: MessageSquare, permission: 'view follow ups' },
-    { label: 'Commissions', href: '/commissions', icon: DollarSign, permission: 'view own commissions' },
-    { label: 'Reports', href: '/reports', icon: BarChart3, permission: 'view dashboards' },
-    { label: 'AI Assistant', href: '/ai', icon: Zap, permission: 'use ai assistant' },
-    { label: 'Integrations', href: '/integrations', icon: Puzzle, permission: 'manage integrations' },
+    {
+        title: 'Library',
+        items: [
+            { label: 'Compliance', href: '/compliance', icon: ShieldCheck, permission: 'view compliance' },
+            { label: 'Template Library', href: '/templates', icon: LibraryBig, permission: 'view templates' },
+        ],
+    },
+    {
+        title: 'Relationships',
+        items: [
+            { label: 'Companies/Agencies', href: '/companies', icon: Building2, permission: 'view crm' },
+            { label: 'Contacts', href: '/contacts', icon: Users, permission: 'view crm' },
+            { label: 'Inbox', href: '/follow-ups', icon: Inbox, permission: 'view follow ups' },
+        ],
+    },
+    {
+        title: 'Insights',
+        items: [
+            { label: 'Team Performance', href: '/reports/users', icon: Users, permission: 'view dashboards' },
+            { label: 'Market Pricing', href: '/market-pricing', icon: TrendingUp, permission: 'view opportunities' },
+            { label: 'Integrations', href: '/integrations', icon: Puzzle, permission: 'manage integrations' },
+        ],
+    },
 ];
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
-    const { auth, flash, notifications_count } = usePage<SharedProps>().props;
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [expandedItems, setExpandedItems] = useState<string[]>([]);
-    const user = auth.user;
+function matchesHref(path: string, href: string): boolean {
+    if (href === '/') return path === '/';
+    return path === href || path.startsWith(href + '/');
+}
 
-    const hasPermission = (permission?: string) => {
-        if (!permission) return true;
-        return user?.permissions?.includes(permission) ?? false;
+// All nav destinations, so we can highlight only the most specific match
+// (e.g. /proposals/board highlights "Applications", not also "Proposals").
+const ALL_HREFS = [
+    ...sections.flatMap(s => s.items.map(i => i.href)),
+    '/guide',
+    '/admin/team',
+    '/admin/activity',
+    '/admin',
+];
+
+function activeHref(currentUrl: string): string | null {
+    const path = currentUrl.split('?')[0];
+    let best: string | null = null;
+    for (const href of ALL_HREFS) {
+        if (matchesHref(path, href) && (!best || href.length > best.length)) {
+            best = href;
+        }
+    }
+    return best;
+}
+
+function useDarkMode(): [boolean, () => void] {
+    const [dark, setDark] = useState(false);
+    useEffect(() => {
+        setDark(document.documentElement.classList.contains('dark'));
+    }, []);
+    const toggle = () => {
+        const el = document.documentElement;
+        const next = !el.classList.contains('dark');
+        el.classList.toggle('dark', next);
+        try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch { /* ignore */ }
+        setDark(next);
+    };
+    return [dark, toggle];
+}
+
+const SIDEBAR_MIN = 184;
+const SIDEBAR_MAX = 400;
+const SIDEBAR_DEFAULT = 256;
+
+function useSidebarWidth(): [number, (e: React.MouseEvent) => void, boolean, () => void] {
+    const [width, setWidth] = useState(SIDEBAR_DEFAULT);
+    const [resizing, setResizing] = useState(false);
+    const widthRef = useRef(width);
+
+    useEffect(() => {
+        const saved = Number(localStorage.getItem('sidebar-width'));
+        if (saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX) {
+            setWidth(saved);
+            widthRef.current = saved;
+        }
+    }, []);
+
+    const startResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = widthRef.current;
+        setResizing(true);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const onMove = (ev: MouseEvent) => {
+            const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + ev.clientX - startX));
+            widthRef.current = w;
+            setWidth(w);
+        };
+        const onUp = () => {
+            setResizing(false);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            try { localStorage.setItem('sidebar-width', String(widthRef.current)); } catch { /* ignore */ }
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     };
 
-    const toggleExpanded = (label: string) => {
-        setExpandedItems(prev =>
-            prev.includes(label) ? prev.filter(i => i !== label) : [...prev, label]
+    const reset = () => {
+        widthRef.current = SIDEBAR_DEFAULT;
+        setWidth(SIDEBAR_DEFAULT);
+        try { localStorage.setItem('sidebar-width', String(SIDEBAR_DEFAULT)); } catch { /* ignore */ }
+    };
+
+    return [width, startResize, resizing, reset];
+}
+
+function timeAgo(iso: string | null): string {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return days < 7 ? `${days}d ago` : new Date(iso).toLocaleDateString();
+}
+
+export function AppLayout({ children }: { children: React.ReactNode }) {
+    const page = usePage<SharedProps>();
+    const { auth, flash, notifications_count, notifications, inbox_unread_count } = page.props;
+    const currentUrl = page.url;
+    const matchedHref = activeHref(currentUrl);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [notifOpen, setNotifOpen] = useState(false);
+    const [dark, toggleDark] = useDarkMode();
+    const [sidebarWidth, startResize, resizing, resetSidebarWidth] = useSidebarWidth();
+    const user = auth.user;
+    const recentNotifications = notifications ?? [];
+
+    // Collapsible nav sections (System / Help). Closed by default to save space;
+    // the user's open/closed choice is remembered across sessions.
+    const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('nav-open-sections');
+            if (saved) setOpenSections(JSON.parse(saved));
+        } catch { /* ignore */ }
+    }, []);
+    const toggleSection = (title: string) => {
+        setOpenSections(prev => {
+            const next = { ...prev, [title]: !(prev[title] ?? false) };
+            try { localStorage.setItem('nav-open-sections', JSON.stringify(next)); } catch { /* ignore */ }
+            return next;
+        });
+    };
+
+    const openNotification = (n: SharedProps['notifications'][number]) => {
+        setNotifOpen(false);
+        if (n.url) {
+            router.post(`/notifications/${n.id}/read`, { follow: true }, { preserveScroll: true });
+        } else if (!n.read) {
+            router.post(`/notifications/${n.id}/read`, {}, { preserveScroll: true });
+        }
+    };
+    const markAllRead = () => router.post('/notifications/read-all', {}, { preserveScroll: true });
+
+    const hasPermission = (permission?: string) =>
+        !permission || (user?.permissions?.includes(permission) ?? false);
+    const handleLogout = () => { clearChat(); router.post('/logout'); };
+    const isSuperAdmin = user?.roles?.includes('Super Admin');
+
+    const adminItems: NavItem[] = [
+        { label: 'Team Activity', href: '/admin/team', icon: BarChart3 },
+        { label: 'Activity Log', href: '/admin/activity', icon: Activity },
+        { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText },
+        { label: 'Admin', href: '/admin', icon: Settings },
+    ];
+
+    const SidebarBody = ({ mobile = false }: { mobile?: boolean }) => {
+        const renderItem = (item: NavItem) => {
+            const Icon = item.icon;
+            const active = item.href === matchedHref;
+            return (
+                <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => mobile && setSidebarOpen(false)}
+                    className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
+                >
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="min-w-0 truncate" title={item.label}>{item.label}</span>
+                    {item.href === '/follow-ups' && inbox_unread_count > 0 && (
+                        <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-orange-500">
+                            ({inbox_unread_count > 99 ? '99+' : inbox_unread_count})
+                        </span>
+                    )}
+                </Link>
+            );
+        };
+
+        const renderSection = (key: number | string, title: string | undefined, items: NavItem[], collapsible: boolean) => {
+            if (items.length === 0) return null;
+            // Collapsible sections start closed to save space, but auto-open when
+            // they contain the current page so its highlight is never hidden.
+            const containsActive = items.some(i => i.href === matchedHref);
+            const open = !collapsible || containsActive || (openSections[title ?? ''] ?? false);
+            return (
+                <div key={key}>
+                    {title && (collapsible ? (
+                        <button
+                            type="button"
+                            onClick={() => toggleSection(title)}
+                            aria-expanded={open}
+                            className="flex w-full items-center gap-1 rounded-lg px-3 pb-1.5 pt-0.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70 transition-colors hover:text-foreground"
+                        >
+                            <span className="truncate">{title}</span>
+                            <ChevronDown className={cn('ml-auto h-3.5 w-3.5 shrink-0 transition-transform duration-200', open ? '' : '-rotate-90')} />
+                        </button>
+                    ) : (
+                        <p className="truncate px-3 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
+                            {title}
+                        </p>
+                    ))}
+                    {open && <div className="space-y-0.5">{items.map(renderItem)}</div>}
+                </div>
+            );
+        };
+
+        return (
+        <div className="flex h-full flex-col">
+            <div className="flex h-16 items-center justify-between px-3">
+                <AppSwitcher onNavigate={() => mobile && setSidebarOpen(false)} />
+                {mobile && (
+                    <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
+                        <X className="h-5 w-5" />
+                    </button>
+                )}
+            </div>
+
+            <nav className="sidebar-scroll flex-1 space-y-5 overflow-y-auto px-3 py-3">
+                {sections.map((section, si) =>
+                    renderSection(si, section.title, section.items.filter(i => hasPermission(i.permission)), !!section.collapsible),
+                )}
+
+                {isSuperAdmin && renderSection('system', 'System', adminItems, true)}
+            </nav>
+
+            <div className="space-y-1 border-t border-border p-3">
+                {renderItem({ label: 'User Guide', href: '/guide', icon: BookOpen })}
+                <Link
+                    href="/settings"
+                    onClick={() => mobile && setSidebarOpen(false)}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-secondary"
+                >
+                    <span className={cn('flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white', avatarGradient(user?.name))}>
+                        {getInitials(user?.name)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">{user?.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{user?.roles?.[0] ?? 'User'}</p>
+                    </div>
+                </Link>
+            </div>
+        </div>
         );
     };
 
-    const handleLogout = () => {
-        router.post('/logout');
-    };
-
-    const NavItems = ({ mobile = false }) => (
-        <nav className="space-y-1">
-            {navigation.filter(item => hasPermission(item.permission)).map(item => {
-                const Icon = item.icon;
-                const isExpanded = expandedItems.includes(item.label);
-                const hasChildren = item.children && item.children.length > 0;
-
-                if (hasChildren) {
-                    return (
-                        <div key={item.label}>
-                            <button
-                                onClick={() => toggleExpanded(item.label)}
-                                className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900"
-                            >
-                                <span className="flex items-center gap-3">
-                                    <Icon className="h-5 w-5 text-gray-500" />
-                                    {item.label}
-                                </span>
-                                <ChevronRight className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")} />
-                            </button>
-                            {isExpanded && (
-                                <div className="ml-8 mt-1 space-y-1">
-                                    {item.children!.map(child => (
-                                        <Link
-                                            key={child.href}
-                                            href={child.href}
-                                            className="block px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900"
-                                            onClick={() => mobile && setSidebarOpen(false)}
-                                        >
-                                            {child.label}
-                                        </Link>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                }
-
-                return (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900"
-                        onClick={() => mobile && setSidebarOpen(false)}
-                    >
-                        <Icon className="h-5 w-5 text-gray-500" />
-                        {item.label}
-                    </Link>
-                );
-            })}
-
-            {user?.roles?.includes('Super Admin') && (
-                <Link
-                    href="/admin"
-                    className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 hover:text-gray-900"
-                >
-                    <Settings className="h-5 w-5 text-gray-500" />
-                    Admin
-                </Link>
-            )}
-        </nav>
-    );
-
     return (
-        <div className="min-h-screen bg-gray-50 flex">
-            {/* Mobile sidebar overlay */}
+        <div className="ql-liquid flex min-h-screen">
+            {/* Mobile overlay */}
             {sidebarOpen && (
-                <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}>
-                    <div className="fixed inset-0 bg-gray-600 bg-opacity-75" />
-                </div>
+                <div className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
             )}
 
             {/* Mobile sidebar */}
-            <div className={cn(
-                "fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:hidden",
-                sidebarOpen ? "translate-x-0" : "-translate-x-full"
+            <aside className={cn(
+                'fixed inset-y-0 left-0 z-50 w-64 transform bg-card shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
+                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
-                <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-                    <span className="text-xl font-bold text-blue-600">QuakeLogic</span>
-                    <button onClick={() => setSidebarOpen(false)}>
-                        <X className="h-6 w-6 text-gray-500" />
-                    </button>
-                </div>
-                <div className="p-4 overflow-y-auto h-full pb-20">
-                    <NavItems mobile />
-                </div>
-            </div>
+                <SidebarBody mobile />
+            </aside>
 
-            {/* Desktop sidebar */}
-            <div className="hidden lg:flex lg:flex-shrink-0">
-                <div className="w-64 flex flex-col bg-white border-r border-gray-200">
-                    <div className="flex items-center h-16 px-4 border-b border-gray-200">
-                        <Link href="/" className="flex items-center gap-2">
-                            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                                <TrendingUp className="h-5 w-5 text-white" />
-                            </div>
-                            <span className="text-lg font-bold text-gray-900">QuakeLogic</span>
-                        </Link>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4">
-                        <NavItems />
-                    </div>
-                    <div className="border-t border-gray-200 p-4">
-                        <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                <User className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-                                <p className="text-xs text-gray-500 truncate">{user?.roles?.[0] ?? 'User'}</p>
-                            </div>
-                            <button onClick={handleLogout} className="text-gray-400 hover:text-gray-600">
-                                <LogOut className="h-5 w-5" />
-                            </button>
-                        </div>
-                    </div>
+            {/* Desktop sidebar — drag the right edge to resize */}
+            <aside className="glass-panel hidden shrink-0 lg:block" style={{ width: sidebarWidth }}>
+                <div className="sticky top-0 h-screen">
+                    <SidebarBody />
+                    <div
+                        onMouseDown={startResize}
+                        onDoubleClick={resetSidebarWidth}
+                        title="Drag to resize · double-click to reset"
+                        className={cn(
+                            'absolute inset-y-0 -right-[3px] z-10 w-1.5 cursor-col-resize transition-colors',
+                            resizing ? 'bg-primary/50' : 'hover:bg-primary/30',
+                        )}
+                    />
                 </div>
-            </div>
+            </aside>
 
-            {/* Main content */}
-            <div className="flex-1 flex flex-col min-w-0">
-                {/* Topbar */}
-                <div className="bg-white border-b border-gray-200 h-16 flex items-center px-4 gap-4">
+            {/* Main column */}
+            <div className="flex min-w-0 flex-1 flex-col">
+                <header className="glass-panel sticky top-0 z-30 flex h-16 items-center gap-2 px-4 sm:px-6">
                     <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
-                        <Menu className="h-6 w-6 text-gray-500" />
+                        <Menu className="h-6 w-6 text-muted-foreground" />
                     </button>
 
-                    <div className="flex-1 max-w-lg">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <input
-                                type="search"
-                                placeholder="Search opportunities, proposals..."
-                                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                    </div>
+                    <GlobalSearch />
 
-                    <div className="flex items-center gap-3 ml-auto">
-                        <button className="relative p-2 text-gray-400 hover:text-gray-600">
-                            <Bell className="h-5 w-5" />
-                            {notifications_count > 0 && (
-                                <span className="absolute top-1 right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                                    {notifications_count > 9 ? '9+' : notifications_count}
-                                </span>
-                            )}
+                    <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+                        <HeaderClock />
+                        <PwaControls />
+
+                        {hasPermission('use ai assistant') && (
+                            <QuakeAiChat active={matchedHref === '/ai'} />
+                        )}
+
+                        <button
+                            onClick={toggleDark}
+                            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        >
+                            {dark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
                         </button>
 
-                        <Link href="/settings" className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                <User className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <span className="hidden md:block font-medium">{user?.name}</span>
-                        </Link>
-                    </div>
-                </div>
+                        <div className="relative">
+                            <button
+                                onClick={() => setNotifOpen(v => !v)}
+                                className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                                title="Notifications"
+                            >
+                                <Bell className="h-[18px] w-[18px]" />
+                                {notifications_count > 0 && (
+                                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white ring-2 ring-card">
+                                        {notifications_count > 9 ? '9+' : notifications_count}
+                                    </span>
+                                )}
+                            </button>
 
-                {/* Flash messages */}
+                            {notifOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
+                                    <div className="animate-dropdown origin-top-right absolute right-0 top-11 z-20 w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                                            <p className="text-sm font-semibold text-foreground">Notifications</p>
+                                            {notifications_count > 0 && (
+                                                <button onClick={markAllRead} className="text-xs font-medium text-primary hover:underline">Mark all read</button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-80 overflow-y-auto">
+                                            {recentNotifications.length === 0 ? (
+                                                <div className="px-4 py-8 text-center">
+                                                    <Bell className="mx-auto mb-2 h-6 w-6 text-muted-foreground/50" />
+                                                    <p className="text-sm text-muted-foreground">You're all caught up</p>
+                                                </div>
+                                            ) : (
+                                                recentNotifications.map(n => (
+                                                    <button
+                                                        key={n.id}
+                                                        onClick={() => openNotification(n)}
+                                                        className={cn(
+                                                            'flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-secondary last:border-0',
+                                                            !n.read && 'bg-primary/[0.04]'
+                                                        )}
+                                                    >
+                                                        <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', n.read ? 'bg-transparent' : 'bg-primary')} />
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block truncate text-sm font-medium text-foreground">{n.title}</span>
+                                                            {n.message && <span className="block truncate text-xs text-muted-foreground">{n.message}</span>}
+                                                            <span className="mt-0.5 block text-[11px] text-muted-foreground/70">{timeAgo(n.created_at)}</span>
+                                                        </span>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                        <Link href="/notifications" onClick={() => setNotifOpen(false)} className="block border-t border-border px-4 py-2.5 text-center text-sm font-medium text-primary transition-colors hover:bg-secondary">
+                                            View all
+                                        </Link>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="relative">
+                            <button
+                                onClick={() => setMenuOpen(v => !v)}
+                                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-secondary"
+                            >
+                                <span className={cn('flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-bold text-white', avatarGradient(user?.name))}>
+                                    {getInitials(user?.name)}
+                                </span>
+                                <span className="hidden text-sm font-medium text-foreground sm:inline">{user?.name?.split(' ')[0]}</span>
+                                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', menuOpen && 'rotate-180')} />
+                            </button>
+
+                            {menuOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                                    <div className="animate-dropdown origin-top-right absolute right-0 top-11 z-20 w-60 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+                                        <div className="border-b border-border px-4 py-3">
+                                            <p className="text-sm font-semibold text-foreground">{user?.name}</p>
+                                            <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                                            {user?.roles?.[0] && <p className="mt-0.5 text-xs font-medium text-primary">{user.roles[0]}</p>}
+                                        </div>
+                                        <Link href="/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-secondary">
+                                            <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+                                        </Link>
+                                        {isSuperAdmin && (
+                                            <Link href="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-secondary">
+                                                <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Admin Panel
+                                            </Link>
+                                        )}
+                                        <div className="mt-1 border-t border-border pt-1">
+                                            <button onClick={handleLogout} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-destructive transition-colors hover:bg-destructive/10">
+                                                <LogOut className="h-4 w-4" /> Sign out
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </header>
+
                 {(flash?.success || flash?.error || flash?.warning) && (
-                    <div className="px-6 pt-4">
-                        {flash.success && (
-                            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm">
-                                {flash.success}
-                            </div>
-                        )}
-                        {flash.error && (
-                            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                                {flash.error}
-                            </div>
-                        )}
-                        {flash.warning && (
-                            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
-                                {flash.warning}
-                            </div>
-                        )}
+                    <div className="space-y-2 px-4 pt-4 sm:px-6">
+                        {flash.success && <div className="animate-rise rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300">{flash.success}</div>}
+                        {flash.error && <div className="animate-rise rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">{flash.error}</div>}
+                        {flash.warning && <div className="animate-rise rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">{flash.warning}</div>}
                     </div>
                 )}
 
-                {/* Page content */}
-                <main className="flex-1 overflow-auto">
+                <main key={currentUrl.split('?')[0]} className="animate-page flex-1">
                     {children}
                 </main>
+
+                <footer className="border-t border-border py-4 text-center text-xs text-muted-foreground">
+                    <Link href="/legal" className="transition-colors hover:text-foreground hover:underline" title="Terms, copyright & legal notice">
+                        QuakeLogic Proposals — © {new Date().getFullYear()} QuakeLogic Inc.
+                    </Link>
+                </footer>
             </div>
         </div>
     );

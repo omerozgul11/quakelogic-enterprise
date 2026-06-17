@@ -31,5 +31,49 @@ class SamGovConnector implements BidSourceConnectorInterface
         return $this->client->getOpportunity($externalId);
     }
 
+    /**
+     * Full-text keyword search (matches descriptions, not just titles).
+     *
+     * @return BidSourceResultDTO[]
+     */
+    public function searchFullText(string $keyword, int $limit = 25): array
+    {
+        return method_exists($this->client, 'searchFullText')
+            ? $this->client->searchFullText($keyword, $limit)
+            : [];
+    }
+
+    /**
+     * Past awarded contracts for pricing benchmarks.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function searchAwards(array $filters = []): array
+    {
+        return method_exists($this->client, 'searchAwards')
+            ? $this->client->searchAwards($filters)
+            : [];
+    }
+
+    /**
+     * Full-text search for award notices (no amounts — enrich via getAward).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function searchAwardsFullText(string $keyword, int $limit = 25): array
+    {
+        return method_exists($this->client, 'searchAwardsFullText')
+            ? $this->client->searchAwardsFullText($keyword, $limit)
+            : [];
+    }
+
+    /** @return array<string,mixed>|null */
+    public function getAward(string $noticeId): ?array
+    {
+        return method_exists($this->client, 'getAward')
+            ? $this->client->getAward($noticeId)
+            : null;
+    }
+
     public function supportsIncrementalSync(): bool { return true; }
 }

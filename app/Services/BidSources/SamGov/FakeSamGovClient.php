@@ -37,6 +37,49 @@ class FakeSamGovClient
         return array_values(array_slice($opportunities, $offset, $limit));
     }
 
+    /** Full-text search behaves like a title/description keyword search on fake data. */
+    public function searchFullText(string $keyword, int $limit = 25): array
+    {
+        return $this->searchOpportunities(['keyword' => $keyword, 'limit' => $limit]);
+    }
+
+    /** Fake full-text award search: same demo data as searchAwards. */
+    public function searchAwardsFullText(string $keyword, int $limit = 25): array
+    {
+        return array_slice($this->searchAwards(['keyword' => $keyword]), 0, $limit);
+    }
+
+    /** Fake data has no per-notice award lookup. */
+    public function getAward(string $noticeId): ?array
+    {
+        return null;
+    }
+
+    /** Demo award data for the market-pricing view when no live API is configured. */
+    public function searchAwards(array $params = []): array
+    {
+        $keyword = isset($params['keyword']) ? strtolower((string) $params['keyword']) : '';
+        $awards = [];
+        foreach ($this->fakeOpportunities as $i => $o) {
+            $awards[] = [
+                'title' => $o->title,
+                'agency' => $o->agencyName,
+                'naics' => $o->naicsCode,
+                'amount' => round((float) ($o->estimatedValue ?? 0) * (0.8 + ($i % 5) * 0.1), 2),
+                'awardee' => ['Acme Federal LLC', 'Vanguard Systems Inc.', 'Northstar Solutions', 'Pinnacle Group'][$i % 4],
+                'award_date' => Carbon::now()->subDays(($i % 300) + 10)->format('Y-m-d'),
+                'solicitation_number' => $o->solicitationNumber,
+                'posted_date' => optional($o->postedDate)->format('Y-m-d'),
+                'set_aside' => $o->setAsideType,
+                'url' => $o->sourceUrl,
+            ];
+        }
+        if ($keyword !== '') {
+            $awards = array_filter($awards, fn ($a) => str_contains(strtolower((string) $a['title']), $keyword));
+        }
+        return array_values(array_slice($awards, 0, 40));
+    }
+
     public function getOpportunity(string $noticeId): ?BidSourceResultDTO
     {
         foreach ($this->fakeOpportunities as $opp) {

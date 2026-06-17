@@ -19,19 +19,9 @@ class ProposalSubmissionPolicy
 
     public function view(User $user, ProposalSubmission $proposal): bool
     {
-        if (!$this->isSameOrg($user, $proposal)) return false;
-
-        // Users with 'view all proposals' can see any proposal
-        if ($user->can('view all proposals')) return true;
-
-        // Users can see their own proposals (owner/team member/manager)
-        if ($user->can('view proposals')) {
-            return $proposal->owner_id === $user->id
-                || $proposal->proposal_manager_id === $user->id
-                || $proposal->teamMembers()->where('user_id', $user->id)->exists();
-        }
-
-        return false;
+        // Every user in the organization can view every proposal (so anyone can
+        // open and edit any of them).
+        return $this->isSameOrg($user, $proposal) && $user->can('view proposals');
     }
 
     public function create(User $user): bool
@@ -41,16 +31,9 @@ class ProposalSubmissionPolicy
 
     public function update(User $user, ProposalSubmission $proposal): bool
     {
-        if (!$this->isSameOrg($user, $proposal)) return false;
-        if (!$user->can('update proposals')) return false;
-
-        // Restrict writers to their assigned proposals
-        if ($user->hasRole('Proposal Writer')) {
-            return $proposal->teamMembers()->where('user_id', $user->id)->exists()
-                || $proposal->owner_id === $user->id;
-        }
-
-        return true;
+        // Every user in the organization may edit every aspect of any proposal
+        // (collaborative editing) — gated only by org scope + the permission.
+        return $this->isSameOrg($user, $proposal) && $user->can('update proposals');
     }
 
     public function delete(User $user, ProposalSubmission $proposal): bool

@@ -23,7 +23,13 @@ class CommissionCalculationService
         }
 
         $baseAmount = $this->getBaseAmount($proposal, $rule);
-        $commissionAmount = $this->computeCommission($baseAmount, $rule);
+        $commissionAmount = $this->computeCommission(
+            $rule->type->value,
+            $baseAmount,
+            (float) $rule->rate,
+            (float) $rule->fixed_amount,
+            $rule->tier_config ?? [],
+        );
         $periodMonth = $proposal->award_date?->format('Y-m') ?? now()->format('Y-m');
 
         return DB::transaction(function () use ($proposal, $user, $rule, $baseAmount, $commissionAmount, $periodMonth) {
@@ -43,44 +49,58 @@ class CommissionCalculationService
     }
 
     /**
-     * Compute commission amount from base and rule.
+     * Compute a commission amount from primitive inputs. Pure (no DB), unit-testable.
+     *
+     * @param  string  $type  One of: fixed, fixed_amount, percentage, tiered.
+     * @param  array<int, array<string, float|int|null>>|null  $tiers  Bracket definitions for tiered.
      */
-    public function computeCommission(float $baseAmount, CommissionRule $rule): float
-    {
-        return match ($rule->type) {
-            CommissionType::FixedAmount => (float) $rule->fixed_amount,
-            CommissionType::Percentage => round($baseAmount * ((float) $rule->rate / 100), 2),
-            CommissionType::Tiered => $this->computeTiered($baseAmount, $rule->tier_config ?? []),
+    public function computeCommission(
+        string $type,
+        float $baseAmount,
+        ?float $rate = null,
+        ?float $fixedAmount = null,
+        ?array $tiers = null,
+    ): float {
+        return match ($type) {
+            'fixed', 'fixed_amount' => round((float) ($fixedAmount ?? 0), 2),
+            'percentage' => round($baseAmount * ((float) ($rate ?? 0) / 100), 2),
+            'tiered' => $this->computeTiered($baseAmount, $tiers ?? []),
+            default => 0.0,
         };
     }
 
     /**
-     * Compute tiered commission.
-     * tier_config format: [['up_to' => 100000, 'rate' => 5], ['up_to' => 500000, 'rate' => 3], ['up_to' => null, 'rate' => 2]]
+     * Compute tiered commission using bracket arithmetic.
+     *
+     * Each tier defines an upper bound via either `max` (min/max format) or
+     * `up_to` (cumulative-threshold format); a null upper bound means "and above".
+     * The portion of the base amount falling within each bracket is taxed at the
+     * bracket's `rate` (a percentage).
+     *
+     * @param  array<int, array<string, float|int|null>>  $tiers
      */
     public function computeTiered(float $amount, array $tiers): float
     {
         $total = 0.0;
-        $remaining = $amount;
         $prevThreshold = 0.0;
 
         foreach ($tiers as $tier) {
-            $upTo = $tier['up_to'] ?? null;
-            $rate = ($tier['rate'] ?? 0) / 100;
+            $upper = $tier['max'] ?? $tier['up_to'] ?? null;
+            $rate = ((float) ($tier['rate'] ?? 0)) / 100;
+            $lower = $prevThreshold;
 
-            if ($upTo === null) {
-                // Final tier: apply to all remaining
-                $total += $remaining * $rate;
+            if ($upper === null) {
+                $total += max(0.0, $amount - $lower) * $rate;
                 break;
             }
 
-            $tierMax = (float) $upTo - $prevThreshold;
-            $inTier = min($remaining, $tierMax);
-            $total += $inTier * $rate;
-            $remaining -= $inTier;
-            $prevThreshold = (float) $upTo;
+            $bracketTop = min($amount, (float) $upper);
+            $total += max(0.0, $bracketTop - $lower) * $rate;
+            $prevThreshold = (float) $upper;
 
-            if ($remaining <= 0) break;
+            if ($amount <= (float) $upper) {
+                break;
+            }
         }
 
         return round($total, 2);

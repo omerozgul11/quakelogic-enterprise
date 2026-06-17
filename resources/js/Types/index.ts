@@ -1,3 +1,9 @@
+export interface UserPreferences {
+    display: { theme: 'system' | 'light' | 'dark'; density: 'comfortable' | 'compact' };
+    dashboard: { default_view: 'personal' | 'executive' };
+    channels: { new_proposal: boolean; new_opportunity: boolean; desktop: boolean; sound: boolean };
+}
+
 export interface User {
     id: number;
     name: string;
@@ -7,6 +13,7 @@ export interface User {
     organization_id: number;
     roles: string[];
     permissions: string[];
+    preferences?: UserPreferences;
 }
 
 export interface Organization {
@@ -23,7 +30,6 @@ export interface Opportunity {
     source: string;
     external_id?: string;
     status: string;
-    capture_stage?: string;
     agency_name?: string;
     naics_code?: string;
     estimated_value?: number;
@@ -45,10 +51,13 @@ export interface ProposalSubmission {
     ulid: string;
     proposal_number: string;
     project_name: string;
+    proposal_type?: string;
     solicitation_number?: string;
     status: string;
     proposal_value?: number;
     award_value?: number;
+    estimated_cost?: number | null;
+    currency?: string;
     due_date?: string;
     submission_date?: string;
     award_date?: string;
@@ -56,22 +65,9 @@ export interface ProposalSubmission {
     owner?: User;
     proposal_manager?: User;
     agency?: Agency;
+    company?: Company;
     created_at: string;
     updated_at: string;
-}
-
-export interface CapturePlan {
-    id: number;
-    ulid: string;
-    stage: string;
-    probability_of_win?: number;
-    estimated_value?: number;
-    strategy?: string;
-    win_themes?: string;
-    discriminators?: string;
-    opportunity?: Opportunity;
-    capture_manager?: User;
-    created_at: string;
 }
 
 export interface Agency {
@@ -104,10 +100,17 @@ export interface Contact {
     last_name: string;
     full_name?: string;
     title?: string;
+    department?: string | null;
     email?: string;
     phone?: string;
+    mobile?: string | null;
+    linkedin_url?: string | null;
+    notes?: string | null;
     is_decision_maker: boolean;
     is_key_contact: boolean;
+    last_contact_date?: string | null;
+    next_follow_up_date?: string | null;
+    created_at?: string;
     agency?: Agency;
     company?: Company;
 }
@@ -151,13 +154,36 @@ export interface FlashMessages {
     success?: string;
     error?: string;
     warning?: string;
+    celebrate?: string | null;
+}
+
+export interface NotificationItem {
+    id: string;
+    type: string;
+    title: string;
+    message?: string | null;
+    url?: string | null;
+    icon?: string;
+    read: boolean;
+    created_at: string | null;
+}
+
+export interface AppLink {
+    key: string;
+    name: string;
+    description: string;
+    icon: string;
+    url: string;
+    current: boolean;
 }
 
 export interface SharedProps {
     auth: { user: User | null };
     flash: FlashMessages;
-    app: { name: string; version: string };
+    app: { name: string; version: string; switcher: AppLink[] };
     notifications_count: number;
+    notifications: NotificationItem[];
+    inbox_unread_count: number;
 }
 
 export type StatusColor = 'blue' | 'green' | 'red' | 'yellow' | 'gray' | 'purple' | 'indigo' | 'orange' | 'teal' | 'cyan' | 'amber' | 'slate' | 'emerald';

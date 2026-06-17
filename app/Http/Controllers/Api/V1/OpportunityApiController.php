@@ -25,7 +25,7 @@ class OpportunityApiController extends Controller
     public function show(Request $request, Opportunity $opportunity): JsonResponse
     {
         abort_unless($opportunity->organization_id === $request->user()->organization_id, 403);
-        return response()->json($opportunity->load(['capturePlan', 'proposals']));
+        return response()->json($opportunity->load(['proposals']));
     }
 
     public function store(Request $request): JsonResponse

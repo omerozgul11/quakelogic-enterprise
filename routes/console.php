@@ -14,3 +14,65 @@ Artisan::command('inspire', function () {
 Schedule::command('bids:sync sam-gov')->dailyAt('06:00')->withoutOverlapping();
 Schedule::command('bids:sync bidprime')->dailyAt('06:30')->withoutOverlapping();
 Schedule::command('follow-ups:generate')->dailyAt('08:00')->withoutOverlapping();
+// Monthly status follow-up per open proposal (emails only when a mailbox is connected).
+Schedule::command('follow-ups:monthly')->monthlyOn(1, '08:30')->withoutOverlapping();
+// Daily: warm the dashboard's exchange-rate cache (free ECB feed) before the
+// workday so the dashboard reads it instantly.
+Schedule::command('exchange-rates:refresh')->dailyAt('05:30')->withoutOverlapping();
+// Daily: score active opportunities against each user's expertise profile and
+// flag recommended owners — runs just before the digest so it can rank them.
+Schedule::command('opportunities:match')->dailyAt('06:45')->withoutOverlapping();
+// Daily: morning opportunity digest per user (keyword matches, ranked by match
+// score) into their Inbox, and deadline reminders for proposals due within 5 days.
+Schedule::command('inbox:opportunity-digest')->dailyAt('07:00')->withoutOverlapping();
+Schedule::command('proposals:deadline-reminders')->dailyAt('07:30')->withoutOverlapping();
+// Hourly: opportunity assignment escalation — assigned-but-untouched opportunities
+// climb the 24h→48h→72h→96h ladder (owner→manager→admin→reassignment candidate).
+Schedule::command('opportunities:escalate')->hourly()->withoutOverlapping();
+// Daily: executive opportunity briefing to admins/CEO (counts, at-risk, workload,
+// recommended reassignments) into their Inbox.
+Schedule::command('executive:briefing')->dailyAt('07:15')->withoutOverlapping();
+// Daily: proposal health — escalate stale (no client contact) proposals up the
+// owner→manager→admin ladder, and nudge pending-award proposals until decided.
+Schedule::command('proposals:health')->dailyAt('07:45')->withoutOverlapping();
+// Daily: delete in-app notifications older than 30 days so the bell list and
+// the notifications table don't grow without bound.
+Schedule::command('notifications:prune')->dailyAt('03:00')->withoutOverlapping();
+
+// Nightly database backup → gzipped dump uploaded to the S3/MinIO disk under
+// backups/, keeping the 14 most recent. The off-store copy + retention is the
+// safety net the platform previously lacked. Runs in the background so a slow
+// dump never blocks the scheduler.
+Schedule::command('db:backup')
+    ->dailyAt('02:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Nightly: embed any not-yet-indexed records into the AI knowledge base
+// (incremental, so it mainly picks up newly SAM.gov-synced opportunities; the
+// org's own records re-embed on edit via EmbeddingObserver). Idempotent and
+// throttled for the Gemini free tier. Runs at 01:30 Pacific — after the free
+// tier's midnight-PT quota reset — so it gets a fresh daily allowance; the
+// command's circuit breaker stops cleanly if the day's quota runs out and the
+// next night resumes where it left off.
+Schedule::command('kb:embed --fresh')
+    ->dailyAt('01:30')->timezone('America/Los_Angeles')
+    ->withoutOverlapping()->runInBackground();
+
+// Background pipeline refresh: runs every 5 minutes so opportunities stay
+// fresh without anyone having the page open. The expired purge runs each
+// time; the SAM.gov pull respects pipeline.sync_throttle_minutes to stay
+// within SAM's API rate limits.
+Schedule::command('pipeline:sync')->everyFiveMinutes()->withoutOverlapping();
+
+// Shipments: refresh active shipments from UPS every 5 minutes (delivered/
+// returned are skipped by the command's active() scope; manually-overridden
+// shipments with auto_track=false are skipped too).
+Schedule::command('mailings:poll')->everyFiveMinutes()->withoutOverlapping();
+
+// Auto-ingest account shipments from UPS Quantum View (only when enabled, so the
+// dev simulator never floods the list). New shipments created on the UPS account
+// appear automatically; mailings:poll then enriches each with its full timeline.
+if (config('services.ups.quantum_view.enabled')) {
+    Schedule::command('mailings:ingest')->hourly()->withoutOverlapping();
+}

@@ -1,13 +1,17 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { AppLayout } from '@/Components/layout/AppLayout';
+import { PageHeader } from '@/Components/ui/PageHeader';
+import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { formatCurrency } from '@/Lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { BarChart2 } from 'lucide-react';
+import { ChartGradients, ChartTooltip, AXIS_TICK, GRID_STROKE } from '@/Components/ui/ChartKit';
+import { ExportMenu } from '@/Components/ui/ExportMenu';
+import { BarChart2, Users, ChevronRight, Landmark } from 'lucide-react';
 
 interface Props {
     proposalTrend: Array<{ year: number; month: number; total: number; awarded: number; proposal_value: number; award_value: number }>;
     commissionTrend: Array<{ period_month: string; total_commissions: number; count: number }>;
-    topOpportunities: Array<{ id: number; title: string; agency_name: string | null; award_value: number }>;
+    topOpportunities: Array<{ id: number; title: string; agency_name: string | null; estimated_value: number }>;
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -17,7 +21,6 @@ export default function ReportsIndex({ proposalTrend, commissionTrend, topOpport
         name: `${MONTH_NAMES[d.month - 1]} ${d.year}`,
         Submitted: d.total,
         Awarded: d.awarded,
-        'Proposal Value': d.proposal_value,
     }));
 
     const commissionData = commissionTrend.slice(0, 6).reverse().map(d => ({
@@ -29,88 +32,107 @@ export default function ReportsIndex({ proposalTrend, commissionTrend, topOpport
         <AppLayout>
             <Head title="Reports" />
             <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                            <BarChart2 className="h-6 w-6 text-blue-500" />
-                            Reports & Analytics
-                        </h1>
-                    </div>
-                </div>
+                <PageHeader
+                    icon={BarChart2}
+                    title="Reports & Analytics"
+                    description="Proposal activity, commissions, and the biggest contracts in your pipeline."
+                    actions={
+                        <>
+                            <ExportMenu urlTemplate="/reports/download/{format}" />
+                            <Link
+                                href="/reports/users"
+                                className="bg-brand-gradient inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
+                            >
+                                <Users className="h-4 w-4" /> Team Performance
+                            </Link>
+                        </>
+                    }
+                />
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                     {/* Proposal Activity */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-base font-semibold text-gray-900 mb-4">Proposal Activity (Last 12 Months)</h2>
-                        {chartData.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-8">No data available.</p>
-                        ) : (
-                            <ResponsiveContainer width="100%" height={250}>
-                                <BarChart data={chartData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                    <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Bar dataKey="Submitted" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                                    <Bar dataKey="Awarded" fill="#10B981" radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        )}
-                    </div>
+                    <Card>
+                        <CardHeader><CardTitle>Proposal Activity — Last 12 Months</CardTitle></CardHeader>
+                        <CardContent>
+                            {chartData.length === 0 ? (
+                                <p className="py-10 text-center text-sm text-muted-foreground">No data available yet.</p>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={chartData} barGap={6}>
+                                        <ChartGradients />
+                                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                                        <XAxis dataKey="name" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+                                        <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                                        <Tooltip cursor={{ fill: 'hsl(var(--muted-foreground))', opacity: 0.08 }} content={<ChartTooltip />} />
+                                        <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                                        <Bar dataKey="Submitted" fill="url(#cg-0)" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                                        <Bar dataKey="Awarded" fill="url(#cg-2)" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </CardContent>
+                    </Card>
 
                     {/* Commission Trend */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                        <h2 className="text-base font-semibold text-gray-900 mb-4">Commission Trend (Last 6 Months)</h2>
-                        {commissionData.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-8">No commission data available.</p>
-                        ) : (
-                            <ResponsiveContainer width="100%" height={250}>
-                                <BarChart data={commissionData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                    <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
-                                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                                    <Bar dataKey="Commission" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        )}
-                    </div>
+                    <Card>
+                        <CardHeader><CardTitle>Commission Trend — Last 6 Months</CardTitle></CardHeader>
+                        <CardContent>
+                            {commissionData.length === 0 ? (
+                                <p className="py-10 text-center text-sm text-muted-foreground">No commission data available yet.</p>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={commissionData}>
+                                        <ChartGradients />
+                                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                                        <XAxis dataKey="name" tick={AXIS_TICK} tickLine={false} axisLine={false} />
+                                        <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} width={44} />
+                                        <Tooltip cursor={{ fill: 'hsl(var(--muted-foreground))', opacity: 0.08 }} content={<ChartTooltip currency />} />
+                                        <Bar dataKey="Commission" fill="url(#cg-6)" radius={[6, 6, 0, 0]} maxBarSize={36} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
 
-                {/* Top Awarded Opportunities */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                        <h2 className="text-base font-semibold text-gray-900">Top Awarded Contracts</h2>
+                {/* Top contracts */}
+                <Card className="mt-6 overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                        <div>
+                            <h2 className="font-semibold text-foreground">Top Contracts by Value</h2>
+                            <p className="mt-0.5 text-xs text-muted-foreground">The highest-value opportunities in your pipeline — live SAM.gov data. Click one to open it.</p>
+                        </div>
                     </div>
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Opportunity</th>
-                                <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Agency</th>
-                                <th className="text-right text-xs font-medium text-gray-500 uppercase px-4 py-3">Award Value</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {topOpportunities.length === 0 ? (
-                                <tr><td colSpan={3} className="text-center py-8 text-gray-500">No awarded contracts yet.</td></tr>
-                            ) : topOpportunities.map((opp, i) => (
-                                <tr key={opp.id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
-                                                {i + 1}
-                                            </span>
-                                            <span className="text-sm text-gray-900 truncate max-w-sm">{opp.title}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-600">{opp.agency_name ?? '—'}</td>
-                                    <td className="px-4 py-3 text-sm font-semibold text-green-700 text-right">{formatCurrency(opp.award_value)}</td>
-                                </tr>
+                    {topOpportunities.length === 0 ? (
+                        <p className="py-10 text-center text-sm text-muted-foreground">No contracts with a value yet.</p>
+                    ) : (
+                        <div className="divide-y divide-border">
+                            {topOpportunities.map((opp, i) => (
+                                <Link
+                                    key={opp.id}
+                                    href={`/opportunities/${opp.id}`}
+                                    className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-secondary/50"
+                                >
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                        {i + 1}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">{opp.title}</p>
+                                        {opp.agency_name && (
+                                            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                                                <Landmark className="h-3 w-3 shrink-0" /> {opp.agency_name}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <span className="shrink-0 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                                        {formatCurrency(opp.estimated_value)}
+                                    </span>
+                                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                                </Link>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
+                        </div>
+                    )}
+                </Card>
             </div>
         </AppLayout>
     );
