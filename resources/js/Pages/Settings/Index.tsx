@@ -52,7 +52,7 @@ function PasswordRules({ value }: { value: string }) {
 
 interface Preferences {
     display: { theme: 'system' | 'light' | 'dark'; density: 'comfortable' | 'compact' };
-    dashboard: { default_view: 'personal' | 'executive' };
+    dashboard: { default_view: 'personal' | 'executive'; eur_usd_threshold: number | null };
     channels: { new_proposal: boolean; new_opportunity: boolean; desktop: boolean; sound: boolean };
 }
 
@@ -217,6 +217,22 @@ export default function SettingsIndex({ user, preferences, twoFactor, mailbox }:
                                             { value: 'executive', label: 'Executive' },
                                         ]}
                                     />
+                                </div>
+                                <div>
+                                    <label className="label flex items-center gap-1">EUR/USD alert threshold</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        className="input"
+                                        value={prefs.data.dashboard.eur_usd_threshold ?? ''}
+                                        placeholder="1.14"
+                                        onChange={e => prefs.setData('dashboard', {
+                                            ...prefs.data.dashboard,
+                                            eur_usd_threshold: e.target.value === '' ? null : parseFloat(e.target.value),
+                                        })}
+                                    />
+                                    <p className="mt-1 text-xs text-muted-foreground">Dashboard shows EUR→USD green when it's under this rate.</p>
                                 </div>
                             </div>
                             <div className="flex items-center justify-end gap-3">

@@ -5,6 +5,7 @@ RUN apk add --no-cache \
     bash \
     curl \
     git \
+    mariadb-client \
     libpng-dev \
     libzip-dev \
     libxml2-dev \

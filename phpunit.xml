@@ -35,5 +35,6 @@
         <env name="AI_PROVIDER" value="fake"/>
         <env name="SAM_GOV_SYNC_ENABLED" value="false"/>
         <env name="BIDPRIME_SYNC_ENABLED" value="false"/>
+        <env name="EXCHANGE_RATES_ENABLED" value="false"/>
     </php>
 </phpunit>

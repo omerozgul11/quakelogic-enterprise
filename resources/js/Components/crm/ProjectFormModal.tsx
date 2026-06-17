@@ -1,0 +1,128 @@
+import { useForm } from '@inertiajs/react';
+import { FormEvent } from 'react';
+import { Modal } from '@/Components/ui/Modal';
+import { Button } from '@/Components/ui/Button';
+import { Select } from '@/Components/ui/Select';
+import { NumberInput } from '@/Components/ui/NumberInput';
+
+export interface EditableProject {
+    id: number;
+    name?: string;
+    code?: string | null;
+    status?: string;
+    description?: string | null;
+    start_date?: string | null;
+    due_date?: string | null;
+    budget?: number | null;
+    company_id?: number | null;
+    owner_id?: number | null;
+}
+
+interface Props {
+    open: boolean;
+    onClose: () => void;
+    project?: EditableProject | null;
+    companies: Array<{ id: number; name: string }>;
+    owners: Array<{ id: number; name: string }>;
+    statuses: Array<{ value: string; label: string }>;
+}
+
+export function ProjectFormModal({ open, onClose, project, companies, owners, statuses }: Props) {
+    const isEdit = !!project;
+    const form = useForm({
+        name: project?.name ?? '',
+        code: project?.code ?? '',
+        status: project?.status ?? 'planned',
+        description: project?.description ?? '',
+        start_date: project?.start_date ?? '',
+        due_date: project?.due_date ?? '',
+        budget: project?.budget != null ? String(project.budget) : '',
+        company_id: project?.company_id ? String(project.company_id) : '',
+        owner_id: project?.owner_id ? String(project.owner_id) : '',
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        form.transform(data => ({
+            ...data,
+            company_id: data.company_id || null,
+            owner_id: data.owner_id || null,
+            budget: data.budget || null,
+            start_date: data.start_date || null,
+            due_date: data.due_date || null,
+        }));
+        const opts = { preserveScroll: true, onSuccess: () => { form.reset(); onClose(); } };
+        if (isEdit) form.put(`/crm/projects/${project!.id}`, opts);
+        else form.post('/crm/projects', opts);
+    };
+
+    const err = (k: keyof typeof form.data) => form.errors[k as keyof typeof form.errors];
+
+    return (
+        <Modal
+            open={open}
+            onClose={onClose}
+            title={isEdit ? 'Edit Project' : 'New Project'}
+            description={isEdit ? 'Update this project.' : 'Plan and track a new project.'}
+            footer={
+                <>
+                    <Button variant="ghost" onClick={onClose}>Cancel</Button>
+                    <Button onClick={submit as unknown as () => void} disabled={form.processing}>
+                        {form.processing ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Project'}
+                    </Button>
+                </>
+            }
+        >
+            <form onSubmit={submit} className="space-y-4">
+                <div className="grid grid-cols-[1fr_8rem] gap-3">
+                    <div>
+                        <label className="label">Project name *</label>
+                        <input className="input" value={form.data.name} onChange={e => form.setData('name', e.target.value)} autoFocus />
+                        {err('name') && <p className="mt-1 text-xs text-destructive">{err('name')}</p>}
+                    </div>
+                    <div>
+                        <label className="label">Code</label>
+                        <input className="input" value={form.data.code} onChange={e => form.setData('code', e.target.value)} placeholder="PRJ-01" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="label">Client</label>
+                        <Select className="w-full" value={form.data.company_id} onChange={v => form.setData('company_id', v)} placeholder="— None —"
+                            options={companies.map(c => ({ value: String(c.id), label: c.name }))} />
+                    </div>
+                    <div>
+                        <label className="label">Status</label>
+                        <Select className="w-full" value={form.data.status} onChange={v => form.setData('status', v)}
+                            options={statuses.map(s => ({ value: s.value, label: s.label }))} />
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="label">Project manager</label>
+                        <Select className="w-full" value={form.data.owner_id} onChange={v => form.setData('owner_id', v)} placeholder="— Unassigned —"
+                            options={owners.map(o => ({ value: String(o.id), label: o.name }))} />
+                    </div>
+                    <div>
+                        <label className="label">Budget</label>
+                        <NumberInput className="input" value={form.data.budget} onChange={e => form.setData('budget', e.target.value)} placeholder="0.00" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="label">Start date</label>
+                        <input type="date" className="input" value={form.data.start_date} onChange={e => form.setData('start_date', e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="label">Due date</label>
+                        <input type="date" className="input" value={form.data.due_date} onChange={e => form.setData('due_date', e.target.value)} />
+                    </div>
+                </div>
+                <div>
+                    <label className="label">Description</label>
+                    <textarea className="input min-h-[72px]" value={form.data.description} onChange={e => form.setData('description', e.target.value)} />
+                </div>
+            </form>
+        </Modal>
+    );
+}

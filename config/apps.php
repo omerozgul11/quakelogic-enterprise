@@ -33,11 +33,12 @@ return [
             'current' => false,
         ],
         [
-            'key' => 'project-manager',
-            'name' => 'Project Manager',
-            'description' => 'Plan & track projects',
-            'icon' => 'folder-kanban',
-            'url' => env('PROJECT_MANAGER_APP_URL', 'https://projectmanager.quakelogic.net'),
+            'key' => 'crm',
+            'name' => 'CRM',
+            'description' => 'Clients, leads, projects & invoices',
+            'icon' => 'contact-round',
+            // A section of this app (not a separate site): /crm.
+            'url' => '/crm',
             'current' => false,
         ],
     ],

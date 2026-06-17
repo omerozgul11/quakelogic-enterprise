@@ -7,8 +7,14 @@ import { QuakeBotScene } from '@/Components/ui/QuakeBotScene';
 import { SharedProps } from '@/Types';
 import {
     Target, FileText, Trophy, TrendingUp, DollarSign,
-    Clock, AlertCircle, CheckCircle, ArrowUpRight, Plus, ArrowRight, FileSearch, CalendarClock,
+    Clock, AlertCircle, CheckCircle, ArrowUpRight, Plus, ArrowRight, FileSearch, CalendarClock, Banknote,
 } from 'lucide-react';
+
+interface ExchangeRates {
+    date: string;
+    source: 'live' | 'reference';
+    rates: Array<{ code: string; name: string; symbol: string; usd_per_unit: number }>;
+}
 
 interface DashboardMetrics {
     mySubmitted: number;
@@ -92,6 +98,51 @@ function AdminSubmissionsCard({ data }: { data: NonNullable<DashboardMetrics['or
 interface Props {
     metrics: DashboardMetrics;
     canViewExecutiveDashboard: boolean;
+    exchangeRates: ExchangeRates;
+    eurUsdThreshold: number;
+}
+
+/** Daily USD exchange rates (EUR→USD etc.). Live ECB feed, cached daily.
+ *  The EUR tile turns green when EUR/USD is under the user's threshold. */
+function ExchangeRatesCard({ data, threshold }: { data: ExchangeRates; threshold: number }) {
+    const fmt = (v: number) => (v >= 0.1 ? v.toFixed(2) : v.toFixed(4));
+    return (
+        <div className="card-surface p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <Banknote className="h-4 w-4 text-muted-foreground" />
+                    <h2 className="font-semibold text-foreground">Daily Exchange Rates</h2>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">vs USD</span>
+                </div>
+                <span
+                    className="text-xs text-muted-foreground"
+                    title={data.source === 'live' ? 'Live European Central Bank reference rate' : 'Static reference rate — live feed unavailable'}
+                >
+                    {data.source === 'live' ? `Updated ${data.date}` : `Reference · ${data.date}`}
+                </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {data.rates.map(r => {
+                    const isEur = r.code === 'EUR';
+                    const under = isEur && r.usd_per_unit < threshold;
+                    const tileClass = isEur
+                        ? (under ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-amber-500/50 bg-amber-500/10')
+                        : 'border-border';
+                    const valueClass = isEur ? (under ? 'text-emerald-600' : 'text-amber-600') : 'text-foreground';
+                    return (
+                        <div key={r.code} className={`rounded-xl border p-3 ${tileClass}`} title={`1 ${r.name} = $${fmt(r.usd_per_unit)} USD`}>
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-foreground">{r.code}</span>
+                                <span className="text-muted-foreground">{r.symbol}</span>
+                            </div>
+                            <p className={`mt-1 text-lg font-bold ${valueClass}`}>${fmt(r.usd_per_unit)}</p>
+                            <p className="text-[11px] text-muted-foreground">{isEur ? `target < $${threshold.toFixed(2)}` : `per 1 ${r.code}`}</p>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
 }
 
 const colorMap: Record<string, string> = {
@@ -130,7 +181,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color = 'indigo', href, 
     return href ? <Link href={href} className="block h-full">{card}</Link> : card;
 }
 
-export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: Props) {
+export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exchangeRates, eurUsdThreshold }: Props) {
     const { auth } = usePage<SharedProps>().props;
 
     return (
@@ -216,6 +267,9 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard }: P
                     <StatCard title="Follow-ups Due" value={metrics.myFollowUps} icon={AlertCircle} color={metrics.myFollowUps > 0 ? 'red' : 'green'} subtitle="Scheduled or overdue"
                         href="/follow-ups" hint="Follow-ups assigned to you that are scheduled or overdue. Opens your inbox." />
                 </div>
+
+                {/* Daily exchange rates (EUR→USD and other majors) */}
+                <ExchangeRatesCard data={exchangeRates} threshold={eurUsdThreshold} />
 
                 {/* Panels */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">

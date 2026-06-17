@@ -72,4 +72,16 @@ return [
         ],
     ],
 
+    /*
+    | Daily exchange rates shown on the dashboard. Pulled once a day from a free,
+    | no-key FX feed (frankfurter.app / ECB) and cached; on any failure (or in
+    | tests, where it's disabled) the dashboard falls back to the static
+    | reference rates in App\Support\Currency.
+    */
+    'exchange_rates' => [
+        'enabled' => env('EXCHANGE_RATES_ENABLED', true),
+        'base_url' => env('EXCHANGE_RATES_BASE_URL', 'https://api.frankfurter.app'),
+        'timeout' => env('EXCHANGE_RATES_TIMEOUT', 4),
+    ],
+
 ];

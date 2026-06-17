@@ -7,6 +7,12 @@ use App\Http\Controllers\Web\ComplianceController;
 use App\Http\Controllers\Web\ContractController;
 use App\Http\Controllers\Web\TemplateController;
 use App\Http\Controllers\Web\CrmController;
+use App\Http\Controllers\Web\Crm\ClientController as CrmClientController;
+use App\Http\Controllers\Web\Crm\ContactController as CrmContactController;
+use App\Http\Controllers\Web\Crm\DashboardController as CrmDashboardController;
+use App\Http\Controllers\Web\Crm\InvoiceController as CrmInvoiceController;
+use App\Http\Controllers\Web\Crm\LeadController as CrmLeadController;
+use App\Http\Controllers\Web\Crm\ProjectController as CrmProjectController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DocumentController;
 use App\Http\Controllers\Web\FollowUpController;
@@ -76,6 +82,66 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('shipments/admin')->name('shipments.admin.')->middleware('role:Super Admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\Web\ShipmentAccessController::class, 'index'])->name('index');
         Route::match(['put', 'patch', 'post'], '/users/{user}', [\App\Http\Controllers\Web\ShipmentAccessController::class, 'update'])->name('users.update');
+    });
+
+    // CRM — dedicated section at /crm (clients, contacts, leads, projects,
+    // invoices). Gated by `access crm`, which every role has. Reuses the shared
+    // companies/contacts tables; everything else lives in crm_* tables.
+    Route::prefix('crm')->name('crm.')->middleware('permission:access crm')->group(function () {
+        Route::get('/', [CrmDashboardController::class, 'index'])->name('dashboard');
+
+        // Clients (companies)
+        Route::prefix('clients')->name('clients.')->group(function () {
+            Route::get('/', [CrmClientController::class, 'index'])->name('index');
+            Route::post('/', [CrmClientController::class, 'store'])->name('store');
+            Route::get('/{company}', [CrmClientController::class, 'show'])->name('show');
+            Route::match(['put', 'patch'], '/{company}', [CrmClientController::class, 'update'])->name('update');
+            Route::delete('/{company}', [CrmClientController::class, 'destroy'])->name('destroy');
+        });
+
+        // Contacts
+        Route::prefix('contacts')->name('contacts.')->group(function () {
+            Route::get('/', [CrmContactController::class, 'index'])->name('index');
+            Route::post('/', [CrmContactController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/{contact}', [CrmContactController::class, 'update'])->name('update');
+            Route::delete('/{contact}', [CrmContactController::class, 'destroy'])->name('destroy');
+        });
+
+        // Leads & sales pipeline
+        Route::prefix('leads')->name('leads.')->group(function () {
+            Route::get('/', [CrmLeadController::class, 'index'])->name('index');
+            Route::post('/', [CrmLeadController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/{lead}', [CrmLeadController::class, 'update'])->name('update');
+            Route::post('/{lead}/status', [CrmLeadController::class, 'updateStatus'])->name('status');
+            Route::post('/{lead}/convert', [CrmLeadController::class, 'convert'])->name('convert');
+            Route::delete('/{lead}', [CrmLeadController::class, 'destroy'])->name('destroy');
+        });
+
+        // Projects & tasks
+        Route::prefix('projects')->name('projects.')->group(function () {
+            Route::get('/', [CrmProjectController::class, 'index'])->name('index');
+            Route::post('/', [CrmProjectController::class, 'store'])->name('store');
+            Route::get('/{project}', [CrmProjectController::class, 'show'])->name('show');
+            Route::match(['put', 'patch'], '/{project}', [CrmProjectController::class, 'update'])->name('update');
+            Route::delete('/{project}', [CrmProjectController::class, 'destroy'])->name('destroy');
+            Route::post('/{project}/tasks', [CrmProjectController::class, 'storeTask'])->name('tasks.store');
+            Route::match(['put', 'patch'], '/{project}/tasks/{task}', [CrmProjectController::class, 'updateTask'])->name('tasks.update');
+            Route::delete('/{project}/tasks/{task}', [CrmProjectController::class, 'destroyTask'])->name('tasks.destroy');
+        });
+
+        // Estimates, invoices & payments
+        Route::prefix('invoices')->name('invoices.')->group(function () {
+            Route::get('/', [CrmInvoiceController::class, 'index'])->name('index');
+            Route::get('/create', [CrmInvoiceController::class, 'create'])->name('create');
+            Route::post('/', [CrmInvoiceController::class, 'store'])->name('store');
+            Route::get('/{invoice}', [CrmInvoiceController::class, 'show'])->name('show');
+            Route::get('/{invoice}/edit', [CrmInvoiceController::class, 'edit'])->name('edit');
+            Route::match(['put', 'patch'], '/{invoice}', [CrmInvoiceController::class, 'update'])->name('update');
+            Route::delete('/{invoice}', [CrmInvoiceController::class, 'destroy'])->name('destroy');
+            Route::post('/{invoice}/status', [CrmInvoiceController::class, 'updateStatus'])->name('status');
+            Route::post('/{invoice}/payments', [CrmInvoiceController::class, 'storePayment'])->name('payments.store');
+            Route::delete('/{invoice}/payments/{payment}', [CrmInvoiceController::class, 'destroyPayment'])->name('payments.destroy');
+        });
     });
 
     // Opportunities

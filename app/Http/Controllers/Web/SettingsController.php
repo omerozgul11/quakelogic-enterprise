@@ -18,7 +18,7 @@ class SettingsController extends Controller
 {
     private const DEFAULT_PREFERENCES = [
         'display' => ['theme' => 'system', 'density' => 'comfortable'],
-        'dashboard' => ['default_view' => 'personal'],
+        'dashboard' => ['default_view' => 'personal', 'eur_usd_threshold' => 1.14],
         'channels' => [
             'new_proposal' => true,
             'new_opportunity' => true,
@@ -170,6 +170,7 @@ class SettingsController extends Controller
             'display.theme' => 'required|in:system,light,dark',
             'display.density' => 'required|in:comfortable,compact',
             'dashboard.default_view' => 'required|in:personal,executive',
+            'dashboard.eur_usd_threshold' => 'nullable|numeric|min:0|max:100',
             'channels.new_proposal' => 'boolean',
             'channels.new_opportunity' => 'boolean',
             'channels.desktop' => 'boolean',

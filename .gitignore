@@ -6,6 +6,8 @@
 /storage/app/private
 /vendor
 .env
+.env.*
+!.env.example
 .env.backup
 .env.production
 .env.bak*

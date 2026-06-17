@@ -3,12 +3,13 @@ import { Link, usePage } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import { cn } from '@/Lib/utils';
 import { Logo } from '@/Components/ui/Logo';
-import { ChevronDown, LayoutDashboard, FileText, Truck, LayoutGrid, ExternalLink, FolderKanban } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, FileText, Truck, LayoutGrid, ExternalLink, FolderKanban, ContactRound } from 'lucide-react';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
     'file-text': FileText,
     truck: Truck,
     'folder-kanban': FolderKanban,
+    'contact-round': ContactRound,
     'layout-dashboard': LayoutDashboard,
 };
 

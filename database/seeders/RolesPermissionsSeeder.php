@@ -29,6 +29,10 @@ class RolesPermissionsSeeder extends Seeder
             // CRM
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
 
+            // CRM section (/crm) — `access crm` gates the whole section (mirrors
+            // `access shipments`) and is granted to every role below.
+            'access crm', 'manage leads', 'manage projects', 'manage invoices',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -71,6 +75,7 @@ class RolesPermissionsSeeder extends Seeder
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
+            'access crm', 'manage leads', 'manage projects', 'manage invoices',
             'view follow ups', 'manage follow ups', 'send follow up emails',
             'view own commissions', 'view all commissions', 'manage commission rules', 'approve commissions', 'export commissions',
             'view dashboards', 'view executive dashboard', 'export reports',
@@ -86,6 +91,7 @@ class RolesPermissionsSeeder extends Seeder
             'assign opportunities', 'qualify opportunities', 'make go no go decision',
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
+            'access crm', 'manage leads', 'manage projects', 'manage invoices',
             'view follow ups', 'manage follow ups', 'send follow up emails',
             'view own commissions', 'view all commissions',
             'view dashboards', 'export reports',
@@ -101,6 +107,7 @@ class RolesPermissionsSeeder extends Seeder
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
             'view crm', 'view follow ups', 'manage follow ups',
+            'access crm', 'manage leads', 'manage projects', 'manage invoices',
             'view own commissions',
             'view dashboards',
             'use ai assistant', 'run document extraction', 'review ai extraction',
@@ -113,7 +120,7 @@ class RolesPermissionsSeeder extends Seeder
         $pw->syncPermissions([
             'view opportunities',
             'view proposals', 'create proposals', 'update proposals', 'manage proposal files',
-            'view crm',
+            'view crm', 'access crm',
             'view follow ups',
             'view own commissions',
             'view dashboards',
@@ -128,6 +135,7 @@ class RolesPermissionsSeeder extends Seeder
             'view opportunities', 'create opportunities',
             'view proposals', 'create proposals', 'update proposals',
             'view crm', 'manage contacts', 'manage activities',
+            'access crm', 'manage leads', 'manage projects',
             'view follow ups', 'manage follow ups', 'send follow up emails',
             'view own commissions',
             'view dashboards',
@@ -142,13 +150,14 @@ class RolesPermissionsSeeder extends Seeder
             'view own commissions', 'view all commissions', 'approve commissions', 'export commissions',
             'view dashboards', 'view executive dashboard', 'export reports',
             'view contracts', 'manage contracts',
+            'access crm', 'view crm', 'manage invoices',
         ]);
 
         // Read Only
         $readOnly = Role::firstOrCreate(['name' => 'Read Only']);
         $readOnly->syncPermissions([
             'view opportunities', 'view proposals',
-            'view crm', 'view follow ups', 'view dashboards',
+            'view crm', 'access crm', 'view follow ups', 'view dashboards',
             'view contracts', 'view templates',
         ]);
     }
