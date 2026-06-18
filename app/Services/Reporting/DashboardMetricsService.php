@@ -160,6 +160,16 @@ class DashboardMetricsService
             ->whereIn('status', $openStatuses)
             ->sum(DB::raw('(' . Currency::usdExpr('proposal_value') . ') * ' . $this->winProbabilityExpr() . ' / 100'));
 
+        // Org-wide pipeline — what admins see on the pipeline cards instead of
+        // their own (an admin/owner typically owns no proposals personally, so the
+        // "My" figures would read $0 while the company pipeline is substantial).
+        $companyPipelineValue = ProposalSubmission::forOrganization($organizationId)
+            ->whereIn('status', $openStatuses)
+            ->sum(DB::raw(Currency::usdExpr('proposal_value')));
+        $companyWeightedPipelineValue = ProposalSubmission::forOrganization($organizationId)
+            ->whereIn('status', $openStatuses)
+            ->sum(DB::raw('(' . Currency::usdExpr('proposal_value') . ') * ' . $this->winProbabilityExpr() . ' / 100'));
+
         $myCommissions = Commission::where('user_id', $user->id)
             ->where('organization_id', $organizationId)
             ->whereYear('created_at', now()->year)
@@ -269,7 +279,8 @@ class DashboardMetricsService
 
         return compact(
             'mySubmitted', 'myAwarded', 'myLost', 'myPending',
-            'mySubmittedValue', 'myAwardValue', 'myPipelineValue', 'myWeightedPipelineValue', 'myCommissions',
+            'mySubmittedValue', 'myAwardValue', 'myPipelineValue', 'myWeightedPipelineValue',
+            'companyPipelineValue', 'companyWeightedPipelineValue', 'myCommissions',
             'myTasks', 'myFollowUps', 'myUpcomingDeadlines', 'recentActivity',
             'companyTotalProposals', 'companyMonthlySubmissions', 'companyMonthlyValue',
             'companySubmittedValue', 'companySubmittedCount', 'companyAwardValue',

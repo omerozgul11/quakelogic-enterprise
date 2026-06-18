@@ -12,7 +12,8 @@ import {
 
 interface ExchangeRates {
     date: string;
-    source: 'live' | 'reference';
+    source: 'realtime' | 'live' | 'reference';
+    fetched_at?: string;
     rates: Array<{ code: string; name: string; symbol: string; usd_per_unit: number }>;
 }
 
@@ -25,6 +26,8 @@ interface DashboardMetrics {
     myAwardValue: number;
     myPipelineValue: number;
     myWeightedPipelineValue: number;
+    companyPipelineValue: number;
+    companyWeightedPipelineValue: number;
     myCommissions: number;
     myTasks: number;
     myFollowUps: number;
@@ -102,23 +105,32 @@ interface Props {
     eurUsdThreshold: number;
 }
 
-/** Daily USD exchange rates (EUR→USD etc.). Live ECB feed, cached daily.
+/** USD exchange rates (EUR→USD etc.). Near-real-time market quotes refreshed
+ *  every minute, with the ECB daily feed / static rates as fallbacks.
  *  The EUR tile turns green when EUR/USD is under the user's threshold. */
 function ExchangeRatesCard({ data, threshold }: { data: ExchangeRates; threshold: number }) {
     const fmt = (v: number) => (v >= 0.1 ? v.toFixed(2) : v.toFixed(4));
+    const asOf = data.fetched_at
+        ? new Date(data.fetched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : null;
+    const isLiveMarket = data.source === 'realtime';
+    const stamp = isLiveMarket
+        ? (asOf ? `Live · ${asOf}` : 'Live')
+        : data.source === 'live' ? `ECB · ${data.date}` : `Reference · ${data.date}`;
+    const stampTitle = isLiveMarket
+        ? 'Near-real-time market rate (refreshed every minute)'
+        : data.source === 'live' ? 'European Central Bank daily reference rate' : 'Static reference rate — live feed unavailable';
     return (
         <div className="card-surface p-5">
             <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                     <Banknote className="h-4 w-4 text-muted-foreground" />
-                    <h2 className="font-semibold text-foreground">Daily Exchange Rates</h2>
+                    <h2 className="font-semibold text-foreground">Exchange Rates</h2>
                     <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">vs USD</span>
                 </div>
-                <span
-                    className="text-xs text-muted-foreground"
-                    title={data.source === 'live' ? 'Live European Central Bank reference rate' : 'Static reference rate — live feed unavailable'}
-                >
-                    {data.source === 'live' ? `Updated ${data.date}` : `Reference · ${data.date}`}
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground" title={stampTitle}>
+                    {isLiveMarket && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />}
+                    {stamp}
                 </span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -248,9 +260,9 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exc
                                 href="/proposals/board?status=awarded,completed" hint="Proposals you've won — awarded or completed. Opens the Applications board filtered to those." />
                         </>
                     )}
-                    <StatCard title="Pipeline Value" value={formatCurrency(metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle="Projected value, open bids"
-                        href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint="Projected value (USD) of your open proposals. Opens the Applications board filtered to open work." />
-                    <StatCard title="Weighted Pipeline" value={formatCurrency(metrics.myWeightedPipelineValue)} icon={TrendingUp} color="teal" subtitle="Value × win probability"
+                    <StatCard title="Pipeline Value" value={formatCurrency(metrics.isAdmin ? metrics.companyPipelineValue : metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle={metrics.isAdmin ? 'Open bids · org-wide' : 'Projected value, open bids'}
+                        href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint={metrics.isAdmin ? "Projected value (USD) of all open proposals company-wide. Opens the Applications board filtered to open work." : "Projected value (USD) of your open proposals. Opens the Applications board filtered to open work."} />
+                    <StatCard title="Weighted Pipeline" value={formatCurrency(metrics.isAdmin ? metrics.companyWeightedPipelineValue : metrics.myWeightedPipelineValue)} icon={TrendingUp} color="teal" subtitle={metrics.isAdmin ? 'Value × win probability · org-wide' : 'Value × win probability'}
                         href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint="Forecast: each open proposal's value weighted by its win probability (per-stage default until you set one on the proposal)." />
                     <StatCard title="My Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" subtitle="Total value you've submitted"
                         href="/proposals/board" hint="Total value (USD) of everything you've submitted. Opens the Applications board." />

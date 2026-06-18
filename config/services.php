@@ -73,15 +73,23 @@ return [
     ],
 
     /*
-    | Daily exchange rates shown on the dashboard. Pulled once a day from a free,
-    | no-key FX feed (frankfurter.app / ECB) and cached; on any failure (or in
-    | tests, where it's disabled) the dashboard falls back to the static
-    | reference rates in App\Support\Currency.
+    | Exchange rates shown on the dashboard. Refreshed on a schedule into a cache
+    | the dashboard reads instantly. Source chain (best first):
+    |   1. realtime  — free, no-key, near-real-time market quotes (Yahoo Finance).
+    |   2. live      — frankfurter.app / ECB daily reference rate.
+    |   3. reference — static rates in App\Support\Currency.
+    | Each step falls through to the next on failure; in tests `enabled` is false
+    | so it always uses the static reference and never touches the network.
     */
     'exchange_rates' => [
         'enabled' => env('EXCHANGE_RATES_ENABLED', true),
         'base_url' => env('EXCHANGE_RATES_BASE_URL', 'https://api.frankfurter.app'),
         'timeout' => env('EXCHANGE_RATES_TIMEOUT', 4),
+
+        // Real-time (intraday) quotes. Yahoo's chart endpoint is free and needs
+        // no key, but is unofficial — disable to fall back to the ECB daily feed.
+        'realtime_enabled' => env('EXCHANGE_RATES_REALTIME_ENABLED', true),
+        'realtime_base_url' => env('EXCHANGE_RATES_REALTIME_BASE_URL', 'https://query1.finance.yahoo.com'),
     ],
 
 ];

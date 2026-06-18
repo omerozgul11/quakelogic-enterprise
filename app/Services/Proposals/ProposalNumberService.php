@@ -11,16 +11,21 @@ class ProposalNumberService
     {
         return DB::transaction(function () use ($organizationId) {
             $year = now()->year;
-            // Count soft-deleted proposals too — the proposal_number unique index
-            // still includes them, so the sequence must never reuse a number.
-            $count = ProposalSubmission::withTrashed()
+            $prefix = "QL-{$year}-";
+            // Derive the next sequence from the highest existing number (soft-deleted
+            // included — the unique index covers them, so a number must never be
+            // reused). Max-based, not count-based: counting collides whenever the
+            // numbers aren't contiguous (e.g. after a recovery/bulk import).
+            $max = ProposalSubmission::withTrashed()
                 ->where('organization_id', $organizationId)
-                ->whereYear('created_at', $year)
+                ->where('proposal_number', 'like', $prefix . '%')
                 ->lockForUpdate()
-                ->count();
+                ->pluck('proposal_number')
+                ->map(fn (string $number) => (int) substr($number, -4))
+                ->max();
 
-            $sequence = str_pad($count + 1, 4, '0', STR_PAD_LEFT);
-            return "QL-{$year}-{$sequence}";
+            $sequence = str_pad((int) ($max ?? 0) + 1, 4, '0', STR_PAD_LEFT);
+            return "{$prefix}{$sequence}";
         });
     }
 }
