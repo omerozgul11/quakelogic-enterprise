@@ -64,10 +64,12 @@ class ProposalTest extends TestCase
         $this->assertMatchesRegularExpression('/^QL-\d{4}-\d{4}$/', $proposal->proposal_number);
     }
 
-    public function test_finance_user_cannot_view_proposal_list(): void
+    public function test_finance_user_can_view_proposal_list(): void
     {
+        // Collaborative visibility: every org user with "view proposals" (now
+        // all roles) can view the proposals list. See ProposalSubmissionPolicy.
         $response = $this->actingAs($this->financeUser)->get('/proposals');
-        $response->assertStatus(403);
+        $response->assertStatus(200);
     }
 
     public function test_proposal_manager_can_transition_status(): void
@@ -89,8 +91,10 @@ class ProposalTest extends TestCase
         ]);
     }
 
-    public function test_proposal_writer_can_only_see_assigned_proposals(): void
+    public function test_proposal_writer_can_view_any_proposal_in_org(): void
     {
+        // Collaborative editing model (ProposalSubmissionPolicy::view): any org
+        // user can open any proposal — owned or not — so anyone can edit it.
         $ownedProposal = ProposalSubmission::factory()->create([
             'organization_id' => $this->organization->id,
             'owner_id' => $this->proposalWriter->id,
@@ -101,12 +105,7 @@ class ProposalTest extends TestCase
             'owner_id' => $this->proposalManager->id,
         ]);
 
-        // Writer can see their own proposal
-        $response = $this->actingAs($this->proposalWriter)->get("/proposals/{$ownedProposal->id}");
-        $response->assertStatus(200);
-
-        // Writer cannot see the other proposal
-        $response = $this->actingAs($this->proposalWriter)->get("/proposals/{$otherProposal->id}");
-        $response->assertStatus(403);
+        $this->actingAs($this->proposalWriter)->get("/proposals/{$ownedProposal->id}")->assertStatus(200);
+        $this->actingAs($this->proposalWriter)->get("/proposals/{$otherProposal->id}")->assertStatus(200);
     }
 }

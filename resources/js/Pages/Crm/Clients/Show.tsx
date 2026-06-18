@@ -6,7 +6,7 @@ import { Pill } from '@/Components/ui/Pill';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { CrmClientFormModal } from '@/Components/crm/CrmClientFormModal';
 import { cn, getInitials, avatarGradient, formatCurrency } from '@/Lib/utils';
-import { ArrowLeft, Building2, Globe, Mail, Phone, MapPin, Pencil, Trash2, Plus, Target, FolderKanban, ReceiptText, Star, BadgeCheck } from 'lucide-react';
+import { ArrowLeft, Building2, Globe, Mail, Phone, MapPin, Pencil, Trash2, Plus, Target, FolderKanban, ReceiptText, FileText, Truck, Briefcase, Star, BadgeCheck } from 'lucide-react';
 
 interface ContactRow { id: number; first_name: string; last_name: string; title?: string | null; email?: string | null; phone?: string | null; is_decision_maker: boolean; is_key_contact: boolean }
 interface LeadRow { id: number; title: string; value: number; status_label: string; status_color: string }
@@ -29,15 +29,22 @@ interface Client {
     contacts: ContactRow[];
 }
 
+interface ProposalRow { id: number; number: string; name: string; value: number; status_label: string; status_color: string }
+interface OpportunityRow { id: number; title: string; value: number; status_label: string; status_color: string }
+interface ShipmentRow { id: number; ulid: string; tracking: string | null; recipient: string | null; status_label: string; status_color: string }
+
 interface Props {
     client: Client;
     leads: LeadRow[];
     projects: ProjectRow[];
     invoices: InvoiceRow[];
+    proposals: ProposalRow[];
+    opportunities: OpportunityRow[];
+    shipments: ShipmentRow[];
     can: { manage: boolean };
 }
 
-export default function ClientShow({ client, leads, projects, invoices, can }: Props) {
+export default function ClientShow({ client, leads, projects, invoices, proposals, opportunities, shipments, can }: Props) {
     const [editOpen, setEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -141,6 +148,17 @@ export default function ClientShow({ client, leads, projects, invoices, can }: P
                     }))} />
                     <RelatedList title="Invoices & estimates" icon={ReceiptText} empty="No billing yet." className="lg:col-span-2" items={invoices.map(i => ({
                         id: i.id, href: `/crm/invoices/${i.id}`, primary: i.number, secondary: formatCurrency(i.total, i.currency), color: i.status_color, label: i.status_label,
+                    }))} />
+
+                    {/* Cross-platform: this client's records in Proposals & Shipments */}
+                    <RelatedList title="Proposals" icon={FileText} empty="No proposals linked to this client yet." items={proposals.map(p => ({
+                        id: p.id, href: `/proposals/${p.id}`, primary: `${p.number} · ${p.name}`, secondary: formatCurrency(p.value), color: p.status_color, label: p.status_label,
+                    }))} />
+                    <RelatedList title="Opportunities" icon={Briefcase} empty="No opportunities linked." items={opportunities.map(o => ({
+                        id: o.id, href: `/opportunities/${o.id}`, primary: o.title, secondary: formatCurrency(o.value), color: o.status_color, label: o.status_label,
+                    }))} />
+                    <RelatedList title="Shipments" icon={Truck} empty="No shipments for this client's proposals." className="lg:col-span-2" items={shipments.map(s => ({
+                        id: s.id, href: `/shipments/mailings/${s.ulid}`, primary: s.recipient || s.tracking || '—', secondary: s.tracking || '', color: s.status_color, label: s.status_label,
                     }))} />
                 </div>
             </div>
