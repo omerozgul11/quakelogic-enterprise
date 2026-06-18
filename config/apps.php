@@ -77,6 +77,15 @@ return [
             'url' => '/assets',
             'current' => false,
         ],
+        [
+            'key' => 'calibration',
+            'name' => 'Calibration',
+            'description' => 'NIST-traceable certificates & due dates',
+            'icon' => 'badge-check',
+            // A section of this app (not a separate site): /calibration.
+            'url' => '/calibration',
+            'current' => false,
+        ],
     ],
 
 ];

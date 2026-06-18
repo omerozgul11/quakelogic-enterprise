@@ -50,6 +50,10 @@ class RolesPermissionsSeeder extends Seeder
             // section; granted to every role (view-only for Read Only).
             'access assets', 'view assets', 'manage assets', 'manage maintenance',
 
+            // Calibration module (/calibration) — `access calibration` gates the
+            // section; granted to every role (view-only for Read Only).
+            'access calibration', 'view calibration', 'manage calibration',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -244,6 +248,20 @@ class RolesPermissionsSeeder extends Seeder
         $assetsManage = Permission::whereIn('name', ['manage assets', 'manage maintenance'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $assetsView : $assetsView->merge($assetsManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Calibration section: same posture — everyone reaches + views it;
+        // everyone except Read Only records/manages certificates.
+        $calibrationView = Permission::whereIn('name', ['access calibration', 'view calibration'])->pluck('id');
+        $calibrationManage = Permission::whereIn('name', ['manage calibration'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $calibrationView : $calibrationView->merge($calibrationManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,
