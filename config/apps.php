@@ -86,6 +86,15 @@ return [
             'url' => '/calibration',
             'current' => false,
         ],
+        [
+            'key' => 'tickets',
+            'name' => 'Service Desk',
+            'description' => 'Support, service & RMA tickets',
+            'icon' => 'life-buoy',
+            // A section of this app (not a separate site): /tickets.
+            'url' => '/tickets',
+            'current' => false,
+        ],
     ],
 
 ];

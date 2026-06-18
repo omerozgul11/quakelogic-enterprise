@@ -3,7 +3,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import { cn } from '@/Lib/utils';
 import { Logo } from '@/Components/ui/Logo';
-import { ChevronDown, LayoutDashboard, FileText, Truck, LayoutGrid, ExternalLink, FolderKanban, ContactRound, Boxes, ShoppingCart, Factory, Cpu, BadgeCheck } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, FileText, Truck, LayoutGrid, ExternalLink, FolderKanban, ContactRound, Boxes, ShoppingCart, Factory, Cpu, BadgeCheck, LifeBuoy } from 'lucide-react';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
     'file-text': FileText,
@@ -16,6 +16,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
     factory: Factory,
     cpu: Cpu,
     'badge-check': BadgeCheck,
+    'life-buoy': LifeBuoy,
 };
 
 /**

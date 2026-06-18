@@ -1,0 +1,22 @@
+{
+    "name": "ServiceDesk",
+    "slug": "tickets",
+    "version": "1.0.0",
+    "description": "Service desk — support/service tickets, RMA and field-service cases with a conversation thread, SLA due dates, priority, assignment and lifecycle.",
+    "enabled": true,
+    "provider": "App\\Modules\\ServiceDesk\\Providers\\ServiceDeskServiceProvider",
+    "dependencies": ["core"],
+    "permissions": [
+        "access tickets",
+        "view tickets",
+        "manage tickets",
+        "comment tickets"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "tickets.dashboard", "icon": "layout-dashboard" },
+        { "label": "Tickets", "route": "tickets.tickets.index", "icon": "life-buoy" }
+    ],
+    "routes": ["tickets"],
+    "widgets": [],
+    "settings": []
+}

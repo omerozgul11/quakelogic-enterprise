@@ -54,6 +54,10 @@ class RolesPermissionsSeeder extends Seeder
             // section; granted to every role (view-only for Read Only).
             'access calibration', 'view calibration', 'manage calibration',
 
+            // Service Desk module (/tickets) — `access tickets` gates the
+            // section; granted to every role (view-only for Read Only).
+            'access tickets', 'view tickets', 'manage tickets', 'comment tickets',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -262,6 +266,20 @@ class RolesPermissionsSeeder extends Seeder
         $calibrationManage = Permission::whereIn('name', ['manage calibration'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $calibrationView : $calibrationView->merge($calibrationManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Service Desk section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages tickets and comments.
+        $ticketsView = Permission::whereIn('name', ['access tickets', 'view tickets'])->pluck('id');
+        $ticketsManage = Permission::whereIn('name', ['manage tickets', 'comment tickets'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $ticketsView : $ticketsView->merge($ticketsManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,
