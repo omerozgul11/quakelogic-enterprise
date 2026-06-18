@@ -95,6 +95,15 @@ return [
             'url' => '/tickets',
             'current' => false,
         ],
+        [
+            'key' => 'finance',
+            'name' => 'Finance',
+            'description' => 'Receivables, payments & credit notes',
+            'icon' => 'landmark',
+            // A section of this app (not a separate site): /finance.
+            'url' => '/finance',
+            'current' => false,
+        ],
     ],
 
 ];

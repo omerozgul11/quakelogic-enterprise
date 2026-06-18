@@ -58,6 +58,10 @@ class RolesPermissionsSeeder extends Seeder
             // section; granted to every role (view-only for Read Only).
             'access tickets', 'view tickets', 'manage tickets', 'comment tickets',
 
+            // Finance module (/finance) — `access finance` gates the section;
+            // granted to every role (view-only for Read Only).
+            'access finance', 'view finance', 'manage finance', 'process payments',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -280,6 +284,20 @@ class RolesPermissionsSeeder extends Seeder
         $ticketsManage = Permission::whereIn('name', ['manage tickets', 'comment tickets'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $ticketsView : $ticketsView->merge($ticketsManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Finance section: same posture — everyone reaches + views it; everyone
+        // except Read Only manages invoices/credit notes and processes payments.
+        $financeView = Permission::whereIn('name', ['access finance', 'view finance'])->pluck('id');
+        $financeManage = Permission::whereIn('name', ['manage finance', 'process payments'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $financeView : $financeView->merge($financeManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,

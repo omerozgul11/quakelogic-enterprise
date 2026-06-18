@@ -1,0 +1,23 @@
+{
+    "name": "Finance",
+    "slug": "finance",
+    "version": "1.0.0",
+    "description": "Finance / AR — receivables view over customer invoices, provider-agnostic online payment collection (Stripe / PayPal / Square behind an interface, fake by default), receipts and credit notes. Reuses the CRM invoice records (no duplicate invoice table).",
+    "enabled": true,
+    "provider": "App\\Modules\\Finance\\Providers\\FinanceServiceProvider",
+    "dependencies": ["core", "crm"],
+    "permissions": [
+        "access finance",
+        "view finance",
+        "manage finance",
+        "process payments"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "finance.dashboard", "icon": "layout-dashboard" },
+        { "label": "Invoices", "route": "finance.invoices.index", "icon": "receipt-text" },
+        { "label": "Credit Notes", "route": "finance.credit-notes.index", "icon": "file-minus" }
+    ],
+    "routes": ["finance"],
+    "widgets": [],
+    "settings": []
+}
