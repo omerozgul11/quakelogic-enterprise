@@ -57,8 +57,8 @@ interface DashboardMetrics {
     upcomingSubmissions: { this_week: number; in15: number } | null;
 }
 
-const SUBMITTED_STATUSES = 'submitted,award_pending,clarification_requested,awarded,completed,lost,protested';
-const OPEN_STATUSES = 'in_progress,submitted,award_pending,clarification_requested,protested';
+const SUBMITTED_STATUSES = 'submitted,award_pending,awarded,completed,lost';
+const OPEN_STATUSES = 'in_progress,submitted,award_pending';
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** Admin: total submissions org-wide with a 7 / 30 / 60 / All interval picker. */
@@ -261,13 +261,13 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exc
                         </>
                     )}
                     <StatCard title="Pipeline Value" value={formatCurrency(metrics.isAdmin ? metrics.companyPipelineValue : metrics.myPipelineValue)} icon={TrendingUp} color="orange" subtitle={metrics.isAdmin ? 'Open bids · org-wide' : 'Projected value, open bids'}
-                        href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint={metrics.isAdmin ? "Projected value (USD) of all open proposals company-wide. Opens the Applications board filtered to open work." : "Projected value (USD) of your open proposals. Opens the Applications board filtered to open work."} />
+                        href="/proposals/board?status=in_progress,submitted,award_pending" hint={metrics.isAdmin ? "Projected value (USD) of all open proposals company-wide. Opens the Applications board filtered to open work." : "Projected value (USD) of your open proposals. Opens the Applications board filtered to open work."} />
                     <StatCard title="Weighted Pipeline" value={formatCurrency(metrics.isAdmin ? metrics.companyWeightedPipelineValue : metrics.myWeightedPipelineValue)} icon={TrendingUp} color="teal" subtitle={metrics.isAdmin ? 'Value × win probability · org-wide' : 'Value × win probability'}
-                        href="/proposals/board?status=in_progress,submitted,award_pending,clarification_requested,protested" hint="Forecast: each open proposal's value weighted by its win probability (per-stage default until you set one on the proposal)." />
+                        href="/proposals/board?status=in_progress,submitted,award_pending" hint="Forecast: each open proposal's value weighted by its win probability (per-stage default until you set one on the proposal)." />
                     <StatCard title="My Submitted Value" value={formatCurrency(metrics.mySubmittedValue)} icon={DollarSign} color="purple" subtitle="Total value you've submitted"
                         href="/proposals/board" hint="Total value (USD) of everything you've submitted. Opens the Applications board." />
                     <StatCard title="Total Submitted Value" value={formatCurrency(metrics.companySubmittedValue)} icon={DollarSign} color="teal" subtitle={`${metrics.companySubmittedCount} submitted · org-wide`}
-                        href="/proposals/board?status=submitted,pending,clarification_requested,awarded,completed,lost" hint="Org-wide value (USD) of every proposal past the submit stage. Opens the Applications board filtered to those." />
+                        href="/proposals/board?status=submitted,award_pending,awarded,completed,lost" hint="Org-wide value (USD) of every proposal past the submit stage. Opens the Applications board filtered to those." />
                     <StatCard title="My Earnings (YTD)" value={formatCurrency(metrics.myAwardValue)} icon={CheckCircle} color="green" subtitle="Your awards this year"
                         href="/proposals/board?status=awarded,completed" hint="Value (USD) of contracts awarded to you this year. Opens the Applications board filtered to won work." />
                     <StatCard title="Company Earnings (YTD)" value={formatCurrency(metrics.companyAwardValue)} icon={Trophy} color="green" subtitle="All wins this year, org-wide"

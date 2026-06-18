@@ -315,6 +315,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [AiAssistantController::class, 'index'])->name('index');
         // Proposal Writer workspace — must precede the /{aiAnalysis} wildcard.
         Route::get('/writer', [AiAssistantController::class, 'writer'])->name('writer');
+        // Datasheet Writer — sits with the Proposal Writer; all of these must also
+        // precede the /{aiAnalysis} wildcard below.
+        Route::get('/datasheets', [\App\Http\Controllers\Web\DatasheetController::class, 'index'])->name('datasheets.index');
+        Route::post('/datasheets', [\App\Http\Controllers\Web\DatasheetController::class, 'store'])->name('datasheets.store');
+        Route::get('/datasheets/{datasheet}', [\App\Http\Controllers\Web\DatasheetController::class, 'show'])->name('datasheets.show');
+        Route::match(['put', 'patch', 'post'], '/datasheets/{datasheet}/edit', [\App\Http\Controllers\Web\DatasheetController::class, 'update'])->name('datasheets.update');
+        Route::post('/datasheets/{datasheet}/regenerate', [\App\Http\Controllers\Web\DatasheetController::class, 'regenerate'])->name('datasheets.regenerate');
+        Route::get('/datasheets/{datasheet}/download', [\App\Http\Controllers\Web\DatasheetController::class, 'download'])->name('datasheets.download');
+        Route::delete('/datasheets/{datasheet}', [\App\Http\Controllers\Web\DatasheetController::class, 'destroy'])->name('datasheets.destroy');
         Route::post('/chat', [AiAssistantController::class, 'chat'])->name('chat');
         Route::post('/analyze', [AiAssistantController::class, 'analyze'])->name('analyze');
         Route::get('/{aiAnalysis}', [AiAssistantController::class, 'show'])->name('show');

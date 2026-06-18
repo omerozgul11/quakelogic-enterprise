@@ -734,6 +734,13 @@ class FakeAiProvider implements AiProviderInterface
             . "[This is a demo draft — set AI_PROVIDER=gemini with a GEMINI_API_KEY to generate full section content.]";
     }
 
+    public function generateFromMedia(string $systemPrompt, string $userPrompt, array $files, array $options = []): string
+    {
+        // Demo mode: no real model. Return '' so the Datasheet Writer falls back
+        // to its deterministic template built from the provided inputs.
+        return '';
+    }
+
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string
     {
         // Pull the user's latest message out of the conversation prompt.

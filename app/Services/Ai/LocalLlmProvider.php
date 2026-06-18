@@ -78,6 +78,12 @@ class LocalLlmProvider implements AiProviderInterface
         );
     }
 
+    public function generateFromMedia(string $systemPrompt, string $userPrompt, array $files, array $options = []): string
+    {
+        // Media (images/PDFs) isn't sent here; answer from the prompt text.
+        return $this->complete($systemPrompt, $userPrompt, $options);
+    }
+
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string
     {
         try {

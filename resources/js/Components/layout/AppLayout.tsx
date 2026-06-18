@@ -36,6 +36,7 @@ const sections: NavSection[] = [
         { label: 'Calendar', href: '/calendar', icon: CalendarDays },
         { label: 'QuakeAI', href: '/ai', icon: Sparkles, permission: 'use ai assistant' },
         { label: 'Proposal Writer', href: '/ai/writer', icon: PenLine, permission: 'use ai assistant' },
+        { label: 'Datasheet Writer', href: '/ai/datasheets', icon: ScrollText, permission: 'use ai assistant' },
     ] },
     {
         title: 'Pipeline',
