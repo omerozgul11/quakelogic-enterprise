@@ -59,6 +59,15 @@ return [
             'url' => '/procurement',
             'current' => false,
         ],
+        [
+            'key' => 'manufacturing',
+            'name' => 'Manufacturing',
+            'description' => 'BOMs & work orders',
+            'icon' => 'factory',
+            // A section of this app (not a separate site): /manufacturing.
+            'url' => '/manufacturing',
+            'current' => false,
+        ],
     ],
 
 ];

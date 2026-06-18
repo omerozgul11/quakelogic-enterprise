@@ -42,6 +42,10 @@ class RolesPermissionsSeeder extends Seeder
             // section; granted to every role below (view-only for Read Only).
             'access procurement', 'view procurement', 'manage suppliers', 'manage purchase orders', 'approve purchase orders', 'receive goods',
 
+            // Manufacturing module (/manufacturing) — `access manufacturing`
+            // gates the section; granted to every role (view-only for Read Only).
+            'access manufacturing', 'view manufacturing', 'manage boms', 'manage work orders', 'complete work orders',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -208,6 +212,20 @@ class RolesPermissionsSeeder extends Seeder
         $procurementManage = Permission::whereIn('name', ['manage suppliers', 'manage purchase orders', 'approve purchase orders', 'receive goods'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $procurementView : $procurementView->merge($procurementManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Manufacturing section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages BOMs/work orders and builds.
+        $manufacturingView = Permission::whereIn('name', ['access manufacturing', 'view manufacturing'])->pluck('id');
+        $manufacturingManage = Permission::whereIn('name', ['manage boms', 'manage work orders', 'complete work orders'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $manufacturingView : $manufacturingView->merge($manufacturingManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,
