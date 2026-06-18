@@ -68,6 +68,15 @@ return [
             'url' => '/manufacturing',
             'current' => false,
         ],
+        [
+            'key' => 'assets',
+            'name' => 'Assets',
+            'description' => 'Instrument registry & maintenance',
+            'icon' => 'cpu',
+            // A section of this app (not a separate site): /assets.
+            'url' => '/assets',
+            'current' => false,
+        ],
     ],
 
 ];

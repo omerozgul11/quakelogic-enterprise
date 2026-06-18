@@ -46,6 +46,10 @@ class RolesPermissionsSeeder extends Seeder
             // gates the section; granted to every role (view-only for Read Only).
             'access manufacturing', 'view manufacturing', 'manage boms', 'manage work orders', 'complete work orders',
 
+            // Asset Management module (/assets) — `access assets` gates the
+            // section; granted to every role (view-only for Read Only).
+            'access assets', 'view assets', 'manage assets', 'manage maintenance',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -226,6 +230,20 @@ class RolesPermissionsSeeder extends Seeder
         $manufacturingManage = Permission::whereIn('name', ['manage boms', 'manage work orders', 'complete work orders'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $manufacturingView : $manufacturingView->merge($manufacturingManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Asset Management section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages assets + logs maintenance.
+        $assetsView = Permission::whereIn('name', ['access assets', 'view assets'])->pluck('id');
+        $assetsManage = Permission::whereIn('name', ['manage assets', 'manage maintenance'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $assetsView : $assetsView->merge($assetsManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,
