@@ -41,6 +41,15 @@ return [
             'url' => '/crm',
             'current' => false,
         ],
+        [
+            'key' => 'inventory',
+            'name' => 'Inventory',
+            'description' => 'Product master, stock & warehouses',
+            'icon' => 'boxes',
+            // A section of this app (not a separate site): /inventory.
+            'url' => '/inventory',
+            'current' => false,
+        ],
     ],
 
 ];

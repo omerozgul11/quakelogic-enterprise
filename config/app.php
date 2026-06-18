@@ -23,5 +23,7 @@ return [
         App\Providers\AppServiceProvider::class,
         App\Providers\AuthServiceProvider::class,
         App\Providers\FortifyServiceProvider::class,
+        // Boots every enabled Enterprise Hub module under app/Modules/.
+        App\Providers\ModulesServiceProvider::class,
     ])->toArray(),
 ];

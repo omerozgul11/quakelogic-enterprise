@@ -34,6 +34,10 @@ class RolesPermissionsSeeder extends Seeder
             // `access shipments`) and is granted to every role below.
             'access crm', 'manage leads', 'manage projects', 'manage invoices',
 
+            // Inventory module (/inventory) — `access inventory` gates the
+            // section; granted to every role below (view-only for Read Only).
+            'access inventory', 'view inventory', 'manage products', 'manage warehouses', 'adjust stock',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -175,6 +179,21 @@ class RolesPermissionsSeeder extends Seeder
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,
                     'role_id' => $roleId,
+                ]);
+            }
+        }
+
+        // Inventory section: everyone can reach + view it; everyone except Read
+        // Only can manage products/warehouses and move stock. Applied via the
+        // pivot so it layers on top of each role's syncPermissions above.
+        $inventoryView = Permission::whereIn('name', ['access inventory', 'view inventory'])->pluck('id');
+        $inventoryManage = Permission::whereIn('name', ['manage products', 'manage warehouses', 'adjust stock'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $inventoryView : $inventoryView->merge($inventoryManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
                 ]);
             }
         }

@@ -1,0 +1,25 @@
+{
+    "name": "Inventory",
+    "slug": "inventory",
+    "version": "1.0.0",
+    "description": "Enterprise inventory & warehouse management — product master, warehouses & bins, stock-on-hand, and an append-only movement ledger (receive / issue / adjust / count / transfer).",
+    "enabled": true,
+    "provider": "App\\Modules\\Inventory\\Providers\\InventoryServiceProvider",
+    "dependencies": ["core"],
+    "permissions": [
+        "access inventory",
+        "view inventory",
+        "manage products",
+        "manage warehouses",
+        "adjust stock"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "inventory.dashboard", "icon": "layout-dashboard" },
+        { "label": "Products", "route": "inventory.products.index", "icon": "package" },
+        { "label": "Warehouses", "route": "inventory.warehouses.index", "icon": "warehouse" },
+        { "label": "Movements", "route": "inventory.movements.index", "icon": "arrow-left-right" }
+    ],
+    "routes": ["inventory"],
+    "widgets": [],
+    "settings": []
+}
