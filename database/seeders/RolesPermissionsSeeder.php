@@ -38,6 +38,10 @@ class RolesPermissionsSeeder extends Seeder
             // section; granted to every role below (view-only for Read Only).
             'access inventory', 'view inventory', 'manage products', 'manage warehouses', 'adjust stock',
 
+            // Procurement module (/procurement) — `access procurement` gates the
+            // section; granted to every role below (view-only for Read Only).
+            'access procurement', 'view procurement', 'manage suppliers', 'manage purchase orders', 'approve purchase orders', 'receive goods',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -190,6 +194,20 @@ class RolesPermissionsSeeder extends Seeder
         $inventoryManage = Permission::whereIn('name', ['manage products', 'manage warehouses', 'adjust stock'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $inventoryView : $inventoryView->merge($inventoryManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Procurement section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages suppliers/POs, approves and receives.
+        $procurementView = Permission::whereIn('name', ['access procurement', 'view procurement'])->pluck('id');
+        $procurementManage = Permission::whereIn('name', ['manage suppliers', 'manage purchase orders', 'approve purchase orders', 'receive goods'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $procurementView : $procurementView->merge($procurementManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,

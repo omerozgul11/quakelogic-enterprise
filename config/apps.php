@@ -50,6 +50,15 @@ return [
             'url' => '/inventory',
             'current' => false,
         ],
+        [
+            'key' => 'procurement',
+            'name' => 'Procurement',
+            'description' => 'Suppliers & purchase orders',
+            'icon' => 'shopping-cart',
+            // A section of this app (not a separate site): /procurement.
+            'url' => '/procurement',
+            'current' => false,
+        ],
     ],
 
 ];
