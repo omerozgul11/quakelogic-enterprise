@@ -1,0 +1,22 @@
+{
+    "name": "AssetManagement",
+    "slug": "assets",
+    "version": "1.0.0",
+    "description": "Asset management — registry & lifecycle for deployed/internal instruments, with assignment, maintenance history, and commissioning an Inventory unit into a tracked asset.",
+    "enabled": true,
+    "provider": "App\\Modules\\AssetManagement\\Providers\\AssetManagementServiceProvider",
+    "dependencies": ["core", "inventory"],
+    "permissions": [
+        "access assets",
+        "view assets",
+        "manage assets",
+        "manage maintenance"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "assets.dashboard", "icon": "layout-dashboard" },
+        { "label": "Assets", "route": "assets.assets.index", "icon": "cpu" }
+    ],
+    "routes": ["assets"],
+    "widgets": [],
+    "settings": []
+}

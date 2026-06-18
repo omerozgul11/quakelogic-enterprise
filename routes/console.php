@@ -16,9 +16,11 @@ Schedule::command('bids:sync bidprime')->dailyAt('06:30')->withoutOverlapping();
 Schedule::command('follow-ups:generate')->dailyAt('08:00')->withoutOverlapping();
 // Monthly status follow-up per open proposal (emails only when a mailbox is connected).
 Schedule::command('follow-ups:monthly')->monthlyOn(1, '08:30')->withoutOverlapping();
-// Daily: warm the dashboard's exchange-rate cache (free ECB feed) before the
-// workday so the dashboard reads it instantly.
-Schedule::command('exchange-rates:refresh')->dailyAt('05:30')->withoutOverlapping();
+// Every minute: refresh the dashboard's exchange-rate cache with near-real-time
+// market quotes (free, no-key Yahoo Finance feed; ECB daily + static reference
+// are the automatic fallbacks). The dashboard reads the warmed cache instantly,
+// so rates track the live market without anyone reloading.
+Schedule::command('exchange-rates:refresh')->everyMinute()->withoutOverlapping();
 // Daily: score active opportunities against each user's expertise profile and
 // flag recommended owners — runs just before the digest so it can rank them.
 Schedule::command('opportunities:match')->dailyAt('06:45')->withoutOverlapping();

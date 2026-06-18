@@ -1,0 +1,24 @@
+{
+    "name": "Manufacturing",
+    "slug": "manufacturing",
+    "version": "1.0.0",
+    "description": "Manufacturing — bills of materials and work orders. Completing a work order consumes components from Inventory and produces finished goods back into stock at rolled-up build cost.",
+    "enabled": true,
+    "provider": "App\\Modules\\Manufacturing\\Providers\\ManufacturingServiceProvider",
+    "dependencies": ["core", "inventory"],
+    "permissions": [
+        "access manufacturing",
+        "view manufacturing",
+        "manage boms",
+        "manage work orders",
+        "complete work orders"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "manufacturing.dashboard", "icon": "layout-dashboard" },
+        { "label": "BOMs", "route": "manufacturing.boms.index", "icon": "list-tree" },
+        { "label": "Work Orders", "route": "manufacturing.work-orders.index", "icon": "factory" }
+    ],
+    "routes": ["manufacturing"],
+    "widgets": [],
+    "settings": []
+}

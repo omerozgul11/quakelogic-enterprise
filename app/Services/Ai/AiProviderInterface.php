@@ -81,6 +81,16 @@ interface AiProviderInterface
     public function complete(string $systemPrompt, string $userPrompt, array $options = []): string;
 
     /**
+     * Multimodal completion: a system + user prompt plus media files (images or
+     * PDFs, each ['mime' => ..., 'data' => base64]) — used by the Datasheet
+     * Writer to read product photos and spec sheets natively. Vision providers
+     * send the media inline; non-vision providers ignore it and answer from text.
+     *
+     * @param  array<int,array{mime:string,data:string}>  $files
+     */
+    public function generateFromMedia(string $systemPrompt, string $userPrompt, array $files, array $options = []): string;
+
+    /**
      * Embed a list of texts into vectors (for the knowledge base / RAG). Returns
      * one float vector per input text, in order. Returns [] when the provider
      * has no embeddings capability or the call fails.

@@ -38,6 +38,30 @@ class RolesPermissionsSeeder extends Seeder
             // section; granted to every role below (view-only for Read Only).
             'access inventory', 'view inventory', 'manage products', 'manage warehouses', 'adjust stock',
 
+            // Procurement module (/procurement) — `access procurement` gates the
+            // section; granted to every role below (view-only for Read Only).
+            'access procurement', 'view procurement', 'manage suppliers', 'manage purchase orders', 'approve purchase orders', 'receive goods',
+
+            // Manufacturing module (/manufacturing) — `access manufacturing`
+            // gates the section; granted to every role (view-only for Read Only).
+            'access manufacturing', 'view manufacturing', 'manage boms', 'manage work orders', 'complete work orders',
+
+            // Asset Management module (/assets) — `access assets` gates the
+            // section; granted to every role (view-only for Read Only).
+            'access assets', 'view assets', 'manage assets', 'manage maintenance',
+
+            // Calibration module (/calibration) — `access calibration` gates the
+            // section; granted to every role (view-only for Read Only).
+            'access calibration', 'view calibration', 'manage calibration',
+
+            // Service Desk module (/tickets) — `access tickets` gates the
+            // section; granted to every role (view-only for Read Only).
+            'access tickets', 'view tickets', 'manage tickets', 'comment tickets',
+
+            // Finance module (/finance) — `access finance` gates the section;
+            // granted to every role (view-only for Read Only).
+            'access finance', 'view finance', 'manage finance', 'process payments',
+
             // Follow-ups
             'view follow ups', 'manage follow ups', 'send follow up emails',
 
@@ -190,6 +214,90 @@ class RolesPermissionsSeeder extends Seeder
         $inventoryManage = Permission::whereIn('name', ['manage products', 'manage warehouses', 'adjust stock'])->pluck('id');
         foreach (Role::all(['id', 'name']) as $role) {
             $grant = $role->name === 'Read Only' ? $inventoryView : $inventoryView->merge($inventoryManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Procurement section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages suppliers/POs, approves and receives.
+        $procurementView = Permission::whereIn('name', ['access procurement', 'view procurement'])->pluck('id');
+        $procurementManage = Permission::whereIn('name', ['manage suppliers', 'manage purchase orders', 'approve purchase orders', 'receive goods'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $procurementView : $procurementView->merge($procurementManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Manufacturing section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages BOMs/work orders and builds.
+        $manufacturingView = Permission::whereIn('name', ['access manufacturing', 'view manufacturing'])->pluck('id');
+        $manufacturingManage = Permission::whereIn('name', ['manage boms', 'manage work orders', 'complete work orders'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $manufacturingView : $manufacturingView->merge($manufacturingManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Asset Management section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages assets + logs maintenance.
+        $assetsView = Permission::whereIn('name', ['access assets', 'view assets'])->pluck('id');
+        $assetsManage = Permission::whereIn('name', ['manage assets', 'manage maintenance'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $assetsView : $assetsView->merge($assetsManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Calibration section: same posture — everyone reaches + views it;
+        // everyone except Read Only records/manages certificates.
+        $calibrationView = Permission::whereIn('name', ['access calibration', 'view calibration'])->pluck('id');
+        $calibrationManage = Permission::whereIn('name', ['manage calibration'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $calibrationView : $calibrationView->merge($calibrationManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Service Desk section: same posture — everyone reaches + views it;
+        // everyone except Read Only manages tickets and comments.
+        $ticketsView = Permission::whereIn('name', ['access tickets', 'view tickets'])->pluck('id');
+        $ticketsManage = Permission::whereIn('name', ['manage tickets', 'comment tickets'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $ticketsView : $ticketsView->merge($ticketsManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
+        // Finance section: same posture — everyone reaches + views it; everyone
+        // except Read Only manages invoices/credit notes and processes payments.
+        $financeView = Permission::whereIn('name', ['access finance', 'view finance'])->pluck('id');
+        $financeManage = Permission::whereIn('name', ['manage finance', 'process payments'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $financeView : $financeView->merge($financeManage);
             foreach ($grant as $permId) {
                 DB::table('role_has_permissions')->updateOrInsert([
                     'permission_id' => $permId,

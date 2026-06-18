@@ -1059,7 +1059,7 @@ class ProposalController extends Controller
     }
 
     /**
-     * Phase 19 — save the loss-analysis fields for a lost/protested proposal.
+     * Phase 19 — save the loss-analysis fields for a lost proposal.
      */
     public function lossAnalysis(Request $request, ProposalSubmission $proposalSubmission): RedirectResponse
     {

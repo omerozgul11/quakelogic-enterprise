@@ -81,7 +81,7 @@ class AdminController extends Controller implements HasMiddleware
         $orgId = $request->user()->organization_id;
 
         $active = ['in_progress'];
-        $submitted = ['submitted', 'award_pending', 'clarification_requested', 'awarded', 'completed', 'lost'];
+        $submitted = ['submitted', 'award_pending', 'awarded', 'completed', 'lost'];
         $won = \App\Enums\ProposalStatus::wonValues();
 
         $users = User::where('organization_id', $orgId)

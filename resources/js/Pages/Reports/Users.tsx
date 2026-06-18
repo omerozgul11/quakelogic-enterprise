@@ -21,7 +21,6 @@ interface Row {
     awarded: number;
     lost: number;
     active: number;
-    cancelled: number;
     win_rate: number | null;
     submitted_value: number;
     earnings: number;
@@ -195,7 +194,6 @@ export default function ReportsUsers({ team, period, from, to, periodLabel, stat
                                             <th className="th text-right" title="Open proposals this person is still working on">Active</th>
                                             <th className="th text-right">Won</th>
                                             <th className="th text-right">Lost</th>
-                                            <th className="th text-right">Cancelled</th>
                                             <th className="th text-right">Win Rate</th>
                                             <th className="th text-right">Submitted $</th>
                                             <th className="th text-right">Earnings</th>
@@ -219,7 +217,6 @@ export default function ReportsUsers({ team, period, from, to, periodLabel, stat
                                                 <td className="td text-right font-medium text-foreground">{r.active}</td>
                                                 <td className="td text-right font-medium text-emerald-600 dark:text-emerald-400">{r.awarded}</td>
                                                 <td className="td text-right text-muted-foreground">{r.lost}</td>
-                                                <td className="td text-right text-muted-foreground">{r.cancelled}</td>
                                                 <td className="td text-right text-muted-foreground">{r.win_rate != null ? `${r.win_rate}%` : '—'}</td>
                                                 <td className="td text-right text-muted-foreground">{formatCurrency(r.submitted_value)}</td>
                                                 <td className="td text-right font-semibold text-foreground">{formatCurrency(r.earnings)}</td>

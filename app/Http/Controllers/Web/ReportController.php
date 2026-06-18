@@ -179,7 +179,7 @@ class ReportController extends Controller
         [$period, $start, $end, $from, $to] = $this->resolveRange($request);
 
         $won = \App\Enums\ProposalStatus::wonValues();
-        $openStatuses = ['in_progress', 'submitted', 'award_pending', 'clarification_requested', 'protested'];
+        $openStatuses = ['in_progress', 'submitted', 'award_pending'];
 
         $by = function ($query, string $col, string $agg = 'count(*)') use ($orgId) {
             return $query->where('organization_id', $orgId)
@@ -195,26 +195,28 @@ class ReportController extends Controller
 
         $created = $by($since(ProposalSubmission::query(), 'created_at'), 'created_by');
         $submitted = $by($since(ProposalSubmission::whereNotNull('submission_date'), 'submission_date'), 'owner_id');
-        $awarded = $by($since(ProposalSubmission::whereIn('status', $won)->whereNotNull('award_date'), 'award_date'), 'owner_id');
+        // Won = any proposal in a won status (awarded/completed), counted by status
+        // and scoped to the interval by created_at — award_date isn't reliably set
+        // (recovered/imported wins lack it), so an "awarded" proposal always counts.
+        $awarded = $by($since(ProposalSubmission::whereIn('status', $won), 'created_at'), 'owner_id');
         $lost = $by($since(ProposalSubmission::where('status', 'lost'), 'updated_at'), 'owner_id');
         $submittedValue = $by($since(ProposalSubmission::whereNotNull('submission_date'), 'submission_date'), 'owner_id', 'COALESCE(SUM(proposal_value), 0)');
         $earnings = $by(
-            $since(ProposalSubmission::whereIn('status', $won)->whereNotNull('award_date'), 'award_date'),
+            $since(ProposalSubmission::whereIn('status', $won), 'created_at'),
             'owner_id',
             'COALESCE(SUM(COALESCE(NULLIF(award_value, 0), proposal_value)), 0)'
         );
-        // Pipeline value, active project count, and cancelled count — scoped to
-        // proposals created within the selected interval so every figure on the
-        // page moves with the date filter (full set when the period is "all").
+        // Pipeline value and active project count — scoped to proposals created
+        // within the selected interval so every figure on the page moves with the
+        // date filter (full set when the period is "all").
         $pipelineValue = $by($since(ProposalSubmission::whereIn('status', $openStatuses), 'created_at'), 'owner_id', 'COALESCE(SUM(proposal_value), 0)');
         $activeCount = $by($since(ProposalSubmission::whereIn('status', $openStatuses), 'created_at'), 'owner_id');
-        $cancelledCount = $by($since(ProposalSubmission::where('status', 'cancelled'), 'created_at'), 'owner_id');
 
         $team = \App\Models\User::where('organization_id', $orgId)
             ->with('roles:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'is_active'])
-            ->map(function ($u) use ($created, $submitted, $awarded, $lost, $submittedValue, $earnings, $pipelineValue, $activeCount, $cancelledCount) {
+            ->map(function ($u) use ($created, $submitted, $awarded, $lost, $submittedValue, $earnings, $pipelineValue, $activeCount) {
                 $aw = (int) ($awarded[$u->id] ?? 0);
                 $lo = (int) ($lost[$u->id] ?? 0);
                 return [
@@ -226,7 +228,6 @@ class ReportController extends Controller
                     'awarded' => $aw,
                     'lost' => $lo,
                     'active' => (int) ($activeCount[$u->id] ?? 0),
-                    'cancelled' => (int) ($cancelledCount[$u->id] ?? 0),
                     'win_rate' => ($aw + $lo) > 0 ? round($aw / ($aw + $lo) * 100, 1) : null,
                     'submitted_value' => (float) ($submittedValue[$u->id] ?? 0),
                     'earnings' => (float) ($earnings[$u->id] ?? 0),

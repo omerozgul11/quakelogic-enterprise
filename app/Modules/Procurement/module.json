@@ -1,0 +1,25 @@
+{
+    "name": "Procurement",
+    "slug": "procurement",
+    "version": "1.0.0",
+    "description": "Procurement & purchasing — supplier master, purchase orders with line items, approvals, and goods receipt that feeds Inventory stock.",
+    "enabled": true,
+    "provider": "App\\Modules\\Procurement\\Providers\\ProcurementServiceProvider",
+    "dependencies": ["core", "inventory"],
+    "permissions": [
+        "access procurement",
+        "view procurement",
+        "manage suppliers",
+        "manage purchase orders",
+        "approve purchase orders",
+        "receive goods"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "procurement.dashboard", "icon": "layout-dashboard" },
+        { "label": "Suppliers", "route": "procurement.suppliers.index", "icon": "factory" },
+        { "label": "Purchase Orders", "route": "procurement.purchase-orders.index", "icon": "shopping-cart" }
+    ],
+    "routes": ["procurement"],
+    "widgets": [],
+    "settings": []
+}

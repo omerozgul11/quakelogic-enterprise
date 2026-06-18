@@ -1,0 +1,21 @@
+{
+    "name": "Calibration",
+    "slug": "calibration",
+    "version": "1.0.0",
+    "description": "Calibration — NIST-traceable calibration certificates with results, due-date tracking and reminders for instruments (assets) and product types.",
+    "enabled": true,
+    "provider": "App\\Modules\\Calibration\\Providers\\CalibrationServiceProvider",
+    "dependencies": ["core", "assets"],
+    "permissions": [
+        "access calibration",
+        "view calibration",
+        "manage calibration"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "calibration.dashboard", "icon": "layout-dashboard" },
+        { "label": "Certificates", "route": "calibration.certificates.index", "icon": "badge-check" }
+    ],
+    "routes": ["calibration"],
+    "widgets": [],
+    "settings": []
+}

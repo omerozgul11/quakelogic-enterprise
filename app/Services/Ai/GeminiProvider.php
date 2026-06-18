@@ -380,6 +380,23 @@ class GeminiProvider implements AiProviderInterface
         }
     }
 
+    public function generateFromMedia(string $systemPrompt, string $userPrompt, array $files, array $options = []): string
+    {
+        $fileParts = [];
+        foreach ($files as $f) {
+            if (! empty($f['data']) && ! empty($f['mime'])) {
+                $fileParts[] = ['inline_data' => ['mime_type' => $f['mime'], 'data' => $f['data']]];
+            }
+        }
+
+        try {
+            return $this->generate($systemPrompt, $userPrompt, $options['generationConfig'] ?? [], $fileParts);
+        } catch (\Exception $e) {
+            Log::error('Gemini generateFromMedia error', ['error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
     public function embed(array $texts): array
     {
         if (! $this->isAvailable() || $texts === []) {

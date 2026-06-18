@@ -10,29 +10,24 @@ use Illuminate\Validation\ValidationException;
 class ProposalWorkflowService
 {
     public const ALLOWED_TRANSITIONS = [
-        'in_progress' => ['submitted', 'cancelled'],
-        'submitted' => ['award_pending', 'clarification_requested', 'awarded', 'lost', 'protested', 'cancelled'],
-        'award_pending' => ['submitted', 'clarification_requested', 'awarded', 'lost', 'protested', 'cancelled'],
-        'clarification_requested' => ['submitted', 'lost', 'protested', 'cancelled'],
-        'awarded' => ['completed', 'submitted', 'protested'],
+        'in_progress' => ['submitted'],
+        'submitted' => ['award_pending', 'awarded', 'lost'],
+        'award_pending' => ['submitted', 'awarded', 'lost'],
+        'awarded' => ['completed', 'submitted'],
         'completed' => ['awarded'],
-        // A lost or cancelled proposal can be reopened — it must never be a
-        // dead-end the user can't move out of.
-        'lost' => ['submitted', 'awarded', 'protested', 'in_progress'],
-        // A protest resolves to a re-decision (awarded / lost), can be dropped
-        // back to pending while it plays out, or cancelled.
-        'protested' => ['awarded', 'lost', 'award_pending', 'cancelled'],
-        'cancelled' => ['in_progress'],
+        // A lost proposal can be reopened — it must never be a dead-end the user
+        // can't move out of.
+        'lost' => ['submitted', 'awarded', 'in_progress'],
     ];
 
     /**
      * The linear happy-path order used to derive the single Previous / Next
-     * step buttons on the proposal header. Off-path outcomes (lost, cancelled)
-     * are intentionally excluded — they're still reachable from the board.
+     * step buttons on the proposal header. The off-path outcome (lost) is
+     * intentionally excluded — it's still reachable from the board.
      */
     public const MAIN_PIPELINE = [
         'in_progress', 'submitted',
-        'award_pending', 'clarification_requested', 'awarded', 'completed',
+        'award_pending', 'awarded', 'completed',
     ];
 
     /**
@@ -45,7 +40,7 @@ class ProposalWorkflowService
     {
         $order = array_flip(self::MAIN_PIPELINE);
         $currentIndex = $order[$current->value] ?? null;
-        $allowed = array_diff(self::ALLOWED_TRANSITIONS[$current->value] ?? [], ['lost', 'cancelled']);
+        $allowed = array_diff(self::ALLOWED_TRANSITIONS[$current->value] ?? [], ['lost']);
 
         $previous = null;
         $next = null;

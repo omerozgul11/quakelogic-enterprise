@@ -51,8 +51,15 @@ class OpportunityController extends Controller
         // Base query: organization scope + the shared filters (status, source,
         // NAICS, free-text search, keyword chips). The For You / Saved / All
         // tabs all build on this same filtered base.
+        //
+        // The pipeline only shows opportunities still worth acting on, so two
+        // things are hidden everywhere: anything OVERDUE (its deadline has
+        // passed — nothing to bid on) and anything already PICKED UP by the team
+        // (a proposal was started from it, so it now lives under Applications).
         $base = Opportunity::forOrganization($user->organization_id)
-            ->with(['agency', 'assignedTo:id,name', 'owner:id,name']);
+            ->with(['agency', 'assignedTo:id,name', 'owner:id,name'])
+            ->where(fn ($q) => $q->whereNull('due_date')->orWhereDate('due_date', '>=', now()->toDateString()))
+            ->whereDoesntHave('proposals');
 
         if ($request->filled('status')) {
             $base->where('status', $request->status);
