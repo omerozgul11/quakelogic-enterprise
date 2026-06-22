@@ -160,7 +160,7 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">
-                <header className="glass sticky top-0 z-30 flex h-16 items-center gap-2 px-4 shadow-[0_6px_24px_-14px_rgba(15,23,42,0.5)] sm:px-6">
+                <header className="glass-panel sticky top-0 z-30 flex h-16 items-center gap-2 px-4 sm:px-6">
                     <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
                         <Menu className="h-6 w-6 text-muted-foreground" />
                     </button>
