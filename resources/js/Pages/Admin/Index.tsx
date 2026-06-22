@@ -7,7 +7,7 @@ import { StatCard } from '@/Components/ui/StatCard';
 import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
 import { formatDate, generatePassword } from '@/Lib/utils';
-import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check, Mail } from 'lucide-react';
+import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check, Mail, LogIn } from 'lucide-react';
 import { useState } from 'react';
 
 interface MailboxState {
@@ -208,7 +208,7 @@ interface Props {
 
 const CUSTOM = '__custom__';
 
-export default function AdminIndex({ users, roles }: Props) {
+export default function AdminIndex({ users, roles, auth }: Props) {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -277,6 +277,12 @@ export default function AdminIndex({ users, roles }: Props) {
             setTimeout(() => setCopied(false), 1500);
         } catch {
             /* clipboard unavailable — the admin can still read the revealed value */
+        }
+    };
+
+    const impersonate = (user: User) => {
+        if (confirm(`Log in as ${user.name}? You'll see the app exactly as they do until you return.`)) {
+            router.post(`/admin/users/${user.id}/impersonate`);
         }
     };
 
@@ -529,6 +535,11 @@ export default function AdminIndex({ users, roles }: Props) {
                                         <td className="td text-muted-foreground">{formatDate(user.created_at)}</td>
                                         <td className="td">
                                             <div className="flex items-center gap-2">
+                                                {user.id !== auth.user.id && user.is_active && !user.roles.some(r => r.name === 'Super Admin') && (
+                                                    <button onClick={() => impersonate(user)} title="Log in as this user" className="text-muted-foreground transition-colors hover:text-primary">
+                                                        <LogIn className="h-4 w-4" />
+                                                    </button>
+                                                )}
                                                 <button onClick={() => startEdit(user)} title="Edit" className="text-muted-foreground transition-colors hover:text-primary">
                                                     <Edit className="h-4 w-4" />
                                                 </button>

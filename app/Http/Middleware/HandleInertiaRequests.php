@@ -61,6 +61,20 @@ class HandleInertiaRequests extends Middleware
                 'version' => config('app.version', '1.0.0'),
                 'switcher' => config('apps.switcher'),
             ],
+            // Drives the global "viewing as …" banner + one-click return. Null
+            // unless an admin is currently impersonating someone.
+            'impersonating' => function () use ($request) {
+                $adminId = $request->session()->get(\App\Services\Auth\ImpersonationService::SESSION_KEY);
+                if (! $adminId) {
+                    return null;
+                }
+                $admin = \App\Models\User::find($adminId);
+
+                return [
+                    'impersonator' => $admin ? ['id' => $admin->id, 'name' => $admin->name] : null,
+                    'user' => $user ? ['id' => $user->id, 'name' => $user->name] : null,
+                ];
+            },
             'notifications_count' => fn() => $user
                 ? $scopeNotifications($user->unreadNotifications())->count()
                 : 0,

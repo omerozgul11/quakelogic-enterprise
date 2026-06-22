@@ -177,6 +177,11 @@ export interface AppLink {
     current: boolean;
 }
 
+export interface Impersonation {
+    impersonator: { id: number; name: string } | null;
+    user: { id: number; name: string } | null;
+}
+
 export interface SharedProps {
     auth: { user: User | null };
     flash: FlashMessages;
@@ -184,6 +189,7 @@ export interface SharedProps {
     notifications_count: number;
     notifications: NotificationItem[];
     inbox_unread_count: number;
+    impersonating?: Impersonation | null;
 }
 
 export type StatusColor = 'blue' | 'green' | 'red' | 'yellow' | 'gray' | 'purple' | 'indigo' | 'orange' | 'teal' | 'cyan' | 'amber' | 'slate' | 'emerald';

@@ -11,11 +11,13 @@ export interface EditableProject {
     code?: string | null;
     status?: string;
     description?: string | null;
+    notes?: string | null;
     start_date?: string | null;
     due_date?: string | null;
     budget?: number | null;
     company_id?: number | null;
     owner_id?: number | null;
+    manager_id?: number | null;
 }
 
 interface Props {
@@ -25,20 +27,24 @@ interface Props {
     companies: Array<{ id: number; name: string }>;
     owners: Array<{ id: number; name: string }>;
     statuses: Array<{ value: string; label: string }>;
+    /** Owner reassignment is admin-only. */
+    canAdminister?: boolean;
 }
 
-export function ProjectFormModal({ open, onClose, project, companies, owners, statuses }: Props) {
+export function ProjectFormModal({ open, onClose, project, companies, owners, statuses, canAdminister = false }: Props) {
     const isEdit = !!project;
     const form = useForm({
         name: project?.name ?? '',
         code: project?.code ?? '',
-        status: project?.status ?? 'planned',
+        status: project?.status ?? 'new',
         description: project?.description ?? '',
+        notes: project?.notes ?? '',
         start_date: project?.start_date ?? '',
         due_date: project?.due_date ?? '',
         budget: project?.budget != null ? String(project.budget) : '',
         company_id: project?.company_id ? String(project.company_id) : '',
         owner_id: project?.owner_id ? String(project.owner_id) : '',
+        project_manager_id: project?.manager_id ? String(project.manager_id) : '',
     });
 
     const submit = (e: FormEvent) => {
@@ -47,6 +53,7 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
             ...data,
             company_id: data.company_id || null,
             owner_id: data.owner_id || null,
+            project_manager_id: data.project_manager_id || null,
             budget: data.budget || null,
             start_date: data.start_date || null,
             due_date: data.due_date || null,
@@ -82,7 +89,7 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
                     </div>
                     <div>
                         <label className="label">Code</label>
-                        <input className="input" value={form.data.code} onChange={e => form.setData('code', e.target.value)} placeholder="PRJ-01" />
+                        <input className="input" value={form.data.code} onChange={e => form.setData('code', e.target.value)} placeholder="optional" />
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -98,9 +105,16 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
+                    {canAdminister && (
+                        <div>
+                            <label className="label">Owner</label>
+                            <Select className="w-full" value={form.data.owner_id} onChange={v => form.setData('owner_id', v)} placeholder="— Me —"
+                                options={owners.map(o => ({ value: String(o.id), label: o.name }))} />
+                        </div>
+                    )}
                     <div>
                         <label className="label">Project manager</label>
-                        <Select className="w-full" value={form.data.owner_id} onChange={v => form.setData('owner_id', v)} placeholder="— Unassigned —"
+                        <Select className="w-full" value={form.data.project_manager_id} onChange={v => form.setData('project_manager_id', v)} placeholder="— Unassigned —"
                             options={owners.map(o => ({ value: String(o.id), label: o.name }))} />
                     </div>
                     <div>
@@ -120,7 +134,11 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
                 </div>
                 <div>
                     <label className="label">Description</label>
-                    <textarea className="input min-h-[72px]" value={form.data.description} onChange={e => form.setData('description', e.target.value)} />
+                    <textarea className="input min-h-[64px]" value={form.data.description} onChange={e => form.setData('description', e.target.value)} />
+                </div>
+                <div>
+                    <label className="label">Notes</label>
+                    <textarea className="input min-h-[48px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} placeholder="Important internal notes…" />
                 </div>
             </form>
         </Modal>
