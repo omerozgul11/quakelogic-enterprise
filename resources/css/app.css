@@ -344,6 +344,29 @@
   .stagger > *:nth-child(8) { animation-delay: 0.31s; }
 }
 
+/* ── Frosted dropdowns, menus & dialogs ───────────────────────────────────
+   Give every popover (.animate-dropdown — notifications, account, app switcher,
+   selects, export/filter menus) and every modal ([role="dialog"]) the same glass
+   + fine-grain finish as the chrome. Un-layered so it overrides the bg-card
+   utility these surfaces carry. Background stays high-alpha + blurred so menu
+   items and dialog text remain crisp. Revert this block to undo. */
+.animate-dropdown,
+[role="dialog"] {
+  background-color: hsl(214 40% 98% / 0.84);
+  background-image: var(--grain-soft);
+  background-size: 150px 150px;
+  background-repeat: repeat;
+  background-blend-mode: soft-light;
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-color: hsl(214 30% 70% / 0.45);
+}
+.dark .animate-dropdown,
+.dark [role="dialog"] {
+  background-color: hsl(222 24% 14% / 0.85);
+  border-color: hsl(0 0% 100% / 0.08);
+}
+
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes scale-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
