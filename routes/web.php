@@ -26,6 +26,7 @@ use App\Http\Controllers\Web\AdminController;
 use App\Http\Controllers\Web\SettingsController;
 use App\Http\Controllers\Web\IntegrationController;
 use App\Http\Controllers\Web\NotificationController;
+use App\Http\Controllers\Web\ImpersonationController;
 use App\Http\Controllers\Web\SearchController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -35,6 +36,13 @@ require __DIR__.'/auth.php';
 
 // Public legal / terms / copyright page (linked from the footer).
 Route::get('/legal', fn () => Inertia::render('Legal/Index'))->name('legal');
+
+// Stop impersonating — reachable while impersonating any user (the active
+// session user is the impersonated one, not a Super Admin), so it sits outside
+// the role gate and the `verified` middleware. Starting impersonation lives in
+// the Super-Admin admin group below.
+Route::post('/impersonate/stop', [ImpersonationController::class, 'stop'])
+    ->middleware('auth')->name('impersonate.stop');
 
 // Authenticated routes
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -382,6 +390,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/users', [AdminController::class, 'storeUser'])->name('users.store');
         Route::match(['put', 'patch'], '/users/{user}', [AdminController::class, 'updateUser'])->name('users.update');
         Route::delete('/users/{user}', [AdminController::class, 'deleteUser'])->name('users.delete');
+        // Start impersonating a teammate ("Login as"). Stop lives outside this
+        // group (see /impersonate/stop) so the impersonated user can return.
+        Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])->name('users.impersonate');
         // Admin-managed work email (SMTP) for a teammate.
         Route::match(['put', 'patch', 'post'], '/users/{user}/mailbox', [AdminController::class, 'connectUserMailbox'])->name('users.mailbox');
         Route::post('/users/{user}/mailbox/test', [AdminController::class, 'testUserMailbox'])->name('users.mailbox.test');

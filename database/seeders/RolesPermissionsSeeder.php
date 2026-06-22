@@ -17,7 +17,7 @@ class RolesPermissionsSeeder extends Seeder
         $permissions = [
             // Admin
             'manage users', 'manage roles', 'manage permissions', 'manage integrations',
-            'view audit logs', 'manage system settings',
+            'view audit logs', 'manage system settings', 'impersonate users',
 
             // Opportunities
             'view opportunities', 'create opportunities', 'update opportunities', 'delete opportunities',
