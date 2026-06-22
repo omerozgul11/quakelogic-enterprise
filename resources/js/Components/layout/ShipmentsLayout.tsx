@@ -68,6 +68,26 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
+    // Dismiss the notifications / account dropdowns on any outside click or Escape
+    // (a document listener also catches header clicks the overlay sits beneath).
+    useEffect(() => {
+        if (!notifOpen && !menuOpen) return;
+        const onDown = (e: MouseEvent) => {
+            const el = e.target as Element | null;
+            if (notifOpen && !el?.closest('[data-dd="notif"]')) setNotifOpen(false);
+            if (menuOpen && !el?.closest('[data-dd="account"]')) setMenuOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { setNotifOpen(false); setMenuOpen(false); }
+        };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [notifOpen, menuOpen]);
+
     const [dark, toggleDark] = useDarkMode();
     const user = auth.user;
     const isAdmin = user?.roles?.includes('Super Admin') ?? false;
@@ -164,7 +184,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                             {dark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
                         </button>
 
-                        <div className="relative">
+                        <div data-dd="notif" className="relative">
                             <button onClick={() => setNotifOpen(v => !v)} title="Notifications"
                                 className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                                 <Bell className="h-[18px] w-[18px]" />
@@ -202,7 +222,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                             )}
                         </div>
 
-                        <div className="relative">
+                        <div data-dd="account" className="relative">
                             <button onClick={() => setMenuOpen(v => !v)} className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-secondary">
                                 <span className={cn('flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-bold text-white', avatarGradient(user?.name))}>
                                     {getInitials(user?.name)}
