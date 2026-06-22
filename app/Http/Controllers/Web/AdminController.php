@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
-use App\Models\FollowUp;
-use App\Models\Opportunity;
 use App\Models\ProposalSubmission;
 use App\Models\User;
 use App\Services\Mail\MailboxConnectionService;
@@ -71,110 +69,6 @@ class AdminController extends Controller implements HasMiddleware
     public function users(Request $request, MailboxConnectionService $mailboxes): Response
     {
         return $this->index($request, $mailboxes);
-    }
-
-    /**
-     * Team activity dashboard: what each employee owns, is working on, and has delivered.
-     */
-    public function team(Request $request): Response
-    {
-        $orgId = $request->user()->organization_id;
-
-        $active = ['in_progress'];
-        $submitted = ['submitted', 'award_pending', 'awarded', 'completed', 'lost', 'protested'];
-        $won = \App\Enums\ProposalStatus::wonValues();
-
-        $users = User::where('organization_id', $orgId)
-            ->with('roles:id,name')
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'title', 'is_active']);
-
-        // Aggregate proposals by owner + status in one query. Money is
-        // normalised to USD since proposals may be in any currency. The status is
-        // flattened to its raw string value here — keeping it as a cast enum
-        // would break the whereIn()/where() collection lookups below.
-        $proposalRows = ProposalSubmission::where('organization_id', $orgId)
-            ->selectRaw('owner_id, status, COUNT(*) as c, COALESCE(SUM(' . Currency::usdExpr('proposal_value') . '), 0) as v, COALESCE(SUM(' . Currency::usdExpr('award_value') . '), 0) as aw')
-            ->groupBy('owner_id', 'status')
-            ->get()
-            ->map(fn ($r) => [
-                'owner_id' => $r->owner_id,
-                'status' => $r->status instanceof \BackedEnum ? $r->status->value : $r->status,
-                'c' => (int) $r->c,
-                'v' => (float) $r->v,
-                'aw' => (float) $r->aw,
-            ]);
-
-        $oppRows = Opportunity::where('organization_id', $orgId)
-            ->whereNotNull('assigned_to')
-            ->selectRaw('assigned_to, COUNT(*) as c')
-            ->groupBy('assigned_to')
-            ->pluck('c', 'assigned_to');
-
-        $followRows = FollowUp::where('organization_id', $orgId)
-            ->whereIn('status', ['scheduled', 'overdue'])
-            ->whereNotNull('assigned_to')
-            ->selectRaw('assigned_to, COUNT(*) as c')
-            ->groupBy('assigned_to')
-            ->pluck('c', 'assigned_to');
-
-        $recent = ProposalSubmission::where('organization_id', $orgId)
-            ->with('owner:id,name')
-            ->latest('updated_at')
-            ->limit(10)
-            ->get(['id', 'proposal_number', 'project_name', 'status', 'owner_id', 'proposal_value', 'currency', 'updated_at'])
-            ->map(fn ($p) => [
-                'id' => $p->id,
-                'proposal_number' => $p->proposal_number,
-                'project_name' => $p->project_name,
-                'status' => $p->status instanceof \BackedEnum ? $p->status->value : $p->status,
-                'owner' => $p->owner?->name,
-                'value' => Currency::toUsd((float) $p->proposal_value, $p->currency),
-                'updated_at' => $p->updated_at?->toIso8601String(),
-            ]);
-
-        $team = $users->map(function ($u) use ($proposalRows, $oppRows, $followRows, $active, $submitted, $won) {
-            $rows = $proposalRows->where('owner_id', $u->id);
-
-            $bucket = fn (array $statuses) => (int) $rows->whereIn('status', $statuses)->sum('c');
-
-            return [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'title' => $u->title,
-                'role' => $u->roles->first()?->name,
-                'is_active' => $u->is_active,
-                'proposals_total' => (int) $rows->sum('c'),
-                'proposals_active' => $bucket($active),
-                'proposals_submitted' => $bucket($submitted),
-                'proposals_won' => $bucket($won),
-                'pipeline_value' => (float) $rows->whereIn('status', $active)->sum('v'),
-                'won_value' => (float) $rows->whereIn('status', $won)->sum('aw'),
-                'opportunities' => (int) ($oppRows[$u->id] ?? 0),
-                'open_follow_ups' => (int) ($followRows[$u->id] ?? 0),
-            ];
-        })->values();
-
-        // Total proposals split into each status as its own category.
-        $statusBreakdown = collect(\App\Enums\ProposalStatus::cases())->map(fn ($s) => [
-            'value' => $s->value,
-            'label' => $s->label(),
-            'color' => $s->color(),
-            'count' => (int) $proposalRows->where('status', $s->value)->sum('c'),
-        ])->values();
-
-        return Inertia::render('Admin/Team', [
-            'team' => $team,
-            'recent' => $recent,
-            'statusBreakdown' => $statusBreakdown,
-            'totals' => [
-                'employees' => $users->count(),
-                'proposals' => (int) $proposalRows->sum('c'),
-                'pipeline_value' => (float) $proposalRows->whereIn('status', $active)->sum('v'),
-                'won' => (int) $proposalRows->whereIn('status', $won)->sum('c'),
-            ],
-        ]);
     }
 
     /**

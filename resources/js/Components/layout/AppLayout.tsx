@@ -84,7 +84,6 @@ function matchesHref(path: string, href: string): boolean {
 const ALL_HREFS = [
     ...sections.flatMap(s => s.items.map(i => i.href)),
     '/guide',
-    '/admin/team',
     '/admin/activity',
     '/admin',
 ];
@@ -246,7 +245,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const isSuperAdmin = user?.roles?.includes('Super Admin');
 
     const adminItems: NavItem[] = [
-        { label: 'Team Activity', href: '/admin/team', icon: BarChart3 },
         { label: 'Activity Log', href: '/admin/activity', icon: Activity },
         { label: 'Audit Log', href: '/admin/audit-logs', icon: ScrollText },
         { label: 'Admin', href: '/admin', icon: Settings },

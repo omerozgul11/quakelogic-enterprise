@@ -140,10 +140,9 @@ const SECTIONS: Section[] = [
         title: 'Admin & Activity Log',
         body: (
             <>
-                <P>Super Admins get three extra tools:</P>
+                <P>Super Admins get two extra tools:</P>
                 <UL items={[
                     <><B>Admin</B> — create users, assign roles (including custom roles), deactivate accounts.</>,
-                    <><B>Team Activity</B> — what each employee currently owns and has delivered.</>,
                     <><B>Activity Log</B> — who did what, by day/week/month/year, in counts and in dollars.</>,
                 ]} />
             </>

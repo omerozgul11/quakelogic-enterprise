@@ -384,7 +384,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Admin
     Route::prefix('admin')->name('admin.')->middleware('role:Super Admin')->group(function () {
         Route::get('/', [AdminController::class, 'index'])->name('index');
-        Route::get('/team', [AdminController::class, 'team'])->name('team');
         Route::get('/activity', [AdminController::class, 'activity'])->name('activity');
         Route::get('/users', [AdminController::class, 'users'])->name('users');
         Route::post('/users', [AdminController::class, 'storeUser'])->name('users.store');
