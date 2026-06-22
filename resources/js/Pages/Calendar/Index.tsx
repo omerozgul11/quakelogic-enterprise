@@ -36,9 +36,21 @@ const TYPE_STYLE: Record<CalendarEvent['type'], { chip: string; dot: string; ico
     opportunity: { chip: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400', dot: 'bg-blue-500', icon: Target, label: 'Opportunity' },
 };
 
+type Temporal = 'past' | 'today' | 'upcoming';
+
+// Color by due date: past = overdue (red), today = due now (blue), upcoming = green.
+const TEMPORAL_STYLE: Record<Temporal, { chip: string; dot: string; label: string }> = {
+    past: { chip: 'bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400', dot: 'bg-red-500', label: 'Overdue' },
+    today: { chip: 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400', dot: 'bg-blue-500', label: 'Due today' },
+    upcoming: { chip: 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400', dot: 'bg-emerald-500', label: 'Upcoming' },
+};
+
 export default function CalendarIndex({ events, counts, can }: Props) {
     const today = new Date();
     const todayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // Zero-padded YYYY-MM-DD keys sort lexically, so a string compare gives the date order.
+    const temporalOf = (dateKey: string): Temporal => (dateKey < todayKey ? 'past' : dateKey === todayKey ? 'today' : 'upcoming');
 
     const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
     const [filters, setFilters] = useState({ proposal: true, opportunity: true });
@@ -127,6 +139,13 @@ export default function CalendarIndex({ events, counts, can }: Props) {
                     </CardContent>
                 </Card>
 
+                {/* Temporal legend */}
+                <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Upcoming</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Due today</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Overdue (date passed)</span>
+                </div>
+
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_20rem]">
                     {/* Month grid */}
                     <Card className="overflow-hidden">
@@ -158,16 +177,16 @@ export default function CalendarIndex({ events, counts, can }: Props) {
                                         </span>
                                         <div className="flex flex-col gap-1 overflow-hidden">
                                             {dayEvents.slice(0, 3).map(e => {
-                                                const s = TYPE_STYLE[e.type];
+                                                const tone = TEMPORAL_STYLE[temporalOf(e.date)];
                                                 return (
                                                     <Link
                                                         key={e.id}
                                                         href={e.url}
                                                         onClick={ev => ev.stopPropagation()}
-                                                        className={cn('flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors', s.chip)}
-                                                        title={e.title}
+                                                        className={cn('flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors', tone.chip)}
+                                                        title={`${e.title} · ${tone.label}`}
                                                     >
-                                                        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', s.dot)} />
+                                                        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tone.dot)} />
                                                         <span className="truncate">{e.title}</span>
                                                     </Link>
                                                 );
@@ -210,11 +229,17 @@ export default function CalendarIndex({ events, counts, can }: Props) {
                                     {selectedEvents.map(e => {
                                         const s = TYPE_STYLE[e.type];
                                         const Icon = s.icon;
+                                        const t = temporalOf(e.date);
+                                        const tone = TEMPORAL_STYLE[t];
                                         return (
                                             <Link key={e.id} href={e.url} className="block rounded-xl border border-border p-3 transition-colors hover:bg-secondary/50">
                                                 <div className="flex items-center gap-1.5">
                                                     <Icon className={cn('h-3.5 w-3.5', e.type === 'proposal' ? 'text-primary' : 'text-blue-500')} />
                                                     <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{s.label}</span>
+                                                    <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold', tone.chip)}>
+                                                        <span className={cn('h-1.5 w-1.5 rounded-full', tone.dot)} />
+                                                        {tone.label}
+                                                    </span>
                                                     <span className="ml-auto"><StatusBadge status={e.status} /></span>
                                                 </div>
                                                 <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground">{e.title}</p>

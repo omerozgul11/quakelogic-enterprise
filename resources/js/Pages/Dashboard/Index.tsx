@@ -47,8 +47,8 @@ interface DashboardMetrics {
         at: string | null;
     }>;
     companyTotalProposals: number;
-    companyMonthlySubmissions: number;
-    companyMonthlyValue: number;
+    companyWeeklySubmissions: number;
+    companyWeeklyValue: number;
     companySubmittedValue: number;
     companySubmittedCount: number;
     companyAwardValue: number;
@@ -73,21 +73,21 @@ function AdminSubmissionsCard({ data }: { data: NonNullable<DashboardMetrics['or
     const tabs: Array<[typeof iv, string]> = [['last7', '7d'], ['last30', '30d'], ['last60', '60d'], ['total', 'All']];
     const rangeNote = days === null ? 'all time' : `last ${days} days`;
     return (
-        <div className="card-surface card-hover group h-full p-5">
+        <div className="card-surface card-hover group h-full p-3.5">
             {/* Whole body links to the board filtered to the selected interval's submissions */}
             <Link href={href} className="block" title={`View submissions (${rangeNote}) on the board`}>
-                <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-sky-500 text-white shadow-soft">
-                        <FileText className="h-5 w-5" />
+                <div className="mb-2.5 flex items-start justify-between">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-sky-500 text-white shadow-soft">
+                        <FileText className="h-4 w-4" />
                     </div>
-                    <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+                    <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
-                <p className="text-2xl font-bold tracking-tight text-foreground">{cur.count}</p>
-                <p className="mt-0.5 text-sm font-medium text-muted-foreground">Total Submissions</p>
-                <p className="mt-1 text-xs text-muted-foreground/80">{formatCurrency(cur.value)} · {rangeNote}</p>
+                <p className="text-xl font-bold tracking-tight text-foreground">{cur.count}</p>
+                <p className="mt-0.5 text-xs font-medium text-muted-foreground">Total Submissions</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground/80">{formatCurrency(cur.value)} · {rangeNote}</p>
             </Link>
             {/* Interval picker — buttons don't navigate; they re-target the link above */}
-            <div className="mt-2.5 inline-flex rounded-lg bg-secondary p-0.5 text-[11px] font-medium">
+            <div className="mt-2 inline-flex rounded-lg bg-secondary p-0.5 text-[10px] font-medium">
                 {tabs.map(([k, label]) => (
                     <button key={k} type="button" onClick={() => setIv(k)} className={cn('rounded-md px-2 py-1 transition-colors', iv === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                         {label}
@@ -176,18 +176,18 @@ function StatCard({ title, value, subtitle, icon: Icon, color = 'indigo', href, 
     hint?: string;
 }) {
     const card = (
-        <div className="card-surface card-hover group h-full p-5" title={hint}>
-            <div className="mb-4 flex items-start justify-between">
-                <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${colorMap[color] ?? colorMap.indigo} text-white shadow-soft`}>
-                    <Icon className="h-5 w-5" />
+        <div className="card-surface card-hover group h-full p-3.5" title={hint}>
+            <div className="mb-2.5 flex items-start justify-between">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br ${colorMap[color] ?? colorMap.indigo} text-white shadow-soft`}>
+                    <Icon className="h-4 w-4" />
                 </div>
                 {href && (
-                    <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+                    <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
                 )}
             </div>
-            <p className="text-2xl font-bold tracking-tight text-foreground">{value}</p>
-            <p className="mt-0.5 text-sm font-medium text-muted-foreground">{title}</p>
-            {subtitle && <p className="mt-1 text-xs text-muted-foreground/80">{subtitle}</p>}
+            <p className="text-xl font-bold tracking-tight text-foreground">{value}</p>
+            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{title}</p>
+            {subtitle && <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/80">{subtitle}</p>}
         </div>
     );
     return href ? <Link href={href} className="block h-full">{card}</Link> : card;
@@ -195,6 +195,14 @@ function StatCard({ title, value, subtitle, icon: Icon, color = 'indigo', href, 
 
 export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exchangeRates, eurUsdThreshold }: Props) {
     const { auth } = usePage<SharedProps>().props;
+
+    // Mon–Sun range of the current week, matching the backend's startOfWeek/endOfWeek,
+    // so "Submissions This Week" can deep-link to exactly those proposals on the board.
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const weekSubmissionsHref = `/proposals/board?date_field=submission_date&from=${ymd(weekStart)}&to=${ymd(weekEnd)}`;
 
     return (
         <AppLayout>
@@ -242,8 +250,10 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exc
                     </div>
                 </div>
 
-                {/* Stats — every card links to the list its number is drawn from */}
-                <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Compact stat cards on the left, Upcoming Deadlines + Company snapshot on the right */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    {/* Every card links to the list its number is drawn from */}
+                    <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-2 lg:auto-rows-min">
                     {metrics.isAdmin && metrics.orgSubmissions ? (
                         <>
                             <AdminSubmissionsCard data={metrics.orgSubmissions} />
@@ -278,15 +288,12 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exc
                         href="/calendar" hint="Tasks assigned to you that aren't completed yet. Opens your calendar." />
                     <StatCard title="Follow-ups Due" value={metrics.myFollowUps} icon={AlertCircle} color={metrics.myFollowUps > 0 ? 'red' : 'green'} subtitle="Scheduled or overdue"
                         href="/follow-ups" hint="Follow-ups assigned to you that are scheduled or overdue. Opens your inbox." />
-                </div>
+                    </div>
 
-                {/* Daily exchange rates (EUR→USD and other majors) */}
-                <ExchangeRatesCard data={exchangeRates} threshold={eurUsdThreshold} />
-
-                {/* Panels */}
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-                    {/* Deadlines */}
-                    <div className="card-surface lg:col-span-3">
+                    {/* Right rail — beside the stat cards */}
+                    <div className="space-y-4 lg:col-span-1">
+                        {/* Deadlines */}
+                        <div className="card-surface flex flex-col">
                         <div className="flex items-center justify-between border-b border-border px-5 py-4">
                             <h2 className="font-semibold text-foreground">Upcoming Deadlines</h2>
                             <Link href="/proposals" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
@@ -325,21 +332,33 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exc
                     </div>
 
                     {/* Company */}
-                    <div className="card-surface lg:col-span-2">
+                    <div className="card-surface">
                         <div className="border-b border-border px-5 py-4">
-                            <h2 className="font-semibold text-foreground">Company This Month</h2>
+                            <h2 className="font-semibold text-foreground">Company This Week</h2>
                         </div>
                         <div className="space-y-1 p-5">
-                            {[
+                            {([
                                 { label: 'Total Proposals (YTD)', value: metrics.companyTotalProposals },
-                                { label: 'Submissions This Month', value: metrics.companyMonthlySubmissions },
-                                { label: 'Value Submitted', value: formatCurrency(metrics.companyMonthlyValue) },
-                            ].map(row => (
-                                <div key={row.label} className="flex items-center justify-between rounded-xl px-3 py-3 transition-colors hover:bg-secondary/50">
-                                    <span className="text-sm text-muted-foreground">{row.label}</span>
-                                    <span className="text-sm font-semibold text-foreground">{row.value}</span>
-                                </div>
-                            ))}
+                                { label: 'Submissions This Week', value: metrics.companyWeeklySubmissions, href: weekSubmissionsHref },
+                                { label: 'Value Submitted', value: formatCurrency(metrics.companyWeeklyValue), href: weekSubmissionsHref },
+                            ] as Array<{ label: string; value: string | number; href?: string }>).map(row => {
+                                const inner = (
+                                    <>
+                                        <span className="text-sm text-muted-foreground">{row.label}</span>
+                                        <span className="text-sm font-semibold text-foreground">{row.value}</span>
+                                    </>
+                                );
+                                return row.href ? (
+                                    <Link key={row.label} href={row.href} title="View these submissions on the board" className="group flex items-center justify-between rounded-xl px-3 py-3 transition-colors hover:bg-secondary/50">
+                                        <span className="text-sm text-muted-foreground group-hover:text-foreground">{row.label}</span>
+                                        <span className="flex items-center gap-1 text-sm font-semibold text-foreground">{row.value}<ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" /></span>
+                                    </Link>
+                                ) : (
+                                    <div key={row.label} className="flex items-center justify-between rounded-xl px-3 py-3">
+                                        {inner}
+                                    </div>
+                                );
+                            })}
                             <div className="grid grid-cols-2 gap-3 pt-3">
                                 <Link href="/opportunities" className="rounded-xl bg-accent px-3 py-2.5 text-center text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/70">
                                     Opportunities
@@ -350,7 +369,11 @@ export default function DashboardIndex({ metrics, canViewExecutiveDashboard, exc
                             </div>
                         </div>
                     </div>
+                    </div>
                 </div>
+
+                {/* Daily exchange rates (EUR→USD and other majors) */}
+                <ExchangeRatesCard data={exchangeRates} threshold={eurUsdThreshold} />
 
                 {/* Recently Added */}
                 <div className="card-surface">

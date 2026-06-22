@@ -119,7 +119,7 @@ export function QuakeBotScene() {
             <style>{STYLE}</style>
             <svg
                 viewBox="0 0 40 26"
-                className="h-20 w-auto"
+                className="h-16 w-auto"
                 shapeRendering="crispEdges"
                 style={{ imageRendering: 'pixelated' }}
                 role="img"

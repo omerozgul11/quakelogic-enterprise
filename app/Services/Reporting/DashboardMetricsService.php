@@ -221,14 +221,13 @@ class DashboardMetricsService
             ->whereYear('created_at', now()->year)
             ->count();
 
-        $companyMonthlySubmissions = ProposalSubmission::forOrganization($organizationId)
-            ->whereYear('submission_date', now()->year)
-            ->whereMonth('submission_date', now()->month)
+        $weekRange = [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()];
+        $companyWeeklySubmissions = ProposalSubmission::forOrganization($organizationId)
+            ->whereBetween('submission_date', $weekRange)
             ->count();
 
-        $companyMonthlyValue = ProposalSubmission::forOrganization($organizationId)
-            ->whereYear('submission_date', now()->year)
-            ->whereMonth('submission_date', now()->month)
+        $companyWeeklyValue = ProposalSubmission::forOrganization($organizationId)
+            ->whereBetween('submission_date', $weekRange)
             ->sum(DB::raw(Currency::usdExpr('proposal_value')));
 
         // Total value of everything that has been submitted (any submitted-or-later
@@ -282,7 +281,7 @@ class DashboardMetricsService
             'mySubmittedValue', 'myAwardValue', 'myPipelineValue', 'myWeightedPipelineValue',
             'companyPipelineValue', 'companyWeightedPipelineValue', 'myCommissions',
             'myTasks', 'myFollowUps', 'myUpcomingDeadlines', 'recentActivity',
-            'companyTotalProposals', 'companyMonthlySubmissions', 'companyMonthlyValue',
+            'companyTotalProposals', 'companyWeeklySubmissions', 'companyWeeklyValue',
             'companySubmittedValue', 'companySubmittedCount', 'companyAwardValue',
             'isAdmin', 'orgSubmissions', 'upcomingSubmissions'
         );
