@@ -352,7 +352,7 @@
    items and dialog text remain crisp. Revert this block to undo. */
 .animate-dropdown,
 [role="dialog"] {
-  background-color: hsl(214 40% 98% / 0.84);
+  background-color: hsl(214 40% 98% / 0.93);
   background-image: var(--grain-soft);
   background-size: 150px 150px;
   background-repeat: repeat;
@@ -363,7 +363,7 @@
 }
 .dark .animate-dropdown,
 .dark [role="dialog"] {
-  background-color: hsl(222 24% 14% / 0.85);
+  background-color: hsl(222 24% 14% / 0.94);
   border-color: hsl(0 0% 100% / 0.08);
 }
 
