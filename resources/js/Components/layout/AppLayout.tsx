@@ -190,6 +190,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const user = auth.user;
     const recentNotifications = notifications ?? [];
 
+    // Dismiss the notifications / account dropdowns on any outside click or Escape
+    // — the same approach the app switcher uses (a document listener catches header
+    // clicks that a z-indexed overlay would miss).
+    const notifRef = useRef<HTMLDivElement>(null);
+    const accountRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!notifOpen && !menuOpen) return;
+        const onDown = (e: MouseEvent) => {
+            const t = e.target as Node;
+            if (notifOpen && !notifRef.current?.contains(t)) setNotifOpen(false);
+            if (menuOpen && !accountRef.current?.contains(t)) setMenuOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { setNotifOpen(false); setMenuOpen(false); }
+        };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [notifOpen, menuOpen]);
+
     // Collapsible nav sections (System / Help). Closed by default to save space;
     // the user's open/closed choice is remembered across sessions.
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -374,7 +397,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             {dark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
                         </button>
 
-                        <div className="relative">
+                        <div ref={notifRef} className="relative">
                             <button
                                 onClick={() => setNotifOpen(v => !v)}
                                 className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -390,7 +413,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                             {notifOpen && (
                                 <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
                                     <div className="animate-dropdown origin-top-right absolute right-0 top-11 z-20 w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                                         <div className="flex items-center justify-between border-b border-border px-4 py-3">
                                             <p className="text-sm font-semibold text-foreground">Notifications</p>
@@ -432,7 +454,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             )}
                         </div>
 
-                        <div className="relative">
+                        <div ref={accountRef} className="relative">
                             <button
                                 onClick={() => setMenuOpen(v => !v)}
                                 className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-secondary"
@@ -446,7 +468,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                             {menuOpen && (
                                 <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                                     <div className="animate-dropdown origin-top-right absolute right-0 top-11 z-20 w-60 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                                         <div className="border-b border-border px-4 py-3">
                                             <p className="text-sm font-semibold text-foreground">{user?.name}</p>
