@@ -107,7 +107,7 @@ class CrmSectionTest extends TestCase
     {
         $this->actingAs($this->bdm)->post('/crm/projects', [
             'name' => 'SCADA Rollout',
-            'status' => 'active',
+            'status' => 'in_progress',
         ])->assertRedirect();
 
         $project = Project::where('name', 'SCADA Rollout')->firstOrFail();

@@ -2,10 +2,14 @@
 
 namespace App\Services\Notifications;
 
+use App\Enums\ProjectStatus;
+use App\Models\Crm\Project;
+use App\Models\Crm\Task as CrmTask;
 use App\Models\Opportunity;
 use App\Models\ProposalSubmission;
 use App\Models\User;
 use App\Notifications\ActivityNotification;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 
 /**
@@ -256,5 +260,156 @@ class Notifier
             'url' => route('proposals.show', $proposal),
             'icon' => 'hourglass',
         ]));
+    }
+
+    // ── Project Management ──────────────────────────────────────────────────
+
+    /** A new project was created (manually or auto from an award). */
+    public function projectCreated(Project $project, ?User $actor): void
+    {
+        $recipients = $this->projectLeads($project)->merge($this->orgAdmins($project->organization_id));
+
+        $this->sendToUsers($recipients, $actor?->id, [
+            'type' => 'project',
+            'title' => 'New project: ' . $project->name,
+            'message' => trim($this->projectRef($project) . ' was created' . ($actor ? ' by ' . $actor->name : '') . '.'),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'folder-kanban',
+        ]);
+    }
+
+    public function projectManagerAssigned(Project $project, User $manager, User $actor): void
+    {
+        if ($manager->id === $actor->id) {
+            return;
+        }
+
+        $this->sendToUsers(collect([$manager]), null, [
+            'type' => 'assignment',
+            'title' => 'You were made project manager',
+            'message' => trim($project->name . ' — assigned by ' . $actor->name),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'user-check',
+        ], 'assignment');
+    }
+
+    public function projectTeamMemberAdded(Project $project, User $member, User $actor): void
+    {
+        if ($member->id === $actor->id) {
+            return;
+        }
+
+        $this->sendToUsers(collect([$member]), null, [
+            'type' => 'assignment',
+            'title' => 'You were added to a project',
+            'message' => trim($project->name . ' — added by ' . $actor->name),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'users',
+        ], 'assignment');
+    }
+
+    public function projectTeamMemberRemoved(Project $project, User $member, User $actor): void
+    {
+        if ($member->id === $actor->id) {
+            return;
+        }
+
+        $this->sendToUsers(collect([$member]), null, [
+            'type' => 'assignment',
+            'title' => 'You were removed from a project',
+            'message' => trim($project->name . ' — updated by ' . $actor->name),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'user-minus',
+        ], 'assignment');
+    }
+
+    public function projectTaskAssigned(Project $project, CrmTask $task, User $assignee, User $actor): void
+    {
+        if ($assignee->id === $actor->id) {
+            return;
+        }
+
+        $this->sendToUsers(collect([$assignee]), null, [
+            'type' => 'assignment',
+            'title' => 'New task assigned: ' . $task->title,
+            'message' => trim($project->name . ' — assigned by ' . $actor->name),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'check-square',
+        ], 'assignment');
+    }
+
+    public function projectStatusChanged(Project $project, ProjectStatus $from, ProjectStatus $to, User $actor): void
+    {
+        $this->sendToUsers($this->projectAudience($project), $actor->id, [
+            'type' => 'project',
+            'title' => 'Project status: ' . $project->name,
+            'message' => trim($this->projectRef($project) . ' moved from ' . $from->label() . ' to ' . $to->label() . ' by ' . $actor->name),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'refresh-cw',
+        ]);
+    }
+
+    public function projectCompleted(Project $project, ?User $actor): void
+    {
+        $recipients = $this->projectAudience($project)->merge($this->orgAdmins($project->organization_id));
+
+        $this->sendToUsers($recipients, $actor?->id, [
+            'type' => 'project',
+            'title' => 'Project completed: ' . $project->name,
+            'message' => trim($this->projectRef($project) . ' was marked completed' . ($actor ? ' by ' . $actor->name : '') . '.'),
+            'url' => route('crm.projects.show', $project),
+            'icon' => 'party-popper',
+        ]);
+    }
+
+    private function projectRef(Project $project): string
+    {
+        return $project->project_number ?: ($project->code ?: ('#' . $project->id));
+    }
+
+    /** Owner + project manager (active users). */
+    private function projectLeads(Project $project): Collection
+    {
+        $ids = array_values(array_filter([$project->owner_id, $project->project_manager_id]));
+
+        return $ids ? User::whereIn('id', $ids)->where('is_active', true)->get() : collect();
+    }
+
+    /** Owner + project manager + active team members (active users). */
+    private function projectAudience(Project $project): Collection
+    {
+        $ids = $project->members()->where('is_active', true)->pluck('user_id')
+            ->merge([$project->owner_id, $project->project_manager_id])
+            ->filter()->unique()->values();
+
+        return $ids->isEmpty() ? collect() : User::whereIn('id', $ids)->where('is_active', true)->get();
+    }
+
+    private function orgAdmins(int $organizationId): Collection
+    {
+        return User::where('organization_id', $organizationId)
+            ->where('is_active', true)
+            ->role(['Super Admin', 'CEO'])
+            ->get();
+    }
+
+    /**
+     * Deliver a payload to a set of users, de-duped, minus the actor, respecting
+     * each recipient's channel preference (defaults to on).
+     *
+     * @param  Collection<int,User>  $recipients
+     * @param  array<string,mixed>  $payload
+     */
+    private function sendToUsers(Collection $recipients, ?int $exceptId, array $payload, string $channel = 'project'): void
+    {
+        $recipients = $recipients->unique('id')
+            ->reject(fn (User $u) => $exceptId !== null && $u->id === $exceptId)
+            ->filter(fn (User $u) => ($u->notification_preferences['channels'][$channel] ?? true) !== false);
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new ActivityNotification($payload));
     }
 }

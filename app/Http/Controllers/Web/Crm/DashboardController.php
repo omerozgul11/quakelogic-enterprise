@@ -31,7 +31,7 @@ class DashboardController extends Controller
             'open_leads' => (clone $openLeads)->count(),
             'pipeline_value' => (float) (clone $openLeads)->sum('estimated_value'),
             'active_projects' => Project::where('organization_id', $orgId)
-                ->where('status', ProjectStatus::Active->value)->count(),
+                ->whereNotIn('status', [ProjectStatus::Completed->value, ProjectStatus::Cancelled->value])->count(),
             'outstanding_amount' => (float) (clone $invoices)
                 ->whereNotIn('status', [InvoiceStatus::Paid->value, InvoiceStatus::Void->value])
                 ->sum(DB::raw('total - amount_paid')),

@@ -122,6 +122,11 @@ class ProposalWorkflowService
             // contract record (idempotent) seeded from the proposal's value so
             // the post-award financial lifecycle is ready to track.
             $this->ensureContract($proposal, $user);
+
+            // Award automation: turn the won proposal into a managed CRM project
+            // (idempotent + gated by the org's project settings). Never blocks
+            // the status change — handleProposalAwarded swallows + logs failures.
+            app(\App\Services\Crm\ProjectCreationService::class)->handleProposalAwarded($proposal, $user);
         }
 
         return $proposal->refresh();

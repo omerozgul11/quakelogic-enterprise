@@ -10,7 +10,9 @@ use App\Services\BidSources\BidPrime\FakeBidPrimeClient;
 use App\Services\BidSources\OpportunityDeduplicationService;
 use App\Services\BidSources\SamGov\SamGovImportService;
 use App\Listeners\RefreshPipelineOnLogin;
+use App\Models\Opportunity;
 use App\Observers\EmbeddingObserver;
+use App\Observers\OpportunityProjectObserver;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +77,10 @@ class AppServiceProvider extends ServiceProvider
         foreach (array_keys(EmbeddingObserver::KIND_MAP) as $modelClass) {
             $modelClass::observe(EmbeddingObserver::class);
         }
+
+        // Award automation: a user marking an opportunity "awarded" spins up a
+        // managed CRM project (idempotent, de-duped against its proposals).
+        Opportunity::observe(OpportunityProjectObserver::class);
 
         if ($this->app->isLocal()) {
             DB::listen(function ($query) {

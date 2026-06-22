@@ -2,6 +2,7 @@
 
 namespace App\Models\Crm;
 
+use App\Enums\Crm\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Models\Organization;
 use App\Models\User;
@@ -9,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -28,6 +30,7 @@ class Task extends Model
     {
         return [
             'status' => TaskStatus::class,
+            'priority' => TaskPriority::class,
             'due_date' => 'date',
             'completed_at' => 'datetime',
             'position' => 'integer',
@@ -53,6 +56,11 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class, 'crm_task_id')->oldest();
     }
 
     public function scopeForOrganization(Builder $query, int $organizationId): Builder

@@ -32,7 +32,9 @@ class RolesPermissionsSeeder extends Seeder
 
             // CRM section (/crm) — `access crm` gates the whole section (mirrors
             // `access shipments`) and is granted to every role below.
-            'access crm', 'manage leads', 'manage projects', 'manage invoices',
+            // `manage all projects` is the admin capability: see/edit EVERY
+            // project + reach project settings (others see only assigned ones).
+            'access crm', 'manage leads', 'manage projects', 'manage invoices', 'manage all projects',
 
             // Inventory module (/inventory) — `access inventory` gates the
             // section; granted to every role below (view-only for Read Only).
@@ -104,7 +106,7 @@ class RolesPermissionsSeeder extends Seeder
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
-            'access crm', 'manage leads', 'manage projects', 'manage invoices',
+            'access crm', 'manage leads', 'manage projects', 'manage all projects', 'manage invoices',
             'view follow ups', 'manage follow ups', 'send follow up emails',
             'view own commissions', 'view all commissions', 'manage commission rules', 'approve commissions', 'export commissions',
             'view dashboards', 'view executive dashboard', 'export reports',
@@ -120,7 +122,7 @@ class RolesPermissionsSeeder extends Seeder
             'assign opportunities', 'qualify opportunities', 'make go no go decision',
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'view crm', 'manage agencies', 'manage companies', 'manage contacts', 'manage activities',
-            'access crm', 'manage leads', 'manage projects', 'manage invoices',
+            'access crm', 'manage leads', 'manage projects', 'manage all projects', 'manage invoices',
             'view follow ups', 'manage follow ups', 'send follow up emails',
             'view own commissions', 'view all commissions',
             'view dashboards', 'export reports',
@@ -136,7 +138,7 @@ class RolesPermissionsSeeder extends Seeder
             'view proposals', 'view all proposals', 'create proposals', 'update proposals',
             'submit proposals', 'approve proposals', 'manage proposal files', 'view private proposal details',
             'view crm', 'view follow ups', 'manage follow ups',
-            'access crm', 'manage leads', 'manage projects', 'manage invoices',
+            'access crm', 'manage leads', 'manage projects', 'manage all projects', 'manage invoices',
             'view own commissions',
             'view dashboards',
             'use ai assistant', 'run document extraction', 'review ai extraction',
