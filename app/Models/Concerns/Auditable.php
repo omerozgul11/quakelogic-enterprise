@@ -28,7 +28,7 @@ trait Auditable
 
     public function writeAuditLog(string $event): void
     {
-        if (!auth()->check()) {
+        if (AuditLog::isMuted() || !auth()->check()) {
             return;
         }
 

@@ -21,6 +21,30 @@ class AuditLog extends Model
     public function auditable(): MorphTo { return $this->morphTo(); }
     public function user(): BelongsTo { return $this->belongsTo(User::class); }
 
+    /** When true, the Auditable trait skips writing — used to silence bulk imports/syncs. */
+    private static bool $muted = false;
+
+    public static function isMuted(): bool
+    {
+        return self::$muted;
+    }
+
+    /**
+     * Run a callback with audit logging suppressed. Used by bulk syncs (e.g. the
+     * SAM.gov import) which would otherwise record every touched record as a user
+     * "edit" — the import's own log is the right history for those.
+     */
+    public static function withoutAuditing(callable $callback): mixed
+    {
+        $previous = self::$muted;
+        self::$muted = true;
+        try {
+            return $callback();
+        } finally {
+            self::$muted = $previous;
+        }
+    }
+
     public static function record(string $event, $model, array $oldValues = [], array $newValues = []): static
     {
         return static::create([

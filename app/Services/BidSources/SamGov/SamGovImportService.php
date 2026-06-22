@@ -2,6 +2,7 @@
 
 namespace App\Services\BidSources\SamGov;
 
+use App\Models\AuditLog;
 use App\Models\Opportunity;
 use App\Models\Organization;
 use App\Models\SamImport;
@@ -91,6 +92,16 @@ class SamGovImportService
     }
 
     private function processResults(SamImport $import, Organization $organization, array $results, array &$stats): void
+    {
+        // A SAM.gov sync touches many opportunities at once; auditing each as a
+        // user "edit" would flood the audit log. The SamImport record and its
+        // items already capture exactly what the import did.
+        AuditLog::withoutAuditing(function () use ($import, $organization, $results, &$stats) {
+            $this->processBatch($import, $organization, $results, $stats);
+        });
+    }
+
+    private function processBatch(SamImport $import, Organization $organization, array $results, array &$stats): void
     {
         foreach ($results as $result) {
             try {
