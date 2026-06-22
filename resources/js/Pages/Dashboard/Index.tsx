@@ -57,8 +57,8 @@ interface DashboardMetrics {
     upcomingSubmissions: { this_week: number; in15: number } | null;
 }
 
-const SUBMITTED_STATUSES = 'submitted,award_pending,awarded,completed,lost';
-const OPEN_STATUSES = 'in_progress,submitted,award_pending';
+const SUBMITTED_STATUSES = 'submitted,award_pending,awarded,completed,lost,protested';
+const OPEN_STATUSES = 'in_progress,submitted,award_pending,protested';
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** Admin: total submissions org-wide with a 7 / 30 / 60 / All interval picker. */

@@ -11,13 +11,16 @@ class ProposalWorkflowService
 {
     public const ALLOWED_TRANSITIONS = [
         'in_progress' => ['submitted'],
-        'submitted' => ['award_pending', 'awarded', 'lost'],
-        'award_pending' => ['submitted', 'awarded', 'lost'],
-        'awarded' => ['completed', 'submitted'],
+        'submitted' => ['award_pending', 'awarded', 'lost', 'protested'],
+        'award_pending' => ['submitted', 'awarded', 'lost', 'protested'],
+        'awarded' => ['completed', 'submitted', 'protested'],
         'completed' => ['awarded'],
         // A lost proposal can be reopened — it must never be a dead-end the user
         // can't move out of.
-        'lost' => ['submitted', 'awarded', 'in_progress'],
+        'lost' => ['submitted', 'awarded', 'in_progress', 'protested'],
+        // A protest is an in-flight contested outcome — it resolves to a win or a
+        // loss, so it must stay reachable in both directions.
+        'protested' => ['awarded', 'lost', 'submitted'],
     ];
 
     /**

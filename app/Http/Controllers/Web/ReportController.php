@@ -179,7 +179,7 @@ class ReportController extends Controller
         [$period, $start, $end, $from, $to] = $this->resolveRange($request);
 
         $won = \App\Enums\ProposalStatus::wonValues();
-        $openStatuses = ['in_progress', 'submitted', 'award_pending'];
+        $openStatuses = ['in_progress', 'submitted', 'award_pending', 'protested'];
 
         $by = function ($query, string $col, string $agg = 'count(*)') use ($orgId) {
             return $query->where('organization_id', $orgId)

@@ -23,7 +23,7 @@ use Illuminate\Support\Collection;
 class PortalContextService
 {
     /** Statuses that count as "still open / in flight" for a proposal. */
-    public const OPEN_STATUSES = ['in_progress', 'submitted', 'award_pending'];
+    public const OPEN_STATUSES = ['in_progress', 'submitted', 'award_pending', 'protested'];
 
     /** @return array<string,mixed> */
     public function snapshot(User $user): array

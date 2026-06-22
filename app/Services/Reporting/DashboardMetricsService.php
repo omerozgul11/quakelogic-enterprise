@@ -34,7 +34,7 @@ class DashboardMetricsService
         // All monetary totals are normalised to USD (proposals may be in any
         // currency) so the executive dashboard is comparable company-wide.
         $pipelineValue = (clone $proposals)
-            ->whereIn('status', ['in_progress', 'submitted', 'award_pending'])
+            ->whereIn('status', ['in_progress', 'submitted', 'award_pending', 'protested'])
             ->sum(DB::raw(Currency::usdExpr('proposal_value')));
 
         // Earnings (YTD): value of contracts awarded this calendar year.
@@ -96,7 +96,7 @@ class DashboardMetricsService
         // Expected revenue this month (Phase 4): open proposals whose expected
         // award date lands this month, weighted by win probability.
         $expectedMonthlyRevenue = (float) (clone $proposals)
-            ->whereIn('status', ['in_progress', 'submitted', 'award_pending'])
+            ->whereIn('status', ['in_progress', 'submitted', 'award_pending', 'protested'])
             ->whereNotNull('expected_award_date')
             ->whereYear('expected_award_date', $currentYear)
             ->whereMonth('expected_award_date', $currentMonth)
@@ -147,7 +147,7 @@ class DashboardMetricsService
             ->sum(DB::raw(Currency::usdExpr('COALESCE(NULLIF(award_value, 0), proposal_value)')));
 
         // Projected pipeline value across open proposals (includes drafts).
-        $openStatuses = ['in_progress', 'submitted', 'award_pending'];
+        $openStatuses = ['in_progress', 'submitted', 'award_pending', 'protested'];
         $myPipelineValue = (clone $myProposals)
             ->whereIn('status', $openStatuses)
             ->sum(DB::raw(Currency::usdExpr('proposal_value')));
@@ -232,7 +232,7 @@ class DashboardMetricsService
 
         // Total value of everything that has been submitted (any submitted-or-later
         // status), shown as its own bubble separate from the overall pipeline total.
-        $submittedStatuses = ['submitted', 'award_pending', 'awarded', 'completed', 'lost'];
+        $submittedStatuses = ['submitted', 'award_pending', 'awarded', 'completed', 'lost', 'protested'];
         $companySubmittedValue = ProposalSubmission::forOrganization($organizationId)
             ->whereIn('status', $submittedStatuses)
             ->sum(DB::raw(Currency::usdExpr('proposal_value')));
@@ -269,7 +269,7 @@ class DashboardMetricsService
             $orgSubmissions = ['last7' => $window(7), 'last30' => $window(30), 'last60' => $window(60), 'total' => $window(null)];
 
             $dueWithin = fn (int $days) => ProposalSubmission::forOrganization($organizationId)
-                ->whereIn('status', ['in_progress', 'submitted', 'award_pending'])
+                ->whereIn('status', ['in_progress', 'submitted', 'award_pending', 'protested'])
                 ->whereNotNull('due_date')
                 ->whereBetween('due_date', [now()->toDateString(), now()->addDays($days)->toDateString()])
                 ->count();
@@ -298,6 +298,7 @@ class DashboardMetricsService
             . "WHEN 'in_progress' THEN 25 "
             . "WHEN 'submitted' THEN 50 "
             . "WHEN 'award_pending' THEN 75 "
+            . "WHEN 'protested' THEN 40 "
             . "ELSE 0 END)";
     }
 

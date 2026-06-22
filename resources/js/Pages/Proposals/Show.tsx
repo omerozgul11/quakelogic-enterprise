@@ -351,8 +351,8 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
                             />
                         )}
 
-                        {/* Loss analysis (Phase 19) — for lost bids */}
-                        {['lost'].includes(statusValue) && (
+                        {/* Loss analysis (Phase 19) — for lost or protested bids */}
+                        {['lost', 'protested'].includes(statusValue) && (
                             <LossAnalysisPanel
                                 proposalId={proposal.id}
                                 canEdit={can.edit}

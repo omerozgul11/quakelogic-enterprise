@@ -10,6 +10,7 @@ enum ProposalStatus: string
     case Awarded = 'awarded';
     case Completed = 'completed';
     case Lost = 'lost';
+    case Protested = 'protested';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum ProposalStatus: string
             self::Awarded => 'Awarded',
             self::Completed => 'Completed',
             self::Lost => 'Lost',
+            self::Protested => 'Protested',
         };
     }
 
@@ -32,12 +34,13 @@ enum ProposalStatus: string
             self::Awarded => 'green',
             self::Completed => 'teal',
             self::Lost => 'red',
+            self::Protested => 'purple',
         };
     }
 
     public function isActive(): bool
     {
-        return in_array($this, [self::InProgress, self::Submitted, self::Pending]);
+        return in_array($this, [self::InProgress, self::Submitted, self::Pending, self::Protested]);
     }
 
     public function isFinal(): bool
