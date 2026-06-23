@@ -189,9 +189,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                                 className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                                 <Bell className="h-[18px] w-[18px]" />
                                 {notifications_count > 0 && (
-                                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white ring-2 ring-card">
-                                        {notifications_count > 9 ? '9+' : notifications_count}
-                                    </span>
+                                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
                                 )}
                             </button>
                             {notifOpen && (
