@@ -33,6 +33,7 @@ interface Props {
         scope_summary: string | null;
         notes: string | null;
         submission_methods: string[];
+        submission_portal_url: string | null;
     };
     users: Array<{ id: number; name: string }>;
     currencies: CurrencyOption[];
@@ -68,6 +69,7 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
         description: proposal.description ?? '',
         notes: proposal.notes ?? '',
         submission_methods: (proposal.submission_methods ?? []).filter(m => SUBMISSION_METHODS.some(s => s.value === m)),
+        submission_portal_url: proposal.submission_portal_url ?? '',
     });
 
     const ownerId = Number(data.owner_id);
@@ -271,6 +273,21 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
                                         );
                                     })}
                                 </div>
+                                {data.submission_methods.includes('portal') && (
+                                    <div className="mt-3">
+                                        <label className="label">Submission Portal Link</label>
+                                        <input
+                                            type="url"
+                                            inputMode="url"
+                                            value={data.submission_portal_url}
+                                            onChange={e => setData('submission_portal_url', e.target.value)}
+                                            placeholder="https://portal.example.gov/submit"
+                                            className="input"
+                                        />
+                                        <p className="mt-1 text-xs text-muted-foreground">Paste the portal URL where this proposal is submitted.</p>
+                                        {errors.submission_portal_url && <p className="mt-1 text-xs text-destructive">{errors.submission_portal_url}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             <div>

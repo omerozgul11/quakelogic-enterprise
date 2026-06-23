@@ -192,12 +192,13 @@ class RolesPermissionsSeeder extends Seeder
             'view contracts', 'view templates',
         ]);
 
-        // Collaborative proposal editing: every role can view + edit every
-        // proposal (the ProposalSubmissionPolicy no longer restricts edit to
-        // owner/team). Applied via the pivot so it layers on top of the
-        // per-role syncPermissions above without re-listing it in each.
+        // Collaborative proposals: every role can add, view, edit and delete
+        // every proposal and all of its details (the ProposalSubmissionPolicy no
+        // longer restricts these to owner/team). Applied via the pivot so it
+        // layers on top of the per-role syncPermissions above without re-listing
+        // it in each.
         $proposalEditing = Permission::whereIn('name', [
-            'view proposals', 'view all proposals', 'update proposals',
+            'view proposals', 'view all proposals', 'create proposals', 'update proposals', 'delete proposals',
             'view private proposal details', 'manage proposal files',
         ])->pluck('id');
         foreach (Role::pluck('id') as $roleId) {

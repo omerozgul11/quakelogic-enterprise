@@ -140,6 +140,7 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
     const editTypeHasValue = proposalTypeHasValue(detailsForm.data.proposal_type);
 
     const submissionMethods = (proposal as { submission_methods?: string[] }).submission_methods ?? [];
+    const submissionPortalUrl = (proposal as { submission_portal_url?: string | null }).submission_portal_url ?? null;
     const detailRows: Array<[string, string | null | undefined]> = [
         ['Type', proposalTypeLabel(proposalType)],
         ['Company', proposal.company?.name],
@@ -457,6 +458,19 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
                                                 </div>
                                             ))}
                                         </dl>
+                                        {submissionPortalUrl && submissionMethods.includes('portal') && (
+                                            <div className="flex items-center justify-between gap-3 border-t border-border py-2.5">
+                                                <dt className="shrink-0 text-sm text-muted-foreground">Submission Portal</dt>
+                                                <a
+                                                    href={submissionPortalUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="truncate text-sm font-semibold text-primary hover:underline"
+                                                >
+                                                    {submissionPortalUrl}
+                                                </a>
+                                            </div>
+                                        )}
                                         {proposal.scope_summary && (
                                             <div className="mt-4 border-t border-border pt-4">
                                                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope Summary</p>

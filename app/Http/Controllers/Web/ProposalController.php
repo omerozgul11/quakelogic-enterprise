@@ -269,6 +269,7 @@ class ProposalController extends Controller
             'due_date' => 'required|date',
             'submission_methods' => 'nullable|array',
             'submission_methods.*' => 'string|in:mail,email,portal',
+            'submission_portal_url' => 'nullable|string|max:2048',
             'description' => 'nullable|string',
             'owner_id' => 'nullable|exists:users,id',
             'team_member_ids' => 'nullable|array',
@@ -293,7 +294,8 @@ class ProposalController extends Controller
         $type = ProposalType::tryFrom($validated['proposal_type'] ?? '') ?? ProposalType::Proposal;
 
         $proposal = ProposalSubmission::create([
-            ...collect($validated)->except(['document', 'company', 'currency', 'owner_id', 'team_member_ids', 'proposal_type', 'proposal_value'])->all(),
+            ...collect($validated)->except(['document', 'company', 'currency', 'owner_id', 'team_member_ids', 'proposal_type', 'proposal_value', 'submission_portal_url'])->all(),
+            'submission_portal_url' => $this->normalizePortalUrl($validated),
             'proposal_type' => $type->value,
             // RFIs carry no dollar value.
             'proposal_value' => $type->hasValue() ? ($validated['proposal_value'] ?? null) : null,
@@ -675,6 +677,7 @@ class ProposalController extends Controller
                 'scope_summary' => $proposalSubmission->scope_summary,
                 'notes' => $proposalSubmission->notes,
                 'submission_methods' => $proposalSubmission->submission_methods ?? [],
+                'submission_portal_url' => $proposalSubmission->submission_portal_url,
             ],
             'users' => User::where('organization_id', $user->organization_id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'currencies' => Currency::options(),
@@ -709,6 +712,7 @@ class ProposalController extends Controller
             'team_member_ids.*' => 'integer|exists:users,id',
             'submission_methods' => 'nullable|array',
             'submission_methods.*' => 'string|in:mail,email,portal',
+            'submission_portal_url' => 'nullable|string|max:2048',
             'status' => ['nullable', Rule::in(collect(ProposalStatus::cases())->map(fn ($s) => $s->value)->all())],
         ]);
 
@@ -725,7 +729,17 @@ class ProposalController extends Controller
         $updates['proposal_type'] = $type->value;
         $updates['proposal_value'] = $type->hasValue() ? ($validated['proposal_value'] ?? null) : null;
 
-        $updates['submission_methods'] = array_values(array_unique($validated['submission_methods'] ?? []));
+        // Submission methods + portal link are edited together on the Create /
+        // Edit forms. Only touch them when the form actually submitted them, so
+        // editing other details (e.g. the inline editor on the proposal page,
+        // which omits these fields) doesn't silently wipe them.
+        if ($request->has('submission_methods')) {
+            $updates['submission_methods'] = array_values(array_unique($validated['submission_methods'] ?? []));
+            $updates['submission_portal_url'] = $this->normalizePortalUrl($validated);
+        } else {
+            unset($updates['submission_methods'], $updates['submission_portal_url']);
+        }
+
         $updates['currency'] = Currency::normalize($validated['currency'] ?? $proposalSubmission->currency);
         $updates['company_id'] = $this->resolveCompanyId($validated['company'] ?? null, $user);
         $updates['updated_by'] = $user->id;
@@ -1290,6 +1304,32 @@ class ProposalController extends Controller
             'owner_id' => $actor->id,
             'name' => Str::limit($name, 250, ''),
         ])->id;
+    }
+
+    /**
+     * The portal submission URL only applies when 'portal' is a chosen method.
+     * Returns null otherwise (so a stale link never lingers), and prepends a
+     * scheme when the user pasted a bare host so the link stays clickable.
+     *
+     * @param  array<string,mixed>  $validated
+     */
+    private function normalizePortalUrl(array $validated): ?string
+    {
+        $methods = (array) ($validated['submission_methods'] ?? []);
+        if (! in_array('portal', $methods, true)) {
+            return null;
+        }
+
+        $url = trim((string) ($validated['submission_portal_url'] ?? ''));
+        if ($url === '') {
+            return null;
+        }
+
+        if (! preg_match('#^https?://#i', $url)) {
+            $url = 'https://' . $url;
+        }
+
+        return Str::limit($url, 2048, '');
     }
 
     /**

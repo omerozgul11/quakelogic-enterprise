@@ -47,6 +47,7 @@ export default function ProposalCreate({ opportunities, users, currencies, propo
         currency: 'USD',
         due_date: prefill?.due_date ?? '',
         submission_methods: [] as string[],
+        submission_portal_url: '',
         owner_id: String(currentUser.id),
         team_member_ids: [] as number[],
         description: '',
@@ -261,6 +262,21 @@ export default function ProposalCreate({ opportunities, users, currencies, propo
                                 </div>
                                 <p className="mt-1 text-xs text-muted-foreground">How will this proposal be submitted? Pick any that apply.</p>
                                 {manual.errors.submission_methods && <p className="mt-1 text-xs text-destructive">{manual.errors.submission_methods}</p>}
+                                {manual.data.submission_methods.includes('portal') && (
+                                    <div className="mt-3">
+                                        <label className="label">Submission Portal Link</label>
+                                        <input
+                                            type="url"
+                                            inputMode="url"
+                                            value={manual.data.submission_portal_url}
+                                            onChange={e => manual.setData('submission_portal_url', e.target.value)}
+                                            placeholder="https://portal.example.gov/submit"
+                                            className="input"
+                                        />
+                                        <p className="mt-1 text-xs text-muted-foreground">Paste the portal URL where this proposal is submitted.</p>
+                                        {manual.errors.submission_portal_url && <p className="mt-1 text-xs text-destructive">{manual.errors.submission_portal_url}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             <div>
