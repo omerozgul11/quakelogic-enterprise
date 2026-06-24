@@ -117,6 +117,19 @@ return [
     ],
 
     /*
+    | R+L Carriers (LTL freight) tracking by PRO number. Unlike J.B. Hunt, R+L's
+    | public tracing page is reachable without reCAPTCHA, so tracking works with no
+    | credentials (the client scrapes the results page). Setting RL_API_KEY (free
+    | for R+L account holders at MyRLC → API) switches it to R+L's documented REST
+    | API (api.rlc.com/ShipmentTracing) for robust, structured status + history.
+    */
+    'rlcarriers' => [
+        'api_key' => env('RL_API_KEY'),
+        'api_base_url' => env('RL_API_BASE_URL', 'https://api.rlc.com'),
+        'web_base_url' => env('RL_WEB_BASE_URL', 'https://www.rlcarriers.com'),
+    ],
+
+    /*
     | Exchange rates shown on the dashboard. Refreshed on a schedule into a cache
     | the dashboard reads instantly. Source chain (best first):
     |   1. realtime  — free, no-key, near-real-time market quotes (Yahoo Finance).

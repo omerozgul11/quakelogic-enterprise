@@ -11,6 +11,7 @@ enum Carrier: string
 {
     case Ups = 'ups';
     case JbHunt = 'jbhunt';
+    case RlCarriers = 'rlcarriers';
     case Fedex = 'fedex';
     case Dhl = 'dhl';
 
@@ -19,6 +20,7 @@ enum Carrier: string
         return match ($this) {
             self::Ups => 'UPS',
             self::JbHunt => 'J.B. Hunt',
+            self::RlCarriers => 'R+L Carriers',
             self::Fedex => 'FedEx',
             self::Dhl => 'DHL',
         };
@@ -27,7 +29,7 @@ enum Carrier: string
     /** Whether a real tracking integration exists for this carrier today. */
     public function supported(): bool
     {
-        return in_array($this, [self::Ups, self::JbHunt], true);
+        return in_array($this, [self::Ups, self::JbHunt, self::RlCarriers], true);
     }
 
     public function color(): string
@@ -35,6 +37,7 @@ enum Carrier: string
         return match ($this) {
             self::Ups => 'amber',
             self::JbHunt => 'green',
+            self::RlCarriers => 'blue',
             self::Fedex => 'indigo',
             self::Dhl => 'red',
         };
@@ -51,6 +54,11 @@ enum Carrier: string
             self::JbHunt => 'https://www.jbhunt.com/track-shipments/?k='
                 .($referenceType ?: \App\Enums\JbHuntReferenceType::Default->value)
                 .'&v='.rawurlencode($trackingNumber).'#TrackShipmentForm',
+            // R+L's tracing page deep-links to results when the PRO is passed as a
+            // query param (docType=PRO is the default reference; source=web mirrors
+            // the site's own form submit).
+            self::RlCarriers => 'https://www.rlcarriers.com/freight/shipping/shipment-tracing?pro='
+                .rawurlencode($trackingNumber).'&docType=PRO&source=web',
             self::Fedex => 'https://www.fedex.com/fedextrack/?trknbr='.$trackingNumber,
             self::Dhl => 'https://www.dhl.com/en/express/tracking.html?AWB='.$trackingNumber,
         };

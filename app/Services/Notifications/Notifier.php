@@ -402,6 +402,24 @@ class Notifier
         ]);
     }
 
+    /** Nudge the assignee that a CRM follow-up is due (or overdue). */
+    public function crmFollowUpDue(\App\Models\Crm\FollowUp $followUp): void
+    {
+        $assignee = $followUp->assignee;
+        if (! $assignee || ! $assignee->is_active) {
+            return;
+        }
+
+        $overdue = $followUp->isOverdue();
+        $this->sendToUsers(collect([$assignee]), null, [
+            'type' => 'follow_up',
+            'title' => $overdue ? 'Follow-up overdue' : 'Follow-up due today',
+            'message' => $followUp->title,
+            'url' => '/crm/follow-ups',
+            'icon' => 'calendar-check',
+        ], channel: 'follow_up');
+    }
+
     private function projectRef(Project $project): string
     {
         return $project->project_number ?: ($project->code ?: ('#' . $project->id));

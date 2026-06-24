@@ -982,8 +982,17 @@ class MailingController extends Controller
         if ($value === '') {
             return 'ups';
         }
+
+        // Punctuation/spacing-insensitive form so "R&L Carriers", "R+L Carriers"
+        // and "RL Carriers" all collapse to the built-in rlcarriers value.
+        $compact = preg_replace('/[^a-z0-9]/', '', strtolower($value));
+
         foreach (\App\Enums\Carrier::cases() as $c) {
             if (strcasecmp($c->value, $value) === 0 || strcasecmp($c->label(), $value) === 0) {
+                return $c->value;
+            }
+            $labelCompact = preg_replace('/[^a-z0-9]/', '', strtolower($c->label()));
+            if ($compact !== '' && ($compact === $c->value || $compact === $labelCompact)) {
                 return $c->value;
             }
         }

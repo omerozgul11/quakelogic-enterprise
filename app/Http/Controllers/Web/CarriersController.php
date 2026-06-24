@@ -38,6 +38,10 @@ class CarriersController extends Controller
             Carrier::JbHunt->value => $jbhuntLive,
         ];
 
+        // Carriers that track live WITHOUT credentials (R+L's public tracing page
+        // needs no key; an optional RL_API_KEY just upgrades it to the REST API).
+        $liveByDefault = [Carrier::RlCarriers->value];
+
         $counts = ProposalMailing::query()
             ->forOrganization($orgId)
             ->selectRaw('carrier, count(*) as c')
@@ -55,7 +59,7 @@ class CarriersController extends Controller
             'removable' => false,
             'status' => ! $c->supported()
                 ? 'coming_soon'
-                : (($credentialed[$c->value] ?? false)
+                : (($credentialed[$c->value] ?? false) || in_array($c->value, $liveByDefault, true)
                     ? 'live'
                     : ($c === Carrier::Ups ? 'test' : 'available')),
             'mailings' => (int) ($counts[$c->value] ?? 0),

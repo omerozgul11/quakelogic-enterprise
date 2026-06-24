@@ -7,13 +7,19 @@ use App\Http\Controllers\Web\ComplianceController;
 use App\Http\Controllers\Web\ContractController;
 use App\Http\Controllers\Web\TemplateController;
 use App\Http\Controllers\Web\CrmController;
+use App\Http\Controllers\Web\Crm\ActivityController as CrmActivityController;
+use App\Http\Controllers\Web\Crm\AutomationController as CrmAutomationController;
 use App\Http\Controllers\Web\Crm\ClientController as CrmClientController;
 use App\Http\Controllers\Web\Crm\ContactController as CrmContactController;
 use App\Http\Controllers\Web\Crm\DashboardController as CrmDashboardController;
+use App\Http\Controllers\Web\Crm\DuplicateController as CrmDuplicateController;
+use App\Http\Controllers\Web\Crm\FollowUpController as CrmFollowUpController;
 use App\Http\Controllers\Web\Crm\InvoiceController as CrmInvoiceController;
 use App\Http\Controllers\Web\Crm\LeadController as CrmLeadController;
+use App\Http\Controllers\Web\Crm\LeaveController as CrmLeaveController;
 use App\Http\Controllers\Web\Crm\ProjectController as CrmProjectController;
 use App\Http\Controllers\Web\Crm\ProjectSettingsController as CrmProjectSettingsController;
+use App\Http\Controllers\Web\Crm\ReportController as CrmReportController;
 use App\Http\Controllers\Web\Crm\TimeClockController as CrmTimeClockController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DocumentController;
@@ -129,10 +135,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('leads')->name('leads.')->group(function () {
             Route::get('/', [CrmLeadController::class, 'index'])->name('index');
             Route::post('/', [CrmLeadController::class, 'store'])->name('store');
+            Route::get('/{lead}', [CrmLeadController::class, 'show'])->name('show');
             Route::match(['put', 'patch'], '/{lead}', [CrmLeadController::class, 'update'])->name('update');
             Route::post('/{lead}/status', [CrmLeadController::class, 'updateStatus'])->name('status');
             Route::post('/{lead}/convert', [CrmLeadController::class, 'convert'])->name('convert');
             Route::delete('/{lead}', [CrmLeadController::class, 'destroy'])->name('destroy');
+        });
+
+        // Activity timeline entries (note / call / email / meeting) on CRM records.
+        Route::prefix('activities')->name('activities.')->group(function () {
+            Route::post('/', [CrmActivityController::class, 'store'])->name('store');
+            Route::delete('/{activity}', [CrmActivityController::class, 'destroy'])->name('destroy');
+        });
+
+        // Sales reporting & forecasting (read-only analytics).
+        Route::get('/reports', [CrmReportController::class, 'index'])->name('reports.index');
+
+        // Duplicate detection & merge (companies + contacts).
+        Route::get('/duplicates', [CrmDuplicateController::class, 'index'])->name('duplicates.index');
+        Route::post('/duplicates/merge', [CrmDuplicateController::class, 'merge'])->name('duplicates.merge');
+
+        // Rules-based automations.
+        Route::prefix('automations')->name('automations.')->group(function () {
+            Route::get('/', [CrmAutomationController::class, 'index'])->name('index');
+            Route::post('/', [CrmAutomationController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/{automation}', [CrmAutomationController::class, 'update'])->name('update');
+            Route::post('/{automation}/toggle', [CrmAutomationController::class, 'toggle'])->name('toggle');
+            Route::delete('/{automation}', [CrmAutomationController::class, 'destroy'])->name('destroy');
+        });
+
+        // Follow-up tasks + Today/Overdue/Upcoming queue.
+        Route::prefix('follow-ups')->name('follow-ups.')->group(function () {
+            Route::get('/', [CrmFollowUpController::class, 'index'])->name('index');
+            Route::post('/', [CrmFollowUpController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/{followUp}', [CrmFollowUpController::class, 'update'])->name('update');
+            Route::post('/{followUp}/complete', [CrmFollowUpController::class, 'complete'])->name('complete');
+            Route::delete('/{followUp}', [CrmFollowUpController::class, 'destroy'])->name('destroy');
         });
 
         // Estimates, invoices & payments
@@ -160,6 +198,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [CrmTimeClockController::class, 'store'])->name('store');
             Route::match(['put', 'patch'], '/{timeEntry}', [CrmTimeClockController::class, 'update'])->name('update');
             Route::delete('/{timeEntry}', [CrmTimeClockController::class, 'destroy'])->name('destroy');
+        });
+
+        // Team leave (powers the "On leave" count on the dashboard presence strip).
+        Route::prefix('leave')->name('leave.')->group(function () {
+            Route::post('/', [CrmLeaveController::class, 'store'])->name('store');
+            Route::delete('/{leave}', [CrmLeaveController::class, 'destroy'])->name('destroy');
         });
     });
 

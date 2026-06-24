@@ -78,6 +78,17 @@ class ClientController extends Controller
                     'status_label' => $o->status?->label() ?? '—', 'status_color' => $o->status?->color() ?? 'gray',
                 ]),
             'shipments' => $this->clientShipments($orgId, $company->id),
+            'activities' => \App\Models\Crm\Activity::forOrganization($orgId)
+                ->where('subject_type', $company->getMorphClass())
+                ->where('subject_id', $company->id)
+                ->with('user:id,name')
+                ->orderByDesc('happened_at')->limit(100)->get()
+                ->map(fn ($a) => [
+                    'id' => $a->id, 'type' => $a->type, 'body' => $a->body, 'meta' => $a->meta,
+                    'user' => $a->user?->name, 'user_id' => $a->user_id,
+                    'happened_at' => $a->happened_at?->toIso8601String(),
+                    'can_delete' => $a->user_id === $request->user()->id && in_array($a->type, \App\Models\Crm\Activity::MANUAL_TYPES, true),
+                ]),
             'can' => ['manage' => $request->user()->can('manage companies')],
         ]);
     }

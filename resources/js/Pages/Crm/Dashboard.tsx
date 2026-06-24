@@ -4,6 +4,9 @@ import { CrmLayout } from '@/Components/layout/CrmLayout';
 import { StatCard } from '@/Components/ui/StatCard';
 import { Pill } from '@/Components/ui/Pill';
 import { TimeClockWidget } from '@/Components/crm/TimeClockWidget';
+import { TeamPresence, TeamPresenceData } from '@/Components/crm/TeamPresence';
+import { DashboardFollowUps } from '@/Components/crm/DashboardFollowUps';
+import { FollowUpRow } from '@/Components/crm/FollowUpPanel';
 import { formatCurrency, formatDate } from '@/Lib/utils';
 
 interface Stats {
@@ -21,15 +24,28 @@ interface RecentLead { id: number; title: string; company: string | null; value:
 interface RecentInvoice { id: number; number: string; kind: string; company: string | null; total: number; currency: string; status_label: string; status_color: string }
 interface ProjectDue { id: number; name: string; due_date: string | null; progress: number; status_label: string; status_color: string }
 
+interface FollowUpQueue {
+    overdue: FollowUpRow[];
+    today: FollowUpRow[];
+    upcoming: FollowUpRow[];
+    counts: { overdue: number; today: number; upcoming: number };
+}
+interface ActivityFeedItem { id: number; type: string; body: string | null; user: string | null; subject_label: string | null; subject_link: string | null; happened_at: string | null }
+interface FollowUpMeta { owners: Array<{ id: number; name: string }>; currentUserId: number; priorities: string[] }
+
 interface Props {
     stats: Stats;
     pipeline: PipelineStage[];
     recentLeads: RecentLead[];
     recentInvoices: RecentInvoice[];
     projectsDue: ProjectDue[];
+    teamPresence: TeamPresenceData;
+    followUps: FollowUpQueue;
+    recentActivity: ActivityFeedItem[];
+    followUpMeta: FollowUpMeta;
 }
 
-export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoices, projectsDue }: Props) {
+export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoices, projectsDue, teamPresence, followUps, recentActivity, followUpMeta }: Props) {
     const pipelineMax = Math.max(1, ...pipeline.map(p => p.count));
 
     return (
@@ -41,8 +57,9 @@ export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoi
                     <p className="mt-1 text-sm text-muted-foreground">Clients, pipeline, projects and billing at a glance.</p>
                 </div>
 
-                <div className="mb-6">
+                <div className="mb-6 space-y-3">
                     <TimeClockWidget />
+                    <TeamPresence presence={teamPresence} />
                 </div>
 
                 <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -51,6 +68,8 @@ export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoi
                     <StatCard title="Active projects" value={stats.active_projects} icon={FolderKanban} tone="teal" href="/projects" />
                     <StatCard title="Outstanding" value={formatCurrency(stats.outstanding_amount)} subtitle={stats.overdue_invoices ? `${stats.overdue_invoices} overdue` : 'All current'} icon={ReceiptText} tone={stats.overdue_invoices ? 'rose' : 'emerald'} href="/crm/invoices" />
                 </div>
+
+                <DashboardFollowUps queue={followUps} activity={recentActivity} meta={followUpMeta} />
 
                 <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-5">
                     {/* Pipeline funnel */}

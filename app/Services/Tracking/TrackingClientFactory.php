@@ -5,6 +5,8 @@ namespace App\Services\Tracking;
 use App\Enums\Carrier;
 use App\Services\JbHunt\FakeJbHuntTrackingClient;
 use App\Services\JbHunt\RealJbHuntTrackingClient;
+use App\Services\Rl\FakeRlCarriersTrackingClient;
+use App\Services\Rl\RealRlCarriersTrackingClient;
 use App\Services\Ups\FakeUpsTrackingClient;
 use App\Services\Ups\RealUpsTrackingClient;
 
@@ -26,6 +28,7 @@ class TrackingClientFactory
         return match (true) {
             $enum === Carrier::Ups => $this->ups(),
             $enum === Carrier::JbHunt => $this->jbHunt(),
+            $enum === Carrier::RlCarriers => $this->rlCarriers(),
             $enum !== null => new UnsupportedCarrierClient($enum->label()),
             default => new UnsupportedCarrierClient(
                 is_string($carrier) && trim($carrier) !== '' ? trim($carrier) : 'This carrier'
@@ -70,5 +73,24 @@ class TrackingClientFactory
         return app()->runningUnitTests()
             ? new FakeJbHuntTrackingClient()
             : new UnsupportedCarrierClient('J.B. Hunt');
+    }
+
+    private function rlCarriers(): CarrierTrackingClient
+    {
+        // R+L's public tracing page is reachable by plain HTTP (no reCAPTCHA), so
+        // the real client works WITHOUT credentials — it scrapes the page and, when
+        // an API key is present, uses R+L's documented REST API instead. The fake
+        // only drives the test suite.
+        if (app()->runningUnitTests()) {
+            return new FakeRlCarriersTrackingClient();
+        }
+
+        $rl = config('services.rlcarriers');
+
+        return new RealRlCarriersTrackingClient(
+            $rl['api_key'] ?? null,
+            $rl['api_base_url'] ?? 'https://api.rlc.com',
+            $rl['web_base_url'] ?? 'https://www.rlcarriers.com',
+        );
     }
 }

@@ -6,8 +6,12 @@ use App\Enums\LeadStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Contact;
+use App\Models\Crm\Activity;
+use App\Models\Crm\FollowUp;
 use App\Models\Crm\Lead;
 use App\Models\User;
+use App\Services\Crm\ActivityLogger;
+use App\Services\Crm\AutomationEngine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +22,11 @@ use Inertia\Response;
 
 class LeadController extends Controller
 {
+    public function __construct(
+        private readonly ActivityLogger $activity,
+        private readonly AutomationEngine $automations,
+    ) {}
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Lead::class);
@@ -72,20 +81,103 @@ class LeadController extends Controller
         ]);
     }
 
+    public function show(Request $request, Lead $lead): Response
+    {
+        $this->authorize('view', $lead);
+        $user = $request->user();
+        abort_unless($lead->organization_id === $user->organization_id, 403);
+
+        $lead->load(['company:id,name', 'contact:id,first_name,last_name', 'owner:id,name']);
+
+        $activities = Activity::forOrganization($user->organization_id)
+            ->where('subject_type', $lead->getMorphClass())
+            ->where('subject_id', $lead->id)
+            ->with('user:id,name')
+            ->orderByDesc('happened_at')
+            ->limit(200)
+            ->get()
+            ->map(fn (Activity $a) => [
+                'id' => $a->id,
+                'type' => $a->type,
+                'body' => $a->body,
+                'meta' => $a->meta,
+                'user' => $a->user?->name,
+                'user_id' => $a->user_id,
+                'happened_at' => $a->happened_at?->toIso8601String(),
+                'can_delete' => $a->user_id === $user->id && in_array($a->type, Activity::MANUAL_TYPES, true),
+            ]);
+
+        return Inertia::render('Crm/Leads/Show', [
+            'lead' => [
+                'id' => $lead->id,
+                'title' => $lead->title,
+                'company' => $lead->company_name ?: $lead->company?->name,
+                'company_id' => $lead->company_id,
+                'contact_name' => $lead->contact_name ?: $lead->contact?->full_name,
+                'product' => $lead->product_name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'source' => $lead->source,
+                'status' => $lead->status->value,
+                'status_label' => $lead->status->label(),
+                'status_color' => $lead->status->color(),
+                'estimated_value' => (float) $lead->estimated_value,
+                'probability' => $lead->probability,
+                'expected_close_date' => $lead->expected_close_date?->toDateString(),
+                'owner' => $lead->owner?->name,
+                'owner_id' => $lead->owner_id,
+                'notes' => $lead->notes,
+                'created_at' => $lead->created_at?->toIso8601String(),
+            ],
+            'activities' => $activities,
+            'followUps' => FollowUp::forOrganization($user->organization_id)
+                ->where('subject_type', $lead->getMorphClass())
+                ->where('subject_id', $lead->id)
+                ->with('assignee:id,name')
+                ->orderByRaw("status = 'done'")
+                ->orderBy('due_date')
+                ->get()
+                ->map(fn (FollowUp $f) => [
+                    'id' => $f->id,
+                    'title' => $f->title,
+                    'notes' => $f->notes,
+                    'due_date' => $f->due_date?->toDateString(),
+                    'priority' => $f->priority,
+                    'status' => $f->status,
+                    'is_overdue' => $f->isOverdue(),
+                    'assigned_to' => $f->assigned_to,
+                    'assignee' => $f->assignee?->name,
+                ]),
+            'statuses' => collect(LeadStatus::pipeline())->map(fn ($s) => ['value' => $s->value, 'label' => $s->label()]),
+            'sources' => ['Website', 'Referral', 'Cold Call', 'Email', 'Event', 'Partner', 'SAM.gov', 'Other'],
+            'owners' => User::where('organization_id', $user->organization_id)
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'currentUserId' => $user->id,
+            'priorities' => FollowUp::PRIORITIES,
+            'can' => ['manage' => $user->can('access crm')],
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $this->authorize('create', Lead::class);
         $user = $request->user();
         $data = $this->validateLead($request);
 
-        Lead::create([
+        $lead = Lead::create([
             ...$data,
             'organization_id' => $user->organization_id,
             'created_by' => $user->id,
             'owner_id' => $data['owner_id'] ?? $user->id,
             'title' => $data['company_name'],
+            // Set the stage explicitly so the in-memory model is hydrated (the DB
+            // default isn't reflected on the instance the hooks below receive).
+            'status' => $data['status'] ?? LeadStatus::New->value,
             'last_activity_at' => now(),
         ]);
+
+        $this->activity->created($lead, $user, "Lead created — {$lead->title}");
+        $this->automations->leadCreated($lead, $user);
 
         return back()->with('success', 'Lead added.');
     }
@@ -109,7 +201,15 @@ class LeadController extends Controller
     {
         $this->authorize('update', $lead);
         $validated = $request->validate(['status' => ['required', new Enum(LeadStatus::class)]]);
-        $lead->update(['status' => $validated['status'], 'last_activity_at' => now()]);
+
+        $from = $lead->status;
+        $to = LeadStatus::from($validated['status']);
+        $lead->update(['status' => $to, 'last_activity_at' => now()]);
+
+        if ($from !== $to) {
+            $this->activity->stageChanged($lead, $from, $to, $request->user());
+            $this->automations->leadStageChanged($lead, $to, $request->user());
+        }
 
         return back()->with('success', 'Lead moved to '.$lead->status->label().'.');
     }
@@ -157,6 +257,9 @@ class LeadController extends Controller
                 'last_activity_at' => now(),
             ]);
         });
+
+        $this->activity->converted($lead, $user);
+        $this->automations->leadStageChanged($lead->refresh(), LeadStatus::Won, $user);
 
         return back()->with('success', 'Lead converted — client created.');
     }

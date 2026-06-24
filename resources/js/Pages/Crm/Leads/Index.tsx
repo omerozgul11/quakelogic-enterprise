@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { CrmLayout } from '@/Components/layout/CrmLayout';
 import { Button } from '@/Components/ui/Button';
@@ -8,7 +8,7 @@ import { EmptyState } from '@/Components/ui/EmptyState';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { LeadFormModal, EditableLead } from '@/Components/crm/LeadFormModal';
 import { cn, formatCurrency, formatDate, getInitials, avatarGradient } from '@/Lib/utils';
-import { Target, Plus, Pencil, Trash2, CheckCheck, List, Columns3 } from 'lucide-react';
+import { Target, Plus, Pencil, Trash2, CheckCheck, List, Columns3, ArrowUpRight } from 'lucide-react';
 
 interface Lead extends EditableLead {
     id: number;
@@ -150,6 +150,7 @@ export default function LeadsIndex({ columns, total, owners, currentUserId, sour
                                                 {can.manage && (
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center justify-end gap-1">
+                                                            <Link href={`/crm/leads/${lead.id}`} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title="Open details"><ArrowUpRight className="h-4 w-4" /></Link>
                                                             {(lead.status === 'qualified' || lead.status === 'proposal') && (
                                                                 <button onClick={() => convert(lead)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40" title="Convert to client"><CheckCheck className="h-4 w-4" /></button>
                                                             )}
@@ -202,6 +203,7 @@ export default function LeadsIndex({ columns, total, owners, currentUserId, sour
                                             {can.manage && (
                                                 <div className="mt-2.5 flex items-center gap-1.5 border-t border-border pt-2.5">
                                                     <Select size="sm" className="flex-1" value={lead.status} onChange={v => move(lead, v)} options={statuses.map(s => ({ value: s.value, label: s.label }))} />
+                                                    <Link href={`/crm/leads/${lead.id}`} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title="Open details"><ArrowUpRight className="h-4 w-4" /></Link>
                                                     {(lead.status === 'qualified' || lead.status === 'proposal') && (
                                                         <button onClick={() => convert(lead)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40" title="Convert to client"><CheckCheck className="h-4 w-4" /></button>
                                                     )}

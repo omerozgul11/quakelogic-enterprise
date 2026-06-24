@@ -6,7 +6,7 @@ import {
     Bell, LogOut, Menu, X, Sun, Moon, ChevronDown, Landmark, FileMinus,
     Boxes, Package, Warehouse, ArrowLeftRight, ShoppingCart, Factory, ClipboardList,
     ListTree, Wrench, Cpu, HardDrive, BadgeCheck, FileCheck, LifeBuoy, Ticket,
-    Settings, ShieldCheck, Clock,
+    Settings, ShieldCheck, Clock, CalendarCheck, BarChart3, CopyCheck, Zap,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
@@ -33,9 +33,18 @@ const navGroups: NavGroup[] = [
             { label: 'Clients', href: '/crm/clients', icon: Building2 },
             { label: 'Contacts', href: '/crm/contacts', icon: Users },
             { label: 'Leads', href: '/crm/leads', icon: Target },
+            { label: 'Follow-ups', href: '/crm/follow-ups', icon: CalendarCheck },
             { label: 'Projects', href: '/projects', icon: FolderKanban },
             { label: 'Invoices', href: '/crm/invoices', icon: ReceiptText },
             { label: 'Time Cards', href: '/crm/time-cards', icon: Clock },
+        ],
+    },
+    {
+        label: 'Sales tools',
+        items: [
+            { label: 'Reports', href: '/crm/reports', icon: BarChart3 },
+            { label: 'Duplicates', href: '/crm/duplicates', icon: CopyCheck },
+            { label: 'Automations', href: '/crm/automations', icon: Zap },
         ],
     },
     {

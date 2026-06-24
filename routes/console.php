@@ -28,6 +28,8 @@ Schedule::command('opportunities:match')->dailyAt('06:45')->withoutOverlapping()
 // score) into their Inbox, and deadline reminders for proposals due within 5 days.
 Schedule::command('inbox:opportunity-digest')->dailyAt('07:00')->withoutOverlapping();
 Schedule::command('proposals:deadline-reminders')->dailyAt('07:30')->withoutOverlapping();
+// Daily: nudge CRM users about follow-ups due today / overdue (once per day each).
+Schedule::command('crm:follow-up-reminders')->dailyAt('07:50')->withoutOverlapping();
 // Hourly: opportunity assignment escalation — assigned-but-untouched opportunities
 // climb the 24h→48h→72h→96h ladder (owner→manager→admin→reassignment candidate).
 Schedule::command('opportunities:escalate')->hourly()->withoutOverlapping();

@@ -5,6 +5,7 @@ import { Button } from '@/Components/ui/Button';
 import { Pill } from '@/Components/ui/Pill';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { CrmClientFormModal } from '@/Components/crm/CrmClientFormModal';
+import { ActivityTimeline, ActivityItem } from '@/Components/crm/ActivityTimeline';
 import { cn, getInitials, avatarGradient, formatCurrency } from '@/Lib/utils';
 import { ArrowLeft, Building2, Globe, Mail, Phone, MapPin, Pencil, Trash2, Plus, Target, FolderKanban, ReceiptText, FileText, Truck, Briefcase, Star, BadgeCheck } from 'lucide-react';
 
@@ -41,10 +42,11 @@ interface Props {
     proposals: ProposalRow[];
     opportunities: OpportunityRow[];
     shipments: ShipmentRow[];
+    activities: ActivityItem[];
     can: { manage: boolean };
 }
 
-export default function ClientShow({ client, leads, projects, invoices, proposals, opportunities, shipments, can }: Props) {
+export default function ClientShow({ client, leads, projects, invoices, proposals, opportunities, shipments, activities, can }: Props) {
     const [editOpen, setEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -160,6 +162,10 @@ export default function ClientShow({ client, leads, projects, invoices, proposal
                     <RelatedList title="Shipments" icon={Truck} empty="No shipments for this client's proposals." className="lg:col-span-2" items={shipments.map(s => ({
                         id: s.id, href: `/shipments/mailings/${s.ulid}`, primary: s.recipient || s.tracking || '—', secondary: s.tracking || '', color: s.status_color, label: s.status_label,
                     }))} />
+
+                    <div className="lg:col-span-2">
+                        <ActivityTimeline subject="company" subjectId={client.id} activities={activities} />
+                    </div>
                 </div>
             </div>
 
