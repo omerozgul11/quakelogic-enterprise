@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     ArrowLeft, RefreshCw, ExternalLink, MapPin, FileText, Pencil, Upload,
     Trash2, Download, Eye, File as FileIcon, Image as ImageIcon,
@@ -8,6 +8,8 @@ import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Pill } from '@/Components/ui/Pill';
 import { Select } from '@/Components/ui/Select';
 import { Combobox } from '@/Components/ui/Combobox';
+import { CarrierField } from '@/Components/ui/CarrierField';
+import { Modal } from '@/Components/ui/Modal';
 import { formatDate, formatDateTime } from '@/Lib/utils';
 
 interface LinkableProposal {
@@ -40,6 +42,8 @@ interface Mailing {
     carrier: string;
     carrier_label: string;
     tracking_url: string | null;
+    reference_type: string | null;
+    reference_type_label: string | null;
     scope: string;
     scope_label: string;
     scope_color: string;
@@ -61,6 +65,7 @@ interface Mailing {
     proof_url: string | null;
     proposal: { id: number; project_name: string; proposal_number: string | null } | null;
     created_by: string | null;
+    created_at: string | null;
     events: TrackingEvent[];
     documents: Doc[];
 }
@@ -76,10 +81,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const DOC_TYPES = [
     { value: 'label', label: 'Shipping label' },
+    { value: 'bill_of_lading', label: 'Bill of lading' },
     { value: 'customs', label: 'Customs form' },
     { value: 'receipt', label: 'Receipt' },
     { value: 'other', label: 'Other' },
 ];
+
+const DOC_TYPE_LABELS: Record<string, string> = Object.fromEntries(DOC_TYPES.map(d => [d.value, d.label]));
 
 const STATUS_OPTIONS = [
     { value: 'label_created', label: 'Label created' },
@@ -90,7 +98,7 @@ const STATUS_OPTIONS = [
     { value: 'returned', label: 'Returned to sender' },
 ];
 
-export default function MailingsShow({ mailing, linkableProposals }: { mailing: Mailing; linkableProposals: LinkableProposal[] }) {
+export default function MailingsShow({ mailing, linkableProposals, carrierOptions, referenceTypeOptions }: { mailing: Mailing; linkableProposals: LinkableProposal[]; carrierOptions: { value: string; label: string }[]; referenceTypeOptions: { value: string; label: string }[] }) {
     const [refreshing, setRefreshing] = useState(false);
     const [editing, setEditing] = useState(false);
     const [docType, setDocType] = useState('label');
@@ -100,6 +108,7 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
     const form = useForm({
         ups_tracking_number: mailing.ups_tracking_number,
         carrier: mailing.carrier,
+        reference_type: mailing.reference_type ?? 'orderNbr',
         proposal_submission_id: mailing.proposal?.id ? String(mailing.proposal.id) : '',
         status: mailing.status,
         auto_track: mailing.auto_track,
@@ -113,6 +122,19 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
     });
 
     const proposalOptions = linkableProposals.map(p => ({ value: String(p.id), label: p.label }));
+
+    // Keep this shipment's status/timeline current: re-pull every 5 minutes (the
+    // server polls the carrier on the same cadence), but never while the user is
+    // mid-edit or the tab is hidden.
+    useEffect(() => {
+        if (editing) return;
+        const id = window.setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                router.reload({ only: ['mailing'] });
+            }
+        }, 5 * 60 * 1000);
+        return () => window.clearInterval(id);
+    }, [editing]);
 
     // Changing the status by hand implies a manual override — pause UPS auto-sync
     // so the next poll doesn't revert it (the user can re-enable it below).
@@ -179,8 +201,8 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                         )}
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setEditing(v => !v)} className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary">
-                            <Pencil className="h-4 w-4" /> {editing ? 'Cancel' : 'Edit'}
+                        <button onClick={() => setEditing(true)} className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary">
+                            <Pencil className="h-4 w-4" /> Edit
                         </button>
                         <button onClick={refresh} disabled={refreshing} className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary disabled:opacity-60">
                             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
@@ -191,8 +213,21 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                 <div className="grid gap-6 md:grid-cols-3">
                     <div className="md:col-span-1">
                         <div className="card-surface p-5">
-                            {editing ? (
-                                <form onSubmit={save} className="space-y-4">
+                            <Modal
+                                open={editing}
+                                onClose={() => setEditing(false)}
+                                title="Edit shipment"
+                                size="lg"
+                                footer={
+                                    <>
+                                        <button type="button" onClick={() => setEditing(false)} className="rounded-full px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</button>
+                                        <button type="submit" form="mailing-edit-form" disabled={form.processing} className="bg-brand-gradient shadow-glow rounded-full px-5 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60">
+                                            {form.processing ? 'Saving…' : 'Save changes'}
+                                        </button>
+                                    </>
+                                }
+                            >
+                                <form id="mailing-edit-form" onSubmit={save} className="space-y-4">
                                     <div>
                                         <label className="label">Tracking number</label>
                                         <input value={form.data.ups_tracking_number} onChange={e => form.setData('ups_tracking_number', e.target.value)} className="input font-mono" />
@@ -201,13 +236,20 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="label">Carrier</label>
-                                            <Select value={form.data.carrier} onChange={v => form.setData('carrier', v)} className="w-full" options={[{ value: 'ups', label: 'UPS' }]} />
+                                            <CarrierField value={form.data.carrier} onChange={v => form.setData('carrier', v)} className="w-full" options={carrierOptions} />
                                         </div>
                                         <div>
                                             <label className="label">Status</label>
                                             <Select value={form.data.status} onChange={onStatusChange} className="w-full" options={STATUS_OPTIONS} />
                                         </div>
                                     </div>
+                                    {form.data.carrier === 'jbhunt' && (
+                                        <div>
+                                            <label className="label">Reference type</label>
+                                            <Select value={form.data.reference_type} onChange={v => form.setData('reference_type', v)} className="w-full" options={referenceTypeOptions} />
+                                            <p className="mt-1 text-xs text-muted-foreground">What kind of number this is, so the J.B. Hunt link opens the right shipment.</p>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="label">Linked proposal</label>
                                         <Combobox value={form.data.proposal_submission_id} options={proposalOptions} onChange={v => form.setData('proposal_submission_id', v)} placeholder="Search proposals…" />
@@ -254,18 +296,17 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                                     <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-secondary/30 p-3">
                                         <input type="checkbox" checked={form.data.auto_track} onChange={e => form.setData('auto_track', e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary" />
                                         <span className="text-sm">
-                                            <span className="font-medium text-foreground">Auto-sync from UPS</span>
-                                            <span className="mt-0.5 block text-xs text-muted-foreground">When on, the UPS poll updates this shipment. Turn off to keep your manual status — UPS won't overwrite it.</span>
+                                            <span className="font-medium text-foreground">Auto-sync from carrier</span>
+                                            <span className="mt-0.5 block text-xs text-muted-foreground">When on, the carrier poll updates this shipment. Turn off to keep your manual status — the carrier won't overwrite it.</span>
                                         </span>
                                     </label>
 
-                                    <button type="submit" disabled={form.processing} className="bg-brand-gradient shadow-glow w-full rounded-full py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60">
-                                        {form.processing ? 'Saving…' : 'Save changes'}
-                                    </button>
                                 </form>
-                            ) : (
-                                <dl className="space-y-4">
+                            </Modal>
+
+                            <dl className="space-y-4">
                                     <Field label="Category">{mailing.scope_label}</Field>
+                                    {mailing.reference_type_label && <Field label="Tracked by">{mailing.reference_type_label}</Field>}
                                     <Field label="Recipient">{mailing.recipient_name ?? '—'}</Field>
                                     {mailing.recipient_address && <Field label="Address"><span className="whitespace-pre-line text-muted-foreground">{mailing.recipient_address}</span></Field>}
                                     <Field label="Deadline">{formatDate(mailing.deadline)}</Field>
@@ -284,12 +325,12 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                                     )}
                                     {!mailing.auto_track && (
                                         <p className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                                            Manual status — UPS auto-sync off
+                                            Manual status — carrier auto-sync off
                                         </p>
                                     )}
+                                    <Field label="Added on">{formatDate(mailing.created_at)}</Field>
                                     {mailing.created_by && <p className="pt-1 text-xs text-muted-foreground">Added by {mailing.created_by}</p>}
                                 </dl>
-                            )}
                         </div>
                     </div>
 
@@ -328,7 +369,7 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                             </div>
 
                             {mailing.documents.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">No documents. Upload the label, customs forms, or receipts (PDF, PNG, JPEG).</p>
+                                <p className="text-sm text-muted-foreground">No documents. Upload the bill of lading, shipping labels, customs forms, or receipts (PDF, PNG, JPEG).</p>
                             ) : (
                                 <ul className="space-y-2">
                                     {mailing.documents.map(d => (
@@ -338,7 +379,7 @@ export default function MailingsShow({ mailing, linkableProposals }: { mailing: 
                                             </span>
                                             <span className="min-w-0 flex-1">
                                                 <span className="block truncate text-sm font-medium text-foreground">{d.name}</span>
-                                                <span className="block text-xs text-muted-foreground">{[d.type, d.size].filter(Boolean).join(' · ')}</span>
+                                                <span className="block text-xs text-muted-foreground">{[d.type ? (DOC_TYPE_LABELS[d.type] ?? d.type) : null, d.size].filter(Boolean).join(' · ')}</span>
                                             </span>
                                             <a href={d.preview_url} target="_blank" rel="noreferrer" title="Preview" className="text-muted-foreground hover:text-primary"><Eye className="h-4 w-4" /></a>
                                             <a href={d.download_url} title="Download" className="text-muted-foreground hover:text-primary"><Download className="h-4 w-4" /></a>

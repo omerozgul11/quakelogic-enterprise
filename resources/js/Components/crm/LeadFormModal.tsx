@@ -7,16 +7,17 @@ import { NumberInput } from '@/Components/ui/NumberInput';
 
 export interface EditableLead {
     id: number;
-    title?: string;
-    contact_name?: string | null;
-    email?: string | null;
+    company?: string | null;        // company_name (free text)
+    contact_name?: string | null;   // the lead / contact person
     phone?: string | null;
+    product?: string | null;        // product_name
+    owner_id?: number | null;
+    email?: string | null;
     source?: string | null;
     status?: string;
     estimated_value?: number | null;
     probability?: number | null;
     expected_close_date?: string | null;
-    company_id?: number | null;
     notes?: string | null;
 }
 
@@ -24,24 +25,26 @@ interface Props {
     open: boolean;
     onClose: () => void;
     lead?: EditableLead | null;
-    companies: Array<{ id: number; name: string }>;
+    owners: Array<{ id: number; name: string }>;
+    currentUserId: number;
     sources: string[];
     statuses: Array<{ value: string; label: string }>;
 }
 
-export function LeadFormModal({ open, onClose, lead, companies, sources, statuses }: Props) {
+export function LeadFormModal({ open, onClose, lead, owners, currentUserId, sources, statuses }: Props) {
     const isEdit = !!lead;
     const form = useForm({
-        title: lead?.title ?? '',
+        company_name: lead?.company ?? '',
         contact_name: lead?.contact_name ?? '',
-        email: lead?.email ?? '',
         phone: lead?.phone ?? '',
-        source: lead?.source ?? '',
+        product_name: lead?.product ?? '',
+        owner_id: String(lead?.owner_id ?? currentUserId),
         status: lead?.status ?? 'new',
+        email: lead?.email ?? '',
+        source: lead?.source ?? '',
         estimated_value: lead?.estimated_value != null ? String(lead.estimated_value) : '',
         probability: lead?.probability != null ? String(lead.probability) : '',
         expected_close_date: lead?.expected_close_date ?? '',
-        company_id: lead?.company_id ? String(lead.company_id) : '',
         notes: lead?.notes ?? '',
     });
 
@@ -49,7 +52,7 @@ export function LeadFormModal({ open, onClose, lead, companies, sources, statuse
         e.preventDefault();
         form.transform(data => ({
             ...data,
-            company_id: data.company_id || null,
+            owner_id: data.owner_id || null,
             estimated_value: data.estimated_value || null,
             probability: data.probability || null,
             expected_close_date: data.expected_close_date || null,
@@ -78,16 +81,35 @@ export function LeadFormModal({ open, onClose, lead, companies, sources, statuse
             }
         >
             <form onSubmit={submit} className="space-y-4">
-                <div>
-                    <label className="label">Title / opportunity *</label>
-                    <input className="input" value={form.data.title} onChange={e => form.setData('title', e.target.value)} autoFocus placeholder="e.g. City of Reno — SCADA upgrade" />
-                    {err('title') && <p className="mt-1 text-xs text-destructive">{err('title')}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="label">Company name *</label>
+                        <input className="input" value={form.data.company_name} onChange={e => form.setData('company_name', e.target.value)} autoFocus placeholder="e.g. City of Reno" />
+                        {err('company_name') && <p className="mt-1 text-xs text-destructive">{err('company_name')}</p>}
+                    </div>
+                    <div>
+                        <label className="label">Lead name (person) *</label>
+                        <input className="input" value={form.data.contact_name} onChange={e => form.setData('contact_name', e.target.value)} placeholder="e.g. Jane Doe" />
+                        {err('contact_name') && <p className="mt-1 text-xs text-destructive">{err('contact_name')}</p>}
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="label">Company</label>
-                        <Select className="w-full" value={form.data.company_id} onChange={v => form.setData('company_id', v)} placeholder="— None —"
-                            options={companies.map(c => ({ value: String(c.id), label: c.name }))} />
+                        <label className="label">Phone *</label>
+                        <input className="input" value={form.data.phone} onChange={e => form.setData('phone', e.target.value)} placeholder="(555) 123-4567" />
+                        {err('phone') && <p className="mt-1 text-xs text-destructive">{err('phone')}</p>}
+                    </div>
+                    <div>
+                        <label className="label">Product *</label>
+                        <input className="input" value={form.data.product_name} onChange={e => form.setData('product_name', e.target.value)} placeholder="QuakeLogic product" />
+                        {err('product_name') && <p className="mt-1 text-xs text-destructive">{err('product_name')}</p>}
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="label">Owner (pursuing)</label>
+                        <Select className="w-full" value={form.data.owner_id} onChange={v => form.setData('owner_id', v)}
+                            options={owners.map(o => ({ value: String(o.id), label: o.name }))} />
                     </div>
                     <div>
                         <label className="label">Stage</label>
@@ -97,24 +119,14 @@ export function LeadFormModal({ open, onClose, lead, companies, sources, statuse
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="label">Contact name</label>
-                        <input className="input" value={form.data.contact_name} onChange={e => form.setData('contact_name', e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="label">Source</label>
-                        <Select className="w-full" value={form.data.source} onChange={v => form.setData('source', v)} placeholder="— None —"
-                            options={sources.map(s => ({ value: s, label: s }))} />
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
                         <label className="label">Email</label>
                         <input type="email" className="input" value={form.data.email} onChange={e => form.setData('email', e.target.value)} />
                         {err('email') && <p className="mt-1 text-xs text-destructive">{err('email')}</p>}
                     </div>
                     <div>
-                        <label className="label">Phone</label>
-                        <input className="input" value={form.data.phone} onChange={e => form.setData('phone', e.target.value)} />
+                        <label className="label">Source</label>
+                        <Select className="w-full" value={form.data.source} onChange={v => form.setData('source', v)} placeholder="— None —"
+                            options={sources.map(s => ({ value: s, label: s }))} />
                     </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
@@ -134,7 +146,7 @@ export function LeadFormModal({ open, onClose, lead, companies, sources, statuse
                 </div>
                 <div>
                     <label className="label">Notes</label>
-                    <textarea className="input min-h-[72px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} />
+                    <textarea className="input min-h-[64px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} />
                 </div>
             </form>
         </Modal>

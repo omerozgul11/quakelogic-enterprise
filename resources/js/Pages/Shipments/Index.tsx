@@ -16,6 +16,7 @@ interface RecentMailing {
     risk_label: string;
     risk_color: string;
     deadline: string | null;
+    label_created_at: string | null;
 }
 
 interface ShipmentIssue {
@@ -183,7 +184,14 @@ export default function ShipmentsDashboard({ stats, recent, issues, scope, scope
                                     <span className="hidden sm:block"><Pill color={m.scope_color} label={m.scope_label} /></span>
                                     <Pill color={m.status_color} label={m.status_label} />
                                     <Pill color={m.risk_color} label={m.risk_label} />
-                                    <span className="hidden w-24 text-right text-xs text-muted-foreground sm:block">{formatDate(m.deadline)}</span>
+                                    <span className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
+                                        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground/60">Label created</span>
+                                        {formatDate(m.label_created_at)}
+                                    </span>
+                                    <span className="hidden w-24 text-right text-xs text-muted-foreground sm:block">
+                                        <span className="block text-[10px] uppercase tracking-wider text-muted-foreground/60">Deadline</span>
+                                        {formatDate(m.deadline)}
+                                    </span>
                                 </Link>
                             ))}
                         </div>

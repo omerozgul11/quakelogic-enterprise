@@ -54,24 +54,43 @@ class CrmSectionTest extends TestCase
     public function test_bdm_can_create_a_lead(): void
     {
         $response = $this->actingAs($this->bdm)->post('/crm/leads', [
-            'title' => 'City of Reno — SCADA upgrade',
+            'company_name' => 'City of Reno',
+            'contact_name' => 'Jane Doe',
+            'phone' => '775-555-0100',
+            'product_name' => 'Borehole Sensor',
             'estimated_value' => 120000,
             'status' => 'qualified',
         ]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('crm_leads', [
-            'title' => 'City of Reno — SCADA upgrade',
+            'company_name' => 'City of Reno',
+            'product_name' => 'Borehole Sensor',
             'organization_id' => $this->organization->id,
             'status' => 'qualified',
             'created_by' => $this->bdm->id,
+            'owner_id' => $this->bdm->id,
         ]);
     }
 
-    public function test_read_only_cannot_create_a_lead(): void
+    public function test_any_crm_user_can_create_a_lead(): void
     {
+        // Leads are open to everyone with CRM access — including Read Only.
         $this->actingAs($this->readOnly)->get('/crm/leads')->assertStatus(200);
-        $this->actingAs($this->readOnly)->post('/crm/leads', ['title' => 'Nope'])->assertStatus(403);
+        $this->actingAs($this->readOnly)->post('/crm/leads', [
+            'company_name' => 'Acme Water',
+            'contact_name' => 'Sam Lee',
+            'phone' => '555-0101',
+            'product_name' => 'Strong Motion Recorder',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('crm_leads', ['company_name' => 'Acme Water', 'created_by' => $this->readOnly->id]);
+    }
+
+    public function test_creating_a_lead_requires_the_important_details(): void
+    {
+        $this->actingAs($this->bdm)->post('/crm/leads', ['company_name' => 'Only Company'])
+            ->assertSessionHasErrors(['contact_name', 'phone', 'product_name']);
+        $this->assertDatabaseMissing('crm_leads', ['company_name' => 'Only Company']);
     }
 
     public function test_leads_are_organization_scoped(): void

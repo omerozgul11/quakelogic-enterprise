@@ -52,6 +52,30 @@ return [
     ],
 
     /*
+    | Expenses — Intuit QuickBooks Online (Accounting API, OAuth 2.0). When
+    | sync_enabled is false (default) or credentials are missing, the
+    | FakeQuickBooksClient is bound and no calls hit Intuit — the integration is
+    | fully exercisable in dev/tests and "demo connections" can be created so the
+    | UI works. Flip sync_enabled + add the Intuit app credentials to go live.
+    | environment selects the sandbox vs production API + auth hosts.
+    */
+    'quickbooks' => [
+        'sync_enabled' => env('QUICKBOOKS_SYNC_ENABLED', false),
+        'client_id' => env('QUICKBOOKS_CLIENT_ID'),
+        'client_secret' => env('QUICKBOOKS_CLIENT_SECRET'),
+        'environment' => env('QUICKBOOKS_ENVIRONMENT', 'production'), // 'sandbox' | 'production'
+        'redirect_uri' => env('QUICKBOOKS_REDIRECT_URI'),
+        // Stable Intuit endpoints (same for sandbox + production).
+        'authorize_url' => env('QUICKBOOKS_AUTHORIZE_URL', 'https://appcenter.intuit.com/connect/oauth2'),
+        'token_url' => env('QUICKBOOKS_TOKEN_URL', 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'),
+        'scope' => 'com.intuit.quickbooks.accounting',
+        // Webhook verifier token (from the Intuit app's Webhooks page). Enables
+        // real-time QuickBooks→app sync: POST /api/quickbooks/webhook, signed
+        // with this token, triggers an immediate pull for the affected company.
+        'webhook_token' => env('QUICKBOOKS_WEBHOOK_TOKEN'),
+    ],
+
+    /*
     | Shipments — UPS Tracking API. When sync_enabled is false (default) or
     | credentials are missing, the FakeUpsTrackingClient is bound (no API calls).
     */
@@ -70,6 +94,26 @@ return [
             'subscription' => env('UPS_QV_SUBSCRIPTION'),   // subscription name set up on the UPS account
             'organization_id' => env('UPS_QV_ORGANIZATION_ID'), // org these account shipments belong to
         ],
+    ],
+
+    /*
+    | J.B. Hunt 360 tracking (freight). OAuth2 client-credentials, mirroring UPS:
+    | RealJbHuntTrackingClient is bound only when JBHUNT_SYNC_ENABLED=true AND
+    | credentials are present; otherwise a fake drives dev/tests (and in
+    | production the carrier stays manual — see TrackingClientFactory). The
+    | endpoint paths/scope/subscription-key are env-driven so the contract can be
+    | matched to the J.B. Hunt 360 developer docs (developer.jbhunt.com) without
+    | a code change once sandbox credentials are issued.
+    */
+    'jbhunt' => [
+        'sync_enabled' => env('JBHUNT_SYNC_ENABLED', false),
+        'client_id' => env('JBHUNT_CLIENT_ID'),
+        'client_secret' => env('JBHUNT_CLIENT_SECRET'),
+        'base_url' => env('JBHUNT_BASE_URL', 'https://api.jbhunt.com'),
+        'token_url' => env('JBHUNT_TOKEN_URL'),            // OAuth2 token endpoint; defaults to base_url + /tokens/oauth2/v1
+        'scope' => env('JBHUNT_SCOPE'),                    // optional OAuth scope, if the tenant requires one
+        'subscription_key' => env('JBHUNT_SUBSCRIPTION_KEY'), // Apigee/APIM gateway key, sent as a header when set
+        'track_path' => env('JBHUNT_TRACK_PATH', '/shipment-tracking/v1/shipments/{tracking}'),
     ],
 
     /*

@@ -37,7 +37,7 @@ class ShipmentImportService
 
     /**
      * @param  array<int, UploadedFile>  $files
-     * @param  array{carrier?:string, scope?:string, recipient_name?:?string, deadline?:?string}  $defaults
+     * @param  array{carrier?:string, reference_type?:?string, scope?:string, recipient_name?:?string, deadline?:?string}  $defaults
      * @return array{candidates: Collection<int, array<string,mixed>>, sources: array<int, array<string,mixed>>}
      */
     public function build(array $files, ?string $pastedText, array $defaults): array
@@ -309,6 +309,9 @@ class ShipmentImportService
         return [
             'tracking_number' => $tn,
             'carrier' => $this->carrier($row['carrier'] ?? null, $defaults),
+            // Reference type only applies to carriers that use it (J.B. Hunt); the
+            // controller normalises it per the final carrier when persisting.
+            'reference_type' => $defaults['reference_type'] ?? null,
             'scope' => $this->scope($row['scope'] ?? null, $defaults),
             'recipient_name' => $this->str($row['recipient_name'] ?? null) ?? ($defaults['recipient_name'] ?? null),
             'recipient_address' => $this->str($row['recipient_address'] ?? null),

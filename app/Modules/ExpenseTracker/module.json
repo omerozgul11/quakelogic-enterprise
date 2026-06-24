@@ -1,0 +1,24 @@
+{
+    "name": "ExpenseTracker",
+    "slug": "expenses",
+    "version": "1.0.0",
+    "description": "Company expense tracking — manual expense entry with costs, categories with budgets, recurring costs & subscriptions, receipt uploads, an approval/reimbursement workflow, and spend reporting.",
+    "enabled": true,
+    "provider": "App\\Modules\\ExpenseTracker\\Providers\\ExpenseTrackerServiceProvider",
+    "dependencies": ["core", "crm"],
+    "permissions": [
+        "access expenses",
+        "view expenses",
+        "manage expenses"
+    ],
+    "navigation": [
+        { "label": "Dashboard", "route": "expenses.dashboard", "icon": "layout-dashboard" },
+        { "label": "Expenses", "route": "expenses.index", "icon": "receipt" },
+        { "label": "Categories", "route": "expenses.categories.index", "icon": "tags" },
+        { "label": "Recurring costs", "route": "expenses.recurring.index", "icon": "refresh-cw" },
+        { "label": "Reports", "route": "expenses.reports", "icon": "bar-chart-3" }
+    ],
+    "routes": ["expenses"],
+    "widgets": [],
+    "settings": []
+}

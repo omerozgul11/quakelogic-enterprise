@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Crm\Lead;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,10 +35,11 @@ class LeadController extends Controller
         $shaped = $leads->map(fn (Lead $l) => [
             'id' => $l->id,
             'title' => $l->title,
+            'company' => $l->company_name ?: $l->company?->name,
             'contact_name' => $l->contact_name,
-            'company' => $l->company?->name,
-            'company_id' => $l->company_id,
+            'product' => $l->product_name,
             'owner' => $l->owner?->name,
+            'owner_id' => $l->owner_id,
             'email' => $l->email,
             'phone' => $l->phone,
             'source' => $l->source,
@@ -46,6 +48,7 @@ class LeadController extends Controller
             'probability' => $l->probability,
             'expected_close_date' => $l->expected_close_date?->toDateString(),
             'notes' => $l->notes,
+            'created_at' => $l->created_at?->toIso8601String(),
         ]);
 
         $columns = collect(LeadStatus::pipeline())->map(fn (LeadStatus $s) => [
@@ -59,11 +62,13 @@ class LeadController extends Controller
         return Inertia::render('Crm/Leads/Index', [
             'columns' => $columns,
             'total' => $shaped->count(),
-            'companies' => Company::where('organization_id', $user->organization_id)
-                ->orderBy('name')->get(['id', 'name']),
+            'owners' => User::where('organization_id', $user->organization_id)
+                ->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'currentUserId' => $user->id,
             'sources' => ['Website', 'Referral', 'Cold Call', 'Email', 'Event', 'Partner', 'SAM.gov', 'Other'],
             'statuses' => collect(LeadStatus::pipeline())->map(fn ($s) => ['value' => $s->value, 'label' => $s->label()]),
-            'can' => ['manage' => $user->can('manage leads')],
+            // Leads are open to every CRM user (the section is gated by access crm).
+            'can' => ['manage' => $user->can('access crm')],
         ]);
     }
 
@@ -71,12 +76,14 @@ class LeadController extends Controller
     {
         $this->authorize('create', Lead::class);
         $user = $request->user();
+        $data = $this->validateLead($request);
 
         Lead::create([
-            ...$this->validateLead($request),
+            ...$data,
             'organization_id' => $user->organization_id,
             'created_by' => $user->id,
-            'owner_id' => $user->id,
+            'owner_id' => $data['owner_id'] ?? $user->id,
+            'title' => $data['company_name'],
             'last_activity_at' => now(),
         ]);
 
@@ -86,7 +93,14 @@ class LeadController extends Controller
     public function update(Request $request, Lead $lead): RedirectResponse
     {
         $this->authorize('update', $lead);
-        $lead->update([...$this->validateLead($request), 'last_activity_at' => now()]);
+        $data = $this->validateLead($request);
+
+        $lead->update([
+            ...$data,
+            'owner_id' => $data['owner_id'] ?? $lead->owner_id,
+            'title' => $data['company_name'],
+            'last_activity_at' => now(),
+        ]);
 
         return back()->with('success', 'Lead updated.');
     }
@@ -113,7 +127,7 @@ class LeadController extends Controller
                     'organization_id' => $user->organization_id,
                     'created_by' => $user->id,
                     'owner_id' => $user->id,
-                    'name' => $lead->title,
+                    'name' => $lead->company_name ?: $lead->title,
                     'company_type' => 'client',
                     'phone' => $lead->phone,
                     'email' => $lead->email,
@@ -161,20 +175,27 @@ class LeadController extends Controller
         $user = $request->user();
 
         return $request->validate([
-            'title' => 'required|string|max:255',
-            'contact_name' => 'nullable|string|max:255',
+            // The important details — required so a lead can't be saved half-empty.
+            'company_name' => 'required|string|max:255',
+            'contact_name' => 'required|string|max:255',
+            'phone' => 'required|string|max:30',
+            'product_name' => 'required|string|max:255',
+            'owner_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where('organization_id', $user->organization_id),
+            ],
             'email' => 'nullable|email|max:255',
-            'phone' => 'nullable|string|max:30',
             'source' => 'nullable|string|max:100',
             'status' => ['nullable', new Enum(LeadStatus::class)],
             'estimated_value' => 'nullable|numeric|min:0|max:9999999999999',
             'probability' => 'nullable|integer|min:0|max:100',
             'expected_close_date' => 'nullable|date',
             'notes' => 'nullable|string',
-            'company_id' => [
-                'nullable',
-                Rule::exists('companies', 'id')->where('organization_id', $user->organization_id),
-            ],
+        ], [
+            'company_name.required' => 'Enter the company name.',
+            'contact_name.required' => 'Enter the lead (contact person) name.',
+            'phone.required' => 'Enter a phone number.',
+            'product_name.required' => 'Enter the product.',
         ]);
     }
 }

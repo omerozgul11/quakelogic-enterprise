@@ -18,7 +18,10 @@ Route::prefix('inventory')->name('inventory.')->middleware('permission:access in
     Route::prefix('products')->name('products.')->group(function () {
         Route::get('/', [ProductController::class, 'index'])->name('index');
         Route::post('/', [ProductController::class, 'store'])->name('store');
+        Route::post('/import', [ProductController::class, 'import'])->name('import');
+        Route::post('/autocategorize', [ProductController::class, 'autocategorize'])->name('autocategorize');
         Route::get('/{product}', [ProductController::class, 'show'])->name('show');
+        Route::get('/{product}/image', [ProductController::class, 'image'])->name('image');
         Route::match(['put', 'patch'], '/{product}', [ProductController::class, 'update'])->name('update');
         Route::delete('/{product}', [ProductController::class, 'destroy'])->name('destroy');
 
@@ -43,4 +46,5 @@ Route::prefix('inventory')->name('inventory.')->middleware('permission:access in
     });
 
     Route::get('/movements', [MovementController::class, 'index'])->name('movements.index');
+    Route::delete('/movements/{movement}', [MovementController::class, 'destroy'])->name('movements.destroy');
 });

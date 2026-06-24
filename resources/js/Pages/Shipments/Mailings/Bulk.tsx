@@ -2,10 +2,17 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Layers } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Select } from '@/Components/ui/Select';
+import { CarrierField } from '@/Components/ui/CarrierField';
 
-export default function MailingsBulk() {
+interface Props {
+    carrierOptions: { value: string; label: string }[];
+    referenceTypeOptions: { value: string; label: string }[];
+}
+
+export default function MailingsBulk({ carrierOptions, referenceTypeOptions }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         carrier: 'ups',
+        reference_type: 'orderNbr',
         scope: 'domestic',
         tracking_numbers: '',
         recipient_name: '',
@@ -41,13 +48,14 @@ export default function MailingsBulk() {
                 <form onSubmit={submit} className="card-surface space-y-5 p-6">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <label className="label">Carrier</label>
-                            <Select
+                            <label className="label">Carrier <span className="text-muted-foreground">(applied to all)</span></label>
+                            <CarrierField
                                 value={data.carrier}
                                 onChange={v => setData('carrier', v)}
-                                options={[{ value: 'ups', label: 'UPS' }]}
+                                options={carrierOptions}
                                 className="w-full"
                             />
+                            {errors.carrier && <p className="mt-1.5 text-sm text-destructive">{errors.carrier}</p>}
                         </div>
                         <div>
                             <label className="label">Category</label>
@@ -59,6 +67,20 @@ export default function MailingsBulk() {
                             />
                         </div>
                     </div>
+
+                    {data.carrier === 'jbhunt' && (
+                        <div>
+                            <label className="label">Reference type <span className="text-muted-foreground">(applied to all)</span></label>
+                            <Select
+                                value={data.reference_type}
+                                onChange={v => setData('reference_type', v)}
+                                options={referenceTypeOptions}
+                                className="w-full sm:max-w-xs"
+                            />
+                            {errors.reference_type && <p className="mt-1.5 text-sm text-destructive">{errors.reference_type}</p>}
+                            <p className="mt-1.5 text-xs text-muted-foreground">What kind of number these are, so the J.B. Hunt tracking link opens the right shipment.</p>
+                        </div>
+                    )}
 
                     <div>
                         <label htmlFor="numbers" className="label">Tracking numbers {count > 0 && <span className="text-muted-foreground">({count})</span>}</label>

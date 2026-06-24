@@ -5,7 +5,8 @@ import { Button } from '@/Components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
-import { ArrowLeft, FileText, UploadCloud, Sparkles, Loader2, X, FileCheck2, Users } from 'lucide-react';
+import { FileDropzone } from '@/Components/ui/FileDropzone';
+import { ArrowLeft, FileText, UploadCloud, Sparkles, Loader2, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 interface CurrencyOption { value: string; label: string; symbol: string; name: string }
@@ -28,7 +29,7 @@ const SUBMISSION_METHODS: Array<{ value: string; label: string }> = [
     { value: 'mail', label: 'Mail' },
 ];
 
-export default function ProposalCreate({ opportunities, users, currencies, proposalTypes, isAdmin, currentUser, prefill }: Props) {
+export default function ProposalCreate({ opportunities, users, currencies, proposalTypes, currentUser, prefill }: Props) {
     const [dragging, setDragging] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
 
@@ -47,10 +48,11 @@ export default function ProposalCreate({ opportunities, users, currencies, propo
         currency: 'USD',
         due_date: prefill?.due_date ?? '',
         submission_methods: [] as string[],
+        submission_portal_url: '',
         owner_id: String(currentUser.id),
         team_member_ids: [] as number[],
         description: '',
-        document: null as File | null,
+        documents: [] as File[],
     });
 
     const ownerId = Number(manual.data.owner_id);
@@ -261,24 +263,33 @@ export default function ProposalCreate({ opportunities, users, currencies, propo
                                 </div>
                                 <p className="mt-1 text-xs text-muted-foreground">How will this proposal be submitted? Pick any that apply.</p>
                                 {manual.errors.submission_methods && <p className="mt-1 text-xs text-destructive">{manual.errors.submission_methods}</p>}
+                                {manual.data.submission_methods.includes('portal') && (
+                                    <div className="mt-3">
+                                        <label className="label">Submission Portal Link</label>
+                                        <input
+                                            type="url"
+                                            inputMode="url"
+                                            value={manual.data.submission_portal_url}
+                                            onChange={e => manual.setData('submission_portal_url', e.target.value)}
+                                            placeholder="https://portal.example.gov/submit"
+                                            className="input"
+                                        />
+                                        <p className="mt-1 text-xs text-muted-foreground">Paste the portal URL — it becomes a clickable link on the proposal page.</p>
+                                        {manual.errors.submission_portal_url && <p className="mt-1 text-xs text-destructive">{manual.errors.submission_portal_url}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             <div>
                                 <label className="label">Owner</label>
-                                {isAdmin ? (
-                                    <Select
-                                        value={manual.data.owner_id}
-                                        onChange={v => manual.setData('owner_id', v)}
-                                        placeholder="Select owner…"
-                                        options={users.map(u => ({ value: String(u.id), label: u.name }))}
-                                        className="w-full"
-                                    />
-                                ) : (
-                                    <input type="text" value={`${currentUser.name} (you)`} disabled className="input cursor-not-allowed opacity-70" />
-                                )}
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    {isAdmin ? 'The owner is the person responsible for this proposal.' : 'Only an administrator can assign a different owner.'}
-                                </p>
+                                <Select
+                                    value={manual.data.owner_id}
+                                    onChange={v => manual.setData('owner_id', v)}
+                                    placeholder="Select owner…"
+                                    options={users.map(u => ({ value: String(u.id), label: u.name }))}
+                                    className="w-full"
+                                />
+                                <p className="mt-1 text-xs text-muted-foreground">The owner is the person responsible for this proposal.</p>
                             </div>
 
                             <div>
@@ -308,20 +319,16 @@ export default function ProposalCreate({ opportunities, users, currencies, propo
                             </div>
 
                             <div>
-                                <label className="label">Attach a document (optional)</label>
-                                {manual.data.document ? (
-                                    <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm">
-                                        <FileCheck2 className="h-4 w-4 text-primary" />
-                                        <span className="flex-1 truncate text-foreground">{manual.data.document.name}</span>
-                                        <button type="button" onClick={() => manual.setData('document', null)} className="text-muted-foreground hover:text-destructive">
-                                            <X className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <input type="file" accept={ACCEPT} onChange={e => manual.setData('document', e.target.files?.[0] ?? null)}
-                                        className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-secondary/70" />
+                                <label className="label">Attach documents (optional)</label>
+                                <FileDropzone
+                                    files={manual.data.documents}
+                                    onChange={fs => manual.setData('documents', fs)}
+                                    accept={ACCEPT}
+                                    hint="Drop one or more PDF / image files here. They're attached and parsed to fill any blanks above."
+                                />
+                                {(manual.errors.documents || (manual.errors as Record<string, string>)['documents.0']) && (
+                                    <p className="mt-1 text-xs text-destructive">{manual.errors.documents || (manual.errors as Record<string, string>)['documents.0']}</p>
                                 )}
-                                <p className="mt-1 text-xs text-muted-foreground">If attached, it will be parsed to fill any blanks above.</p>
                             </div>
 
                             <div className="flex justify-end gap-3 pt-2">

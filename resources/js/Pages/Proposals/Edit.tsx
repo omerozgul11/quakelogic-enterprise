@@ -5,6 +5,7 @@ import { Button } from '@/Components/ui/Button';
 import { Card, CardContent } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
+import { FileDropzone } from '@/Components/ui/FileDropzone';
 import { ArrowLeft, FileText, Users } from 'lucide-react';
 
 interface CurrencyOption { value: string; label: string; symbol: string; name: string }
@@ -33,6 +34,7 @@ interface Props {
         scope_summary: string | null;
         notes: string | null;
         submission_methods: string[];
+        submission_portal_url: string | null;
     };
     users: Array<{ id: number; name: string }>;
     currencies: CurrencyOption[];
@@ -47,7 +49,7 @@ const SUBMISSION_METHODS: Array<{ value: string; label: string }> = [
     { value: 'mail', label: 'Mail' },
 ];
 
-export default function ProposalEdit({ proposal, users, currencies, statusOptions, proposalTypes, isAdmin }: Props) {
+export default function ProposalEdit({ proposal, users, currencies, statusOptions, proposalTypes }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         project_name: proposal.project_name ?? '',
         proposal_type: proposal.proposal_type ?? 'proposal',
@@ -68,6 +70,7 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
         description: proposal.description ?? '',
         notes: proposal.notes ?? '',
         submission_methods: (proposal.submission_methods ?? []).filter(m => SUBMISSION_METHODS.some(s => s.value === m)),
+        submission_portal_url: proposal.submission_portal_url ?? '',
     });
 
     const ownerId = Number(data.owner_id);
@@ -91,6 +94,19 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         put(`/proposals/${proposal.id}`);
+    };
+
+    // Documents upload — independent of the details save above. The proposal
+    // already exists, so dropped files are attached immediately.
+    const fileForm = useForm({ files: [] as File[], document_type: '' });
+    const uploadFiles = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (fileForm.data.files.length === 0) return;
+        fileForm.post(`/proposals/${proposal.id}/files`, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => fileForm.reset(),
+        });
     };
 
     return (
@@ -217,20 +233,14 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
 
                             <div>
                                 <label className="label">Owner</label>
-                                {isAdmin ? (
-                                    <Select
-                                        value={data.owner_id}
-                                        onChange={v => setData('owner_id', v)}
-                                        placeholder="Select owner…"
-                                        options={users.map(u => ({ value: String(u.id), label: u.name }))}
-                                        className="w-full"
-                                    />
-                                ) : (
-                                    <input type="text" value={proposal.owner_name ?? 'Unassigned'} disabled className="input cursor-not-allowed opacity-70" />
-                                )}
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    {isAdmin ? 'The owner is the person responsible for this proposal.' : 'Only an administrator can change the owner.'}
-                                </p>
+                                <Select
+                                    value={data.owner_id}
+                                    onChange={v => setData('owner_id', v)}
+                                    placeholder="Select owner…"
+                                    options={users.map(u => ({ value: String(u.id), label: u.name }))}
+                                    className="w-full"
+                                />
+                                <p className="mt-1 text-xs text-muted-foreground">The owner is the person responsible for this proposal.</p>
                             </div>
 
                             <div>
@@ -271,6 +281,21 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
                                         );
                                     })}
                                 </div>
+                                {data.submission_methods.includes('portal') && (
+                                    <div className="mt-3">
+                                        <label className="label">Submission Portal Link</label>
+                                        <input
+                                            type="url"
+                                            inputMode="url"
+                                            value={data.submission_portal_url}
+                                            onChange={e => setData('submission_portal_url', e.target.value)}
+                                            placeholder="https://portal.example.gov/submit"
+                                            className="input"
+                                        />
+                                        <p className="mt-1 text-xs text-muted-foreground">Paste the portal URL — it becomes a clickable link on the proposal page.</p>
+                                        {errors.submission_portal_url && <p className="mt-1 text-xs text-destructive">{errors.submission_portal_url}</p>}
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -291,6 +316,35 @@ export default function ProposalEdit({ proposal, users, currencies, statusOption
                             <div className="flex justify-end gap-3 pt-2">
                                 <Button href={`/proposals/${proposal.id}`} variant="secondary">Cancel</Button>
                                 <Button type="submit" disabled={processing}>{processing ? 'Saving…' : 'Save Changes'}</Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                <Card className="mt-6">
+                    <CardContent className="pt-5">
+                        <div className="mb-3 flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Attach documents</h2>
+                        </div>
+                        <form onSubmit={uploadFiles} className="space-y-3">
+                            <FileDropzone
+                                files={fileForm.data.files}
+                                onChange={fs => fileForm.setData('files', fs)}
+                                hint="Drop one or more PDF / image files here — they're attached to this proposal right away."
+                            />
+                            <input
+                                type="text"
+                                placeholder="Document type (optional — applied to all)"
+                                value={fileForm.data.document_type}
+                                onChange={e => fileForm.setData('document_type', e.target.value)}
+                                className="input"
+                            />
+                            {fileForm.errors.files && <p className="text-xs text-destructive">{fileForm.errors.files}</p>}
+                            <div className="flex justify-end">
+                                <Button type="submit" disabled={fileForm.processing || fileForm.data.files.length === 0}>
+                                    {fileForm.processing ? 'Uploading…' : `Upload${fileForm.data.files.length ? ` ${fileForm.data.files.length} file${fileForm.data.files.length === 1 ? '' : 's'}` : ''}`}
+                                </Button>
                             </div>
                         </form>
                     </CardContent>

@@ -102,6 +102,25 @@ export function formatPercent(value?: number | null): string {
 }
 
 /**
+/** A readable SKU like QL-7F3K9M (no visually ambiguous characters). */
+export function generateSku(prefix = 'QL'): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let body = '';
+    for (let i = 0; i < 6; i++) body += chars[Math.floor(Math.random() * chars.length)];
+    return `${prefix}-${body}`;
+}
+
+/** A valid 13-digit EAN-13 barcode (12 random digits + check digit). */
+export function generateBarcode(): string {
+    let digits = '';
+    for (let i = 0; i < 12; i++) digits += Math.floor(Math.random() * 10);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += Number(digits[i]) * (i % 2 === 0 ? 1 : 3);
+    const check = (10 - (sum % 10)) % 10;
+    return digits + check;
+}
+
+/**
  * Generate a strong, readable password. Guarantees at least one lowercase,
  * uppercase, digit and symbol, and avoids visually ambiguous characters
  * (0/O, 1/l/I) so it can be read aloud or copied without confusion.
@@ -225,6 +244,7 @@ export function proposalTypeLabel(type?: string | null): string {
         case 'rfi': return 'RFI';
         case 'rfq': return 'RFQ';
         case 'rfp': return 'RFP';
+        case 'notice_of_intent': return 'Notice of Intent';
         case 'proposal': return 'Proposal';
         default: return type ? type.toUpperCase() : '—';
     }
@@ -236,14 +256,15 @@ export function proposalTypeColor(type?: string | null): string {
         case 'rfi': return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
         case 'rfq': return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300';
         case 'rfp': return 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300';
+        case 'notice_of_intent': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
         case 'proposal': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
         default: return 'bg-secondary text-muted-foreground';
     }
 }
 
-/** RFIs are informational only — they carry no dollar value. */
+/** RFIs and Notices of Intent are informational only — they carry no dollar value. */
 export function proposalTypeHasValue(type?: string | null): boolean {
-    return type !== 'rfi';
+    return type !== 'rfi' && type !== 'notice_of_intent';
 }
 
 /** Proposal health (days since last client contact) — traffic-light dot classes. */

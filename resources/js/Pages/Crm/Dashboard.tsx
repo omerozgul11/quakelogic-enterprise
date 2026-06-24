@@ -3,6 +3,7 @@ import { Building2, Users, Target, FolderKanban, ReceiptText, AlertTriangle, Arr
 import { CrmLayout } from '@/Components/layout/CrmLayout';
 import { StatCard } from '@/Components/ui/StatCard';
 import { Pill } from '@/Components/ui/Pill';
+import { TimeClockWidget } from '@/Components/crm/TimeClockWidget';
 import { formatCurrency, formatDate } from '@/Lib/utils';
 
 interface Stats {
@@ -38,6 +39,10 @@ export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoi
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">CRM Dashboard</h1>
                     <p className="mt-1 text-sm text-muted-foreground">Clients, pipeline, projects and billing at a glance.</p>
+                </div>
+
+                <div className="mb-6">
+                    <TimeClockWidget />
                 </div>
 
                 <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

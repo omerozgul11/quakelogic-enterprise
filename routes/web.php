@@ -14,6 +14,7 @@ use App\Http\Controllers\Web\Crm\InvoiceController as CrmInvoiceController;
 use App\Http\Controllers\Web\Crm\LeadController as CrmLeadController;
 use App\Http\Controllers\Web\Crm\ProjectController as CrmProjectController;
 use App\Http\Controllers\Web\Crm\ProjectSettingsController as CrmProjectSettingsController;
+use App\Http\Controllers\Web\Crm\TimeClockController as CrmTimeClockController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DocumentController;
 use App\Http\Controllers\Web\FollowUpController;
@@ -63,6 +64,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('shipments')->name('shipments.')->middleware('permission:access shipments')->group(function () {
         Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'dashboard'])->name('dashboard');
         Route::get('/carriers', [\App\Http\Controllers\Web\CarriersController::class, 'index'])->name('carriers');
+        Route::post('/carriers', [\App\Http\Controllers\Web\CarriersController::class, 'store'])->name('carriers.store');
+        Route::post('/carriers/update', [\App\Http\Controllers\Web\CarriersController::class, 'update'])->name('carriers.update');
+        Route::post('/carriers/remove', [\App\Http\Controllers\Web\CarriersController::class, 'destroy'])->name('carriers.remove');
         Route::prefix('mailings')->name('mailings.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Web\MailingController::class, 'create'])->name('create');
@@ -73,6 +77,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/import', [\App\Http\Controllers\Web\MailingController::class, 'importStore'])->name('import.store');
             Route::post('/refresh-all', [\App\Http\Controllers\Web\MailingController::class, 'refreshAll'])->name('refresh-all');
             Route::post('/match-proposals', [\App\Http\Controllers\Web\MailingController::class, 'matchProposals'])->name('match-proposals');
+            Route::post('/bulk-refresh', [\App\Http\Controllers\Web\MailingController::class, 'bulkRefresh'])->name('bulk-refresh');
+            Route::post('/bulk-reassign', [\App\Http\Controllers\Web\MailingController::class, 'bulkReassign'])->name('bulk-reassign');
+            Route::post('/bulk-delete', [\App\Http\Controllers\Web\MailingController::class, 'bulkDelete'])->name('bulk-delete');
+            // Before /{ulid} so "export" isn't read as a shipment id.
+            Route::get('/export', [\App\Http\Controllers\Web\MailingController::class, 'export'])->name('export');
             Route::get('/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'show'])->name('show');
             Route::match(['put', 'patch'], '/{ulid}', [\App\Http\Controllers\Web\MailingController::class, 'update'])->name('update');
             Route::post('/{ulid}/refresh', [\App\Http\Controllers\Web\MailingController::class, 'refresh'])->name('refresh');
@@ -177,6 +186,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/{invoice}/status', [CrmInvoiceController::class, 'updateStatus'])->name('status');
             Route::post('/{invoice}/payments', [CrmInvoiceController::class, 'storePayment'])->name('payments.store');
             Route::delete('/{invoice}/payments/{payment}', [CrmInvoiceController::class, 'destroyPayment'])->name('payments.destroy');
+        });
+
+        // Time clock (live punch widget, JSON) + Time Cards (review/filter shifts).
+        Route::prefix('time-clock')->name('time-clock.')->group(function () {
+            Route::get('/status', [CrmTimeClockController::class, 'status'])->name('status');
+            Route::post('/in', [CrmTimeClockController::class, 'clockIn'])->name('in');
+            Route::post('/out', [CrmTimeClockController::class, 'clockOut'])->name('out');
+        });
+        Route::prefix('time-cards')->name('time-cards.')->group(function () {
+            Route::get('/', [CrmTimeClockController::class, 'index'])->name('index');
+            Route::post('/', [CrmTimeClockController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/{timeEntry}', [CrmTimeClockController::class, 'update'])->name('update');
+            Route::delete('/{timeEntry}', [CrmTimeClockController::class, 'destroy'])->name('destroy');
         });
     });
 

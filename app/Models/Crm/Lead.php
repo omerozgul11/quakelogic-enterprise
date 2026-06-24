@@ -23,7 +23,7 @@ class Lead extends Model
 
     protected $fillable = [
         'ulid', 'organization_id', 'created_by', 'owner_id', 'company_id', 'contact_id',
-        'title', 'contact_name', 'email', 'phone', 'source', 'status',
+        'title', 'company_name', 'product_name', 'contact_name', 'email', 'phone', 'source', 'status',
         'estimated_value', 'probability', 'expected_close_date', 'notes', 'last_activity_at',
     ];
 

@@ -269,6 +269,7 @@ class ProposalController extends Controller
             'due_date' => 'required|date',
             'submission_methods' => 'nullable|array',
             'submission_methods.*' => 'string|in:mail,email,portal',
+            'submission_portal_url' => 'nullable|string|max:2048',
             'description' => 'nullable|string',
             'owner_id' => 'nullable|exists:users,id',
             'team_member_ids' => 'nullable|array',
@@ -276,7 +277,8 @@ class ProposalController extends Controller
             // Security: only PDF and image files are accepted. Office/text formats
             // (doc, docx, xls, txt, csv, …) are rejected. Validate by sniffed
             // content type (mimetypes) and extension (mimes) for defense in depth.
-            'document' => 'nullable|file|max:102400|mimetypes:application/pdf,image/jpeg,image/png|mimes:pdf,jpg,jpeg,png',
+            'documents' => 'nullable|array|max:15',
+            'documents.*' => 'file|max:102400|mimetypes:application/pdf,image/jpeg,image/png|mimes:pdf,jpg,jpeg,png',
         ], [
             'company.required' => 'Enter the client / company name.',
             'solicitation_number.required' => 'Enter the solicitation number.',
@@ -293,7 +295,8 @@ class ProposalController extends Controller
         $type = ProposalType::tryFrom($validated['proposal_type'] ?? '') ?? ProposalType::Proposal;
 
         $proposal = ProposalSubmission::create([
-            ...collect($validated)->except(['document', 'company', 'currency', 'owner_id', 'team_member_ids', 'proposal_type', 'proposal_value'])->all(),
+            ...collect($validated)->except(['documents', 'company', 'currency', 'owner_id', 'team_member_ids', 'proposal_type', 'proposal_value', 'submission_portal_url'])->all(),
+            'submission_portal_url' => $this->normalizePortalUrl($validated),
             'proposal_type' => $type->value,
             // RFIs carry no dollar value.
             'proposal_value' => $type->hasValue() ? ($validated['proposal_value'] ?? null) : null,
@@ -317,9 +320,11 @@ class ProposalController extends Controller
         $this->syncTeamMembers($proposal, $validated['team_member_ids'] ?? [], $user);
         $this->ensureOwnerOnTeam($proposal, $user);
 
-        // Optional attached document: QuakeAI reads it and fills any blanks.
-        if ($request->hasFile('document')) {
-            $analysis = $this->intake->extract($proposal, $request->file('document'), $user);
+        // Optional attached documents: all are stored on the proposal, and
+        // QuakeAI reads them to fill any blanks (the richest one wins).
+        if ($request->hasFile('documents')) {
+            $files = array_values($request->file('documents'));
+            $analysis = $this->intake->extractBest($proposal, $files, $user);
             if ($analysis) {
                 $this->intake->autoApply($proposal->fresh(), $analysis, $user, fillBlanksOnly: true);
             }
@@ -675,6 +680,7 @@ class ProposalController extends Controller
                 'scope_summary' => $proposalSubmission->scope_summary,
                 'notes' => $proposalSubmission->notes,
                 'submission_methods' => $proposalSubmission->submission_methods ?? [],
+                'submission_portal_url' => $proposalSubmission->submission_portal_url,
             ],
             'users' => User::where('organization_id', $user->organization_id)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'currencies' => Currency::options(),
@@ -709,6 +715,7 @@ class ProposalController extends Controller
             'team_member_ids.*' => 'integer|exists:users,id',
             'submission_methods' => 'nullable|array',
             'submission_methods.*' => 'string|in:mail,email,portal',
+            'submission_portal_url' => 'nullable|string|max:2048',
             'status' => ['nullable', Rule::in(collect(ProposalStatus::cases())->map(fn ($s) => $s->value)->all())],
         ]);
 
@@ -725,14 +732,24 @@ class ProposalController extends Controller
         $updates['proposal_type'] = $type->value;
         $updates['proposal_value'] = $type->hasValue() ? ($validated['proposal_value'] ?? null) : null;
 
-        $updates['submission_methods'] = array_values(array_unique($validated['submission_methods'] ?? []));
+        // Submission methods + portal link are edited together on the Create /
+        // Edit forms. Only touch them when the form actually submitted them, so
+        // editing other details (e.g. the inline detail editor, which omits these
+        // fields) doesn't silently wipe them.
+        if ($request->has('submission_methods')) {
+            $updates['submission_methods'] = array_values(array_unique($validated['submission_methods'] ?? []));
+            $updates['submission_portal_url'] = $this->normalizePortalUrl($validated);
+        } else {
+            unset($updates['submission_methods'], $updates['submission_portal_url']);
+        }
+
         $updates['currency'] = Currency::normalize($validated['currency'] ?? $proposalSubmission->currency);
         $updates['company_id'] = $this->resolveCompanyId($validated['company'] ?? null, $user);
         $updates['updated_by'] = $user->id;
 
-        // Only admins may reassign ownership; for everyone else owner_id is
-        // ignored entirely so users cannot change who owns a proposal.
-        if ($user->hasRole('Super Admin') && !empty($validated['owner_id']) && $this->userInOrg((int) $validated['owner_id'], $user)) {
+        // Collaborative ownership: any user who can edit the proposal (authorized
+        // above) may reassign its owner, as long as the new owner is in the org.
+        if (!empty($validated['owner_id']) && $this->userInOrg((int) $validated['owner_id'], $user)) {
             $updates['owner_id'] = (int) $validated['owner_id'];
             $updates['proposal_manager_id'] = (int) $validated['owner_id'];
         }
@@ -1238,12 +1255,13 @@ class ProposalController extends Controller
     }
 
     /**
-     * Resolve the owner for a proposal. Only Super Admins may assign ownership
-     * to someone else; everyone else falls back to the default (themselves).
+     * Resolve the owner for a proposal. Any creator may assign ownership to
+     * another user in their organization; otherwise it falls back to the
+     * default (themselves).
      */
     private function resolveOwnerId(int|string|null $requested, User $actor, int $default): int
     {
-        if ($requested && $actor->hasRole('Super Admin') && $this->userInOrg((int) $requested, $actor)) {
+        if ($requested && $this->userInOrg((int) $requested, $actor)) {
             return (int) $requested;
         }
         return $default;
@@ -1290,6 +1308,32 @@ class ProposalController extends Controller
             'owner_id' => $actor->id,
             'name' => Str::limit($name, 250, ''),
         ])->id;
+    }
+
+    /**
+     * The portal submission URL only applies when 'portal' is a chosen method.
+     * Returns null otherwise (so a stale link never lingers), and prepends a
+     * scheme when the user pasted a bare host so the link stays clickable.
+     *
+     * @param  array<string,mixed>  $validated
+     */
+    private function normalizePortalUrl(array $validated): ?string
+    {
+        $methods = (array) ($validated['submission_methods'] ?? []);
+        if (! in_array('portal', $methods, true)) {
+            return null;
+        }
+
+        $url = trim((string) ($validated['submission_portal_url'] ?? ''));
+        if ($url === '') {
+            return null;
+        }
+
+        if (! preg_match('#^https?://#i', $url)) {
+            $url = 'https://' . $url;
+        }
+
+        return Str::limit($url, 2048, '');
     }
 
     /**

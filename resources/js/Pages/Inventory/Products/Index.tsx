@@ -12,12 +12,16 @@ import { Select } from '@/Components/ui/Select';
 import { ProductFormModal } from '@/Components/inventory/ProductFormModal';
 import { formatCurrency } from '@/Lib/utils';
 import { PaginatedResponse } from '@/Types';
-import { Package, Plus, ExternalLink } from 'lucide-react';
+import { ProductImportModal } from '@/Components/inventory/ProductImportModal';
+import { Modal } from '@/Components/ui/Modal';
+import { Checkbox } from '@/Components/ui/Checkbox';
+import { Package, Plus, ExternalLink, Upload, ArrowUp, ArrowDown, ChevronsUpDown, Tags } from 'lucide-react';
 
 interface ProductRow {
     id: number;
     sku: string;
     name: string;
+    image_url: string | null;
     type_label: string;
     type_color: string;
     category: string | null;
@@ -35,15 +39,46 @@ interface Props {
     products: PaginatedResponse<ProductRow>;
     filters: Record<string, string>;
     types: { value: string; label: string }[];
+    currencies: { value: string; label: string; symbol?: string }[];
     can: { manage: boolean; adjust: boolean };
 }
 
-export default function ProductsIndex({ products, filters, types, can }: Props) {
+export default function ProductsIndex({ products, filters, types, currencies, can }: Props) {
     const [formOpen, setFormOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
+    const [catOpen, setCatOpen] = useState(false);
+    const [catAll, setCatAll] = useState(false);
+    const [catBusy, setCatBusy] = useState(false);
+
+    const runAutoCategorize = () => {
+        setCatBusy(true);
+        router.post('/inventory/products/autocategorize', { mode: catAll ? 'all' : 'empty' }, {
+            preserveScroll: true,
+            onFinish: () => { setCatBusy(false); setCatOpen(false); },
+        });
+    };
 
     const apply = (patch: Record<string, string | undefined>) => {
         router.get('/inventory/products', { ...filters, ...patch }, { preserveState: true, preserveScroll: true, replace: true });
     };
+
+    const sort = filters.sort ?? 'name';
+    const dir = filters.dir === 'desc' ? 'desc' : 'asc';
+    const toggleSort = (key: string) =>
+        apply({ sort: key, dir: sort === key && dir === 'asc' ? 'desc' : 'asc' });
+
+    const SortHeader = ({ field, label, align = 'left' }: { field: string; label: string; align?: 'left' | 'right' }) => (
+        <button
+            type="button"
+            onClick={() => toggleSort(field)}
+            className={`group inline-flex items-center gap-1 hover:text-foreground ${align === 'right' ? 'flex-row-reverse' : ''}`}
+        >
+            {label}
+            {sort === field
+                ? (dir === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />)
+                : <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground" />}
+        </button>
+    );
 
     return (
         <InventoryLayout>
@@ -53,7 +88,13 @@ export default function ProductsIndex({ products, filters, types, can }: Props) 
                     icon={Package}
                     title="Products"
                     description={`${products.total} ${products.total === 1 ? 'product' : 'products'}`}
-                    actions={can.manage && <Button onClick={() => setFormOpen(true)} icon={Plus}>Add Product</Button>}
+                    actions={can.manage && (
+                        <div className="flex items-center gap-2">
+                            <Button variant="secondary" icon={Tags} onClick={() => setCatOpen(true)}>Auto-categorize</Button>
+                            <Button variant="secondary" icon={Upload} onClick={() => setImportOpen(true)}>Import</Button>
+                            <Button icon={Plus} onClick={() => setFormOpen(true)}>Add Product</Button>
+                        </div>
+                    )}
                 />
 
                 <Card className="mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -73,11 +114,11 @@ export default function ProductsIndex({ products, filters, types, can }: Props) 
                         <table className="w-full">
                             <thead className="border-b border-border bg-secondary/40">
                                 <tr>
-                                    <th className="th">Product</th>
-                                    <th className="th hidden sm:table-cell">Type</th>
+                                    <th className="th"><SortHeader field="name" label="Product" /></th>
+                                    <th className="th hidden sm:table-cell"><SortHeader field="type" label="Type" /></th>
                                     <th className="th text-right">On hand</th>
                                     <th className="th hidden text-right md:table-cell">Cost</th>
-                                    <th className="th text-right">Price</th>
+                                    <th className="th text-right"><SortHeader field="price" label="Price" align="right" /></th>
                                     <th className="th" />
                                 </tr>
                             </thead>
@@ -96,11 +137,18 @@ export default function ProductsIndex({ products, filters, types, can }: Props) 
                                 ) : products.data.map(p => (
                                     <tr key={p.id} className="row-link">
                                         <td className="td">
-                                            <Link href={`/inventory/products/${p.id}`} className="block">
-                                                <span className="font-medium text-foreground hover:text-primary">{p.name}</span>
-                                                <span className="mt-0.5 flex items-center gap-2">
-                                                    <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
-                                                    {!p.is_active && <span className="chip">Inactive</span>}
+                                            <Link href={`/inventory/products/${p.id}`} className="flex items-center gap-3">
+                                                <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-secondary">
+                                                    {p.image_url
+                                                        ? <img src={p.image_url} alt="" className="h-full w-full object-cover" />
+                                                        : <Package className="h-4 w-4 text-muted-foreground" />}
+                                                </span>
+                                                <span className="min-w-0">
+                                                    <span className="block truncate font-medium text-foreground hover:text-primary">{p.name}</span>
+                                                    <span className="mt-0.5 flex items-center gap-2">
+                                                        <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
+                                                        {!p.is_active && <span className="chip">Inactive</span>}
+                                                    </span>
                                                 </span>
                                             </Link>
                                         </td>
@@ -130,7 +178,38 @@ export default function ProductsIndex({ products, filters, types, can }: Props) 
                 </Card>
             </div>
 
-            {formOpen && <ProductFormModal open onClose={() => setFormOpen(false)} types={types} />}
+            {formOpen && <ProductFormModal open onClose={() => setFormOpen(false)} types={types} currencies={currencies} />}
+            {importOpen && <ProductImportModal open onClose={() => setImportOpen(false)} />}
+
+            <Modal
+                open={catOpen}
+                onClose={() => !catBusy && setCatOpen(false)}
+                title="Auto-categorize products"
+                size="sm"
+                footer={
+                    <>
+                        <Button variant="ghost" onClick={() => setCatOpen(false)} disabled={catBusy}>Cancel</Button>
+                        <Button icon={Tags} onClick={runAutoCategorize} disabled={catBusy}>
+                            {catBusy ? 'Categorizing…' : 'Categorize'}
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-muted-foreground">
+                    Assigns a category to each product by reading its name — sensors, cables,
+                    enclosures, power, antennas, data acquisition, software, services, shake
+                    tables and more.
+                </p>
+                <label className="mt-4 flex cursor-pointer items-start gap-3">
+                    <Checkbox checked={catAll} onChange={setCatAll} ariaLabel="Re-categorize all" />
+                    <span className="text-sm">
+                        <span className="font-medium text-foreground">Re-categorize everything</span>
+                        <span className="block text-muted-foreground">
+                            Off: only fill products that have no category yet. On: re-derive every product's category from its name.
+                        </span>
+                    </span>
+                </label>
+            </Modal>
         </InventoryLayout>
     );
 }

@@ -23,6 +23,7 @@ class MailingController extends Controller
     public function __construct(
         private readonly MailingTrackingService $tracking,
         private readonly \App\Services\Mailings\ShipmentProposalMatcher $matcher,
+        private readonly \App\Services\Mailings\CarrierRegistry $carrierRegistry,
     ) {}
 
     public function dashboard(Request $request): Response
@@ -104,7 +105,7 @@ class MailingController extends Controller
                 'on_time_rate' => $totalDelivered > 0 ? (int) round($deliveredOnTime / $totalDelivered * 100) : null,
             ],
             'recent' => $base()
-                ->with(['proposalSubmission:id,project_name,proposal_number', 'latestEvent'])
+                ->with(['proposalSubmission:id,project_name,proposal_number', 'latestEvent', 'labelCreatedEvent'])
                 ->latest()->limit(6)->get()->map(fn (ProposalMailing $m) => [
                     'ulid' => $m->ulid,
                     'ups_tracking_number' => $m->ups_tracking_number,
@@ -117,6 +118,7 @@ class MailingController extends Controller
                     'risk_color' => $m->risk()->color(),
                     'current_location' => $m->latestEvent?->location,
                     'deadline' => optional($m->deadline)->toDateString(),
+                    'label_created_at' => optional($m->labelCreatedEvent?->occurred_at)->toDateString(),
                 ]),
             'issues' => $issues,
         ]);
@@ -127,6 +129,39 @@ class MailingController extends Controller
         $this->authorize('viewAny', ProposalMailing::class);
         $orgId = $request->user()->organization_id;
 
+        $mailings = $this->listQuery($request, $orgId)
+            ->paginate(20)
+            ->withQueryString()
+            ->through(fn (ProposalMailing $m) => $this->present($m));
+
+        $scope = in_array($request->string('scope')->toString(), ['domestic', 'international'], true)
+            ? $request->string('scope')->toString() : null;
+
+        return Inertia::render('Shipments/Mailings/Index', [
+            'mailings' => $mailings,
+            'filters' => [
+                'status' => $request->string('status')->toString() ?: null,
+                'filter' => $request->string('filter')->toString() ?: null,
+                'scope' => $scope,
+                'carrier' => $request->string('carrier')->toString() ?: null,
+                'q' => trim($request->string('q')->toString()) ?: null,
+                'sort' => $request->string('sort')->toString() ?: 'recent',
+                'dir' => strtolower($request->string('dir')->toString()) === 'asc' ? 'asc' : 'desc',
+            ],
+            'carrierOptions' => $this->usedCarrierOptions($orgId),
+            // Full carrier set (known + custom) for the bulk "reassign" action.
+            'reassignCarrierOptions' => $this->carrierOptions($orgId),
+        ]);
+    }
+
+    /**
+     * The shipments list query with every active filter applied — scope, carrier,
+     * the free-text search (tracking #, recipient, or linked proposal name/number),
+     * the status pill, and the dashboard drill-down filters — plus the chosen sort.
+     * Shared by the list view and the CSV export so both honour the same filters.
+     */
+    private function listQuery(Request $request, int $orgId): \Illuminate\Database\Eloquent\Builder
+    {
         $sort = $request->string('sort')->toString() ?: 'recent';
         $dir = strtolower($request->string('dir')->toString()) === 'asc' ? 'asc' : 'desc';
 
@@ -134,11 +169,22 @@ class MailingController extends Controller
         $filter = $request->string('filter')->toString();
         $scope = in_array($request->string('scope')->toString(), ['domestic', 'international'], true)
             ? $request->string('scope')->toString() : null;
+        $carrier = $request->string('carrier')->toString() ?: null;
+        $search = trim($request->string('q')->toString());
 
         $query = ProposalMailing::query()
             ->forOrganization($orgId)
-            ->with(['proposalSubmission:id,project_name,proposal_number', 'latestEvent'])
+            ->with(['proposalSubmission:id,project_name,proposal_number', 'latestEvent', 'labelCreatedEvent'])
             ->when($scope, fn ($q) => $q->where('scope', $scope))
+            ->when($carrier, fn ($q) => $q->where('carrier', $carrier))
+            ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search) {
+                $like = '%'.addcslashes($search, '%_\\').'%';
+                $w->where('ups_tracking_number', 'like', $like)
+                    ->orWhere('recipient_name', 'like', $like)
+                    ->orWhereHas('proposalSubmission', fn ($p) => $p
+                        ->where('project_name', 'like', $like)
+                        ->orWhere('proposal_number', 'like', $like));
+            }))
             ->when($request->string('status')->toString(), fn ($q, $s) => $s === 'active'
                 ? $q->active()                       // "En route" — everything not delivered/returned
                 : $q->where('status', $s))
@@ -152,21 +198,76 @@ class MailingController extends Controller
 
         $this->applySort($query, $sort, $dir);
 
-        $mailings = $query
-            ->paginate(20)
-            ->withQueryString()
-            ->through(fn (ProposalMailing $m) => $this->present($m));
+        return $query;
+    }
 
-        return Inertia::render('Shipments/Mailings/Index', [
-            'mailings' => $mailings,
-            'filters' => [
-                'status' => $request->string('status')->toString() ?: null,
-                'filter' => $filter ?: null,
-                'scope' => $scope,
-                'sort' => $sort,
-                'dir' => $dir,
-            ],
-        ]);
+    /**
+     * Download the current (filtered + sorted) shipments list as a CSV, so "what
+     * you see is what you export". Honours the same query params as the list.
+     */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorize('viewAny', ProposalMailing::class);
+        $orgId = $request->user()->organization_id;
+
+        $mailings = $this->listQuery($request, $orgId)->limit(5000)->get();
+        $filename = 'shipments-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($mailings) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, [
+                'Tracking Number', 'Carrier', 'Reference Type', 'Recipient', 'Category',
+                'Status', 'On-time', 'Current Location', 'Proposal', 'Label Created',
+                'Deadline', 'Estimated Delivery', 'Delivered On', 'Received By',
+            ]);
+
+            foreach ($mailings as $m) {
+                fputcsv($out, [
+                    (string) $m->ups_tracking_number,
+                    \App\Enums\Carrier::tryFrom($m->carrier)?->label() ?: ($m->carrier ?: ''),
+                    $m->reference_type
+                        ? (\App\Enums\JbHuntReferenceType::tryFrom($m->reference_type)?->label() ?? $m->reference_type)
+                        : '',
+                    (string) $m->recipient_name,
+                    $m->scope?->label() ?? 'Domestic',
+                    $m->status->label(),
+                    $m->risk()->label(),
+                    (string) $this->currentLocation($m),
+                    (string) ($m->proposalSubmission?->proposal_number ?? $m->proposalSubmission?->project_name),
+                    (string) optional($m->labelCreatedEvent?->occurred_at)->toDateString(),
+                    (string) optional($m->deadline)->toDateString(),
+                    (string) optional($m->scheduled_delivery)->toDateString(),
+                    (string) optional($m->delivered_at)->toDateString(),
+                    (string) $m->received_by,
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * Carriers actually present on this org's shipments, for the list's "by
+     * carrier" filter — so every option yields results. Built-in carriers show
+     * their label; custom carrier names are already human-readable.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function usedCarrierOptions(int $orgId): array
+    {
+        return ProposalMailing::query()
+            ->forOrganization($orgId)
+            ->whereNotNull('carrier')
+            ->where('carrier', '!=', '')
+            ->distinct()
+            ->orderBy('carrier')
+            ->pluck('carrier')
+            ->map(fn ($c) => [
+                'value' => (string) $c,
+                'label' => \App\Enums\Carrier::tryFrom((string) $c)?->label() ?? (string) $c,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -227,6 +328,8 @@ class MailingController extends Controller
         return Inertia::render('Shipments/Mailings/Create', [
             'prefill' => $prefill,
             'linkableProposals' => $linkable,
+            'carrierOptions' => $this->carrierOptions($orgId),
+            'referenceTypeOptions' => \App\Enums\JbHuntReferenceType::options(),
         ]);
     }
 
@@ -235,12 +338,13 @@ class MailingController extends Controller
         $this->authorize('create', ProposalMailing::class);
         $orgId = $request->user()->organization_id;
 
-        $supportedCarriers = collect(\App\Enums\Carrier::cases())
-            ->filter(fn ($c) => $c->supported())->map(fn ($c) => $c->value)->all();
-
         $data = $request->validate([
             'ups_tracking_number' => ['required', 'string', 'max:64'],
-            'carrier' => ['nullable', Rule::in($supportedCarriers)],
+            // A free-text carrier so custom/freight carriers (e.g. J.B. Hunt) can be
+            // added; known carriers are normalised back to their enum value below.
+            'carrier' => ['nullable', 'string', 'max:50'],
+            // The kind of number entered, used by carriers with reference types (J.B. Hunt).
+            'reference_type' => ['nullable', Rule::enum(\App\Enums\JbHuntReferenceType::class)],
             'scope' => ['nullable', Rule::enum(\App\Enums\ShipmentScope::class)],
             'recipient_name' => ['nullable', 'string', 'max:255'],
             'recipient_address' => ['nullable', 'string', 'max:1000'],
@@ -251,10 +355,17 @@ class MailingController extends Controller
             ],
         ]);
 
+        $carrier = $this->normalizeCarrier($data['carrier'] ?? null);
+
         $mailing = new ProposalMailing($data);
         $mailing->organization_id = $orgId;
         $mailing->created_by = $request->user()->id;
-        $mailing->carrier = $data['carrier'] ?? 'ups';
+        $mailing->carrier = $carrier;
+        $mailing->reference_type = $this->normalizeReferenceType($carrier, $data['reference_type'] ?? null);
+        // Carriers without a live integration can't be auto-synced — track manually.
+        if (! $this->carrierIsLive($carrier) && \Illuminate\Support\Facades\Schema::hasColumn('proposal_mailings', 'auto_track')) {
+            $mailing->auto_track = false;
+        }
         $mailing->save();
 
         // Auto-link to a matching proposal when the user didn't pick one.
@@ -262,12 +373,21 @@ class MailingController extends Controller
             $this->matcher->matchOne($mailing);
         }
 
+        if (! $this->carrierIsLive($carrier)) {
+            $label = \App\Enums\Carrier::tryFrom($carrier)?->label() ?? $carrier;
+
+            return redirect()->route('shipments.mailings.show', $mailing->ulid)
+                ->with('success', "Shipment created. {$label} isn't auto-tracked — set its status by hand and upload the bill of lading or labels.");
+        }
+
         try {
             // notify:false — don't alert on the initial population the user just created.
             $this->tracking->refresh($mailing, notify: false);
         } catch (\Throwable $e) {
+            $label = \App\Enums\Carrier::tryFrom($carrier)?->label() ?? 'carrier';
+
             return redirect()->route('shipments.mailings.show', $mailing->ulid)
-                ->with('warning', 'Mailing created, but the first UPS lookup failed. It will retry on the next poll.');
+                ->with('warning', "Mailing created, but the first {$label} lookup failed. It will retry on the next poll.");
         }
 
         return redirect()->route('shipments.mailings.show', $mailing->ulid)
@@ -278,7 +398,10 @@ class MailingController extends Controller
     {
         $this->authorize('create', ProposalMailing::class);
 
-        return Inertia::render('Shipments/Mailings/Bulk');
+        return Inertia::render('Shipments/Mailings/Bulk', [
+            'carrierOptions' => $this->carrierOptions($request->user()->organization_id),
+            'referenceTypeOptions' => \App\Enums\JbHuntReferenceType::options(),
+        ]);
     }
 
     /**
@@ -291,18 +414,17 @@ class MailingController extends Controller
         $this->authorize('create', ProposalMailing::class);
         $orgId = $request->user()->organization_id;
 
-        $supported = collect(\App\Enums\Carrier::cases())
-            ->filter(fn ($c) => $c->supported())->map(fn ($c) => $c->value)->all();
-
         $data = $request->validate([
             'tracking_numbers' => ['required', 'string', 'max:20000'],
-            'carrier' => ['nullable', Rule::in($supported)],
+            'carrier' => ['nullable', 'string', 'max:50'],
+            'reference_type' => ['nullable', Rule::enum(\App\Enums\JbHuntReferenceType::class)],
             'scope' => ['nullable', Rule::enum(\App\Enums\ShipmentScope::class)],
             'recipient_name' => ['nullable', 'string', 'max:255'],
             'deadline' => ['nullable', 'date'],
         ]);
 
-        $carrier = $data['carrier'] ?? 'ups';
+        $carrier = $this->normalizeCarrier($data['carrier'] ?? null);
+        $referenceType = $data['reference_type'] ?? null;
         $scope = $data['scope'] ?? 'domestic';
 
         // Split on whitespace/commas, drop separators/labels, dedupe.
@@ -314,6 +436,7 @@ class MailingController extends Controller
         $rows = $numbers->take(100)->map(fn ($tn) => [
             'tracking_number' => $tn,
             'carrier' => $carrier,
+            'reference_type' => $referenceType,
             'scope' => $scope,
             'recipient_name' => $data['recipient_name'] ?? null,
             'deadline' => $data['deadline'] ?? null,
@@ -329,7 +452,10 @@ class MailingController extends Controller
     {
         $this->authorize('create', ProposalMailing::class);
 
-        return Inertia::render('Shipments/Mailings/Import');
+        return Inertia::render('Shipments/Mailings/Import', [
+            'carrierOptions' => $this->carrierOptions($request->user()->organization_id),
+            'referenceTypeOptions' => \App\Enums\JbHuntReferenceType::options(),
+        ]);
     }
 
     /**
@@ -340,9 +466,6 @@ class MailingController extends Controller
     {
         $this->authorize('create', ProposalMailing::class);
         $orgId = $request->user()->organization_id;
-
-        $supported = collect(\App\Enums\Carrier::cases())
-            ->filter(fn ($c) => $c->supported())->map(fn ($c) => $c->value)->all();
 
         $incoming = $request->file('files', []);
         $incoming = is_array($incoming) ? $incoming : [$incoming];
@@ -364,7 +487,8 @@ class MailingController extends Controller
             'files' => ['nullable', 'array', 'max:20'],
             'files.*' => ['file', 'max:51200', 'extensions:pdf,png,jpg,jpeg,webp,gif,csv,txt,md,doc,docx'],
             'pasted_text' => ['nullable', 'string', 'max:20000'],
-            'carrier' => ['nullable', Rule::in($supported)],
+            'carrier' => ['nullable', 'string', 'max:50'],
+            'reference_type' => ['nullable', Rule::enum(\App\Enums\JbHuntReferenceType::class)],
             'scope' => ['nullable', Rule::enum(\App\Enums\ShipmentScope::class)],
             'recipient_name' => ['nullable', 'string', 'max:255'],
             'deadline' => ['nullable', 'date'],
@@ -378,7 +502,8 @@ class MailingController extends Controller
         }
 
         $defaults = [
-            'carrier' => $request->input('carrier', 'ups'),
+            'carrier' => $this->normalizeCarrier($request->input('carrier')),
+            'reference_type' => $request->input('reference_type'),
             'scope' => $request->input('scope', 'domestic'),
             'recipient_name' => $request->input('recipient_name'),
             'deadline' => $request->input('deadline'),
@@ -441,6 +566,11 @@ class MailingController extends Controller
             $mailing->organization_id = $orgId;
             $mailing->created_by = $userId;
             $mailing->carrier = $row['carrier'] ?? 'ups';
+            $mailing->reference_type = $this->normalizeReferenceType($mailing->carrier, $row['reference_type'] ?? null);
+            // Carriers without a live integration can't be auto-synced — track manually.
+            if (! $this->carrierIsLive($mailing->carrier) && \Illuminate\Support\Facades\Schema::hasColumn('proposal_mailings', 'auto_track')) {
+                $mailing->auto_track = false;
+            }
             $mailing->save();
 
             $created[] = $mailing;
@@ -449,6 +579,10 @@ class MailingController extends Controller
         $budgetUntil = microtime(true) + 20.0;
         $pending = 0;
         foreach ($created as $mailing) {
+            // Manual carriers (no live integration) aren't fetched — nothing to load.
+            if (! $this->carrierIsLive($mailing->carrier)) {
+                continue;
+            }
             if (microtime(true) >= $budgetUntil) {
                 $pending++;
 
@@ -528,6 +662,8 @@ class MailingController extends Controller
         return Inertia::render('Shipments/Mailings/Show', [
             'mailing' => $this->present($mailing, withTimeline: true),
             'linkableProposals' => $linkable,
+            'carrierOptions' => $this->carrierOptions($request->user()->organization_id),
+            'referenceTypeOptions' => \App\Enums\JbHuntReferenceType::options(),
         ]);
     }
 
@@ -541,8 +677,6 @@ class MailingController extends Controller
         $this->authorize('update', $mailing);
 
         $orgId = $request->user()->organization_id;
-        $supportedCarriers = collect(\App\Enums\Carrier::cases())
-            ->filter(fn ($c) => $c->supported())->map(fn ($c) => $c->value)->all();
 
         $data = $request->validate([
             'ups_tracking_number' => [
@@ -550,7 +684,8 @@ class MailingController extends Controller
                 Rule::unique('proposal_mailings', 'ups_tracking_number')
                     ->where('organization_id', $orgId)->ignore($mailing->id),
             ],
-            'carrier' => ['nullable', Rule::in($supportedCarriers)],
+            'carrier' => ['nullable', 'string', 'max:50'],
+            'reference_type' => ['nullable', Rule::enum(\App\Enums\JbHuntReferenceType::class)],
             'proposal_submission_id' => [
                 'nullable',
                 Rule::exists('proposal_submissions', 'id')->where('organization_id', $orgId),
@@ -567,7 +702,8 @@ class MailingController extends Controller
         ]);
 
         $mailing->ups_tracking_number = $data['ups_tracking_number'];
-        $mailing->carrier = $data['carrier'] ?? $mailing->carrier;
+        $mailing->carrier = $this->normalizeCarrier($data['carrier'] ?? $mailing->carrier);
+        $mailing->reference_type = $this->normalizeReferenceType($mailing->carrier, $data['reference_type'] ?? null);
         $mailing->proposal_submission_id = $data['proposal_submission_id'] ?? null;
         $mailing->recipient_name = $data['recipient_name'] ?? null;
         $mailing->recipient_address = $data['recipient_address'] ?? null;
@@ -590,9 +726,10 @@ class MailingController extends Controller
         }
 
         // Pause/resume automatic UPS sync so a manual override isn't reverted by
-        // the next poll. Resilient to the column not existing yet.
+        // the next poll. Resilient to the column not existing yet. Carriers without
+        // a live integration can never auto-sync, so the flag is forced off.
         if (\Illuminate\Support\Facades\Schema::hasColumn('proposal_mailings', 'auto_track')) {
-            $mailing->auto_track = $request->boolean('auto_track');
+            $mailing->auto_track = $this->carrierIsLive($mailing->carrier) && $request->boolean('auto_track');
         }
 
         $mailing->save();
@@ -608,6 +745,12 @@ class MailingController extends Controller
             ->firstOrFail();
 
         $this->authorize('update', $mailing);
+
+        if (! $this->carrierIsLive($mailing->carrier)) {
+            $label = \App\Enums\Carrier::tryFrom($mailing->carrier)?->label() ?: ($mailing->carrier ?: 'This carrier');
+
+            return back()->with('warning', "{$label} isn't auto-tracked — update its status by hand from Edit.");
+        }
 
         try {
             $this->tracking->refresh($mailing);
@@ -675,6 +818,96 @@ class MailingController extends Controller
             $linked ? "Linked {$linked} shipment(s) to a matching proposal." : 'No new proposal matches found.');
     }
 
+    /**
+     * Refresh tracking for a hand-picked set of shipments (list checkboxes →
+     * "Refresh"). Live carriers only — manual ones are skipped — and bounded by a
+     * wall-clock budget so a large selection can't run past the request timeout.
+     */
+    public function bulkRefresh(Request $request): RedirectResponse
+    {
+        $this->authorize('viewAny', ProposalMailing::class);
+        $orgId = $request->user()->organization_id;
+
+        $data = $request->validate([
+            'ulids' => ['required', 'array', 'max:200'],
+            'ulids.*' => ['string'],
+        ]);
+
+        $mailings = ProposalMailing::query()->forOrganization($orgId)
+            ->whereIn('ulid', $data['ulids'])->get();
+
+        $budgetUntil = microtime(true) + 22.0;
+        $updated = 0;
+        $skipped = 0;
+        foreach ($mailings as $m) {
+            if (! $this->carrierIsLive($m->carrier) || microtime(true) >= $budgetUntil) {
+                $skipped++;
+
+                continue;
+            }
+            try {
+                $this->tracking->refresh($m, notify: false);
+                $updated++;
+            } catch (\Throwable $e) {
+                $skipped++;
+            }
+        }
+
+        return back()->with($updated ? 'success' : 'warning',
+            $updated
+                ? "Refreshed {$updated} shipment(s)".($skipped ? " · {$skipped} skipped (manual carrier or left for the next run)" : '').'.'
+                : 'Nothing to refresh — the selected shipments are tracked manually.');
+    }
+
+    /** Reassign a set of shipments to a different carrier (list checkboxes → "Reassign"). */
+    public function bulkReassign(Request $request): RedirectResponse
+    {
+        $this->authorize('viewAny', ProposalMailing::class);
+        $orgId = $request->user()->organization_id;
+
+        $data = $request->validate([
+            'ulids' => ['required', 'array', 'max:500'],
+            'ulids.*' => ['string'],
+            'carrier' => ['required', 'string', 'max:50'],
+        ]);
+
+        $carrier = $this->normalizeCarrier($data['carrier']);
+        $mailings = ProposalMailing::query()->forOrganization($orgId)
+            ->whereIn('ulid', $data['ulids'])->get();
+
+        $hasAutoTrack = \Illuminate\Support\Facades\Schema::hasColumn('proposal_mailings', 'auto_track');
+        foreach ($mailings as $m) {
+            $m->carrier = $carrier;
+            $m->reference_type = $this->normalizeReferenceType($carrier, $m->reference_type);
+            if ($hasAutoTrack && ! $this->carrierIsLive($carrier)) {
+                $m->auto_track = false;
+            }
+            $m->save();
+        }
+
+        $label = \App\Enums\Carrier::tryFrom($carrier)?->label() ?? $carrier;
+
+        return back()->with('success', 'Reassigned '.$mailings->count()." shipment(s) to {$label}.");
+    }
+
+    /** Delete a set of shipments (list checkboxes → "Delete"). Soft-deletes. */
+    public function bulkDelete(Request $request): RedirectResponse
+    {
+        $this->authorize('viewAny', ProposalMailing::class);
+        $orgId = $request->user()->organization_id;
+
+        $data = $request->validate([
+            'ulids' => ['required', 'array', 'max:500'],
+            'ulids.*' => ['string'],
+        ]);
+
+        $deleted = ProposalMailing::query()->forOrganization($orgId)
+            ->whereIn('ulid', $data['ulids'])->delete();
+
+        return back()->with($deleted ? 'success' : 'warning',
+            $deleted ? "Deleted {$deleted} shipment(s)." : 'No shipments were deleted.');
+    }
+
     private function latestEvent(ProposalMailing $m): ?\App\Models\MailingTrackingEvent
     {
         if ($m->relationLoaded('latestEvent')) {
@@ -701,6 +934,100 @@ class MailingController extends Controller
         ])->filter()->implode("\n");
     }
 
+    /**
+     * Carriers offered in the create/edit pickers: the known enum carriers plus
+     * any custom carrier names already used in this org (so a name added once is
+     * reusable). There is no carriers table — `carrier` is a free string column.
+     *
+     * @return array<int, array{value:string, label:string}>
+     */
+    private function carrierOptions(int $orgId): array
+    {
+        $options = [];
+        foreach (\App\Enums\Carrier::cases() as $c) {
+            $options[$c->value] = $c->label();
+        }
+
+        // Custom carriers registered on the Carriers page (even with no shipments yet).
+        $org = \App\Models\Organization::find($orgId);
+        if ($org) {
+            foreach ($this->carrierRegistry->names($org) as $name) {
+                if (! isset($options[$name])) {
+                    $options[$name] = $name;
+                }
+            }
+        }
+
+        // Plus any carrier already used on a shipment.
+        $used = ProposalMailing::query()->forOrganization($orgId)
+            ->whereNotNull('carrier')->distinct()->pluck('carrier');
+        foreach ($used as $value) {
+            $value = (string) $value;
+            if ($value !== '' && ! isset($options[$value])) {
+                $options[$value] = \App\Enums\Carrier::tryFrom($value)?->label() ?? $value;
+            }
+        }
+
+        return collect($options)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values()->all();
+    }
+
+    /**
+     * Map a typed/selected carrier to its stored value: a known carrier label or
+     * value collapses to its enum value (so UPS stays 'ups'); anything else is a
+     * trimmed custom label (e.g. 'J.B. Hunt').
+     */
+    private function normalizeCarrier(?string $value): string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return 'ups';
+        }
+        foreach (\App\Enums\Carrier::cases() as $c) {
+            if (strcasecmp($c->value, $value) === 0 || strcasecmp($c->label(), $value) === 0) {
+                return $c->value;
+            }
+        }
+
+        return mb_substr($value, 0, 50);
+    }
+
+    /** Only carriers with a live tracking integration are auto-synced; the rest are manual. */
+    private function carrierIsLive(string $carrier): bool
+    {
+        $enum = \App\Enums\Carrier::tryFrom($carrier);
+        if ($enum === null || ! $enum->supported()) {
+            return false;
+        }
+
+        // J.B. Hunt has no production simulator (unlike UPS), so it only counts as
+        // live once credentialed — otherwise it stays manual (status + documents by
+        // hand) rather than fabricating data or failing every poll. Mirrors
+        // TrackingClientFactory::jbHunt() exactly: the fake only drives tests.
+        if ($enum === \App\Enums\Carrier::JbHunt) {
+            $jbh = config('services.jbhunt');
+            $credentialed = (bool) ($jbh['sync_enabled'] && $jbh['client_id'] && $jbh['client_secret']);
+
+            return $credentialed || app()->runningUnitTests();
+        }
+
+        return true;
+    }
+
+    /**
+     * Reference types only apply to carriers that use them (J.B. Hunt). For any
+     * other carrier it's null; for J.B. Hunt an unknown/empty value falls back to
+     * the default so the tracking link always resolves.
+     */
+    private function normalizeReferenceType(string $carrier, ?string $value): ?string
+    {
+        if ($carrier !== \App\Enums\Carrier::JbHunt->value) {
+            return null;
+        }
+
+        return \App\Enums\JbHuntReferenceType::tryFrom((string) $value)?->value
+            ?? \App\Enums\JbHuntReferenceType::Default->value;
+    }
+
     private function present(ProposalMailing $m, bool $withTimeline = false): array
     {
         $risk = $m->risk();
@@ -710,8 +1037,13 @@ class MailingController extends Controller
             'ulid' => $m->ulid,
             'ups_tracking_number' => $m->ups_tracking_number,
             'carrier' => $m->carrier,
-            'carrier_label' => \App\Enums\Carrier::tryFrom($m->carrier)?->label() ?? strtoupper((string) $m->carrier),
-            'tracking_url' => \App\Enums\Carrier::tryFrom($m->carrier)?->trackingUrl($m->ups_tracking_number),
+            // Known carrier → its label; a custom carrier is already a human name.
+            'carrier_label' => \App\Enums\Carrier::tryFrom($m->carrier)?->label() ?: ($m->carrier ?: 'Carrier'),
+            'tracking_url' => \App\Enums\Carrier::tryFrom($m->carrier)?->trackingUrl($m->ups_tracking_number, $m->reference_type),
+            'reference_type' => $m->reference_type,
+            'reference_type_label' => $m->reference_type
+                ? (\App\Enums\JbHuntReferenceType::tryFrom($m->reference_type)?->label() ?? $m->reference_type)
+                : null,
             'scope' => $m->scope?->value ?? 'domestic',
             'scope_label' => $m->scope?->label() ?? 'Domestic',
             'scope_color' => $m->scope?->color() ?? 'blue',
@@ -740,6 +1072,7 @@ class MailingController extends Controller
                 'proposal_number' => $m->proposalSubmission->proposal_number,
             ] : null,
             'created_at' => optional($m->created_at)->toIso8601String(),
+            'label_created_at' => optional($m->labelCreatedEvent?->occurred_at)->toDateString(),
         ];
 
         if ($withTimeline) {

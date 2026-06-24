@@ -99,6 +99,21 @@ class User extends Authenticatable
         return $this->hasOne(EmailAccount::class);
     }
 
+    /**
+     * Where notification emails are delivered. App alerts go to the user's
+     * connected work email (falling back to their login email); password-reset
+     * and email-verification links always go to the login email they entered.
+     */
+    public function routeNotificationForMail(mixed $notification): string
+    {
+        if ($notification instanceof \Illuminate\Auth\Notifications\ResetPassword
+            || $notification instanceof \Illuminate\Auth\Notifications\VerifyEmail) {
+            return $this->email;
+        }
+
+        return $this->emailAccount?->email ?: $this->email;
+    }
+
     public function followUps(): HasMany
     {
         return $this->hasMany(FollowUp::class, 'assigned_to');

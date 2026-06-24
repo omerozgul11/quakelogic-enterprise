@@ -106,6 +106,42 @@ class InventoryService
     }
 
     /**
+     * Delete a ledger entry and undo its effect: the on-hand for its
+     * (product, warehouse) is reversed by the entry's signed quantity, and every
+     * later entry's running balance is shifted to keep the history chained.
+     * Weighted-average cost is left as-is — re-count to re-baseline it if needed.
+     */
+    public function deleteMovement(Movement $movement): void
+    {
+        DB::transaction(function () use ($movement) {
+            $qty = (float) $movement->quantity; // signed: + in, − out
+
+            $stock = Stock::query()
+                ->where('inventory_product_id', $movement->inventory_product_id)
+                ->where('inventory_warehouse_id', $movement->inventory_warehouse_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($stock) {
+                $stock->quantity_on_hand = max(0, (float) $stock->quantity_on_hand - $qty);
+                $stock->save();
+            }
+
+            // Keep the running balances of later entries consistent (signed qty:
+            // decrementing by a negative value adds it back).
+            Movement::query()
+                ->where('inventory_product_id', $movement->inventory_product_id)
+                ->where('inventory_warehouse_id', $movement->inventory_warehouse_id)
+                ->where(fn ($q) => $q
+                    ->where('occurred_at', '>', $movement->occurred_at)
+                    ->orWhere(fn ($w) => $w->where('occurred_at', $movement->occurred_at)->where('id', '>', $movement->id)))
+                ->decrement('quantity_after', $qty);
+
+            $movement->delete();
+        });
+    }
+
+    /**
      * The one place stock changes. Locks (or creates) the stock row, applies a
      * signed quantity, recomputes weighted-average cost, persists the new balance
      * and writes the ledger entry. Throws if it would drive on-hand negative

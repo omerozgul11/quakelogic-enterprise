@@ -7,12 +7,16 @@ use App\Modules\Inventory\Enums\MovementType;
 use App\Modules\Inventory\Models\Movement;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Services\InventoryService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class MovementController extends Controller
 {
+    public function __construct(private readonly InventoryService $inventory) {}
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Product::class);
@@ -47,6 +51,23 @@ class MovementController extends Controller
             'filters' => $request->only(['search', 'type', 'warehouse_id']),
             'types' => collect(MovementType::cases())->map(fn ($t) => ['value' => $t->value, 'label' => $t->label()]),
             'warehouses' => Warehouse::where('organization_id', $orgId)->orderBy('name')->get(['id', 'name']),
+            'can' => ['manage' => $request->user()->can('adjust stock')],
         ]);
+    }
+
+    /**
+     * Remove a ledger entry. Reverses its effect on the on-hand and re-chains the
+     * later running balances (see InventoryService::deleteMovement).
+     */
+    public function destroy(Request $request, Movement $movement): RedirectResponse
+    {
+        abort_unless($movement->organization_id === $request->user()->organization_id, 404);
+        $product = $movement->product;
+        abort_unless($product !== null, 404);
+        $this->authorize('adjustStock', $product);
+
+        $this->inventory->deleteMovement($movement);
+
+        return back()->with('success', 'Movement removed.');
     }
 }

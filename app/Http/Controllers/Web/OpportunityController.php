@@ -309,9 +309,11 @@ class OpportunityController extends Controller
         return redirect()->route('opportunities.index')->with('success', 'Opportunity created successfully.');
     }
 
-    public function show(Request $request, Opportunity $opportunity, \App\Services\Opportunities\OpportunityHealthService $health): Response
+    public function show(Request $request, Opportunity $opportunity, \App\Services\Opportunities\OpportunityHealthService $health, \App\Services\BidSources\SamGov\SamLinkResolver $samLinks): Response
     {
         $this->authorize('view', $opportunity);
+
+        $this->ensureSamLink($opportunity, $samLinks);
 
         $opportunity->load([
             'agency', 'company.contacts:id,company_id,first_name,last_name,email,phone,title',
@@ -353,6 +355,8 @@ class OpportunityController extends Controller
                     'reasons' => $s->match_reasons,
                 ])->values()
             : [];
+
+        $opportunity->append('sam_url');
 
         return Inertia::render('Opportunities/Show', [
             'opportunity' => $opportunity,
@@ -436,6 +440,37 @@ class OpportunityController extends Controller
      * preview/download URLs. Empty when the source feed has no resource links
      * (e.g. SAM sync disabled) — the UI shows an empty state.
      *
+     * Deep-link to the exact SAM.gov notice. Older SAM opportunities were
+     * imported without a notice id, so resolve it from the solicitation number
+     * on first view and persist it (so `sam_url` links straight to the notice).
+     * Best-effort: a cached miss avoids re-hitting SAM for notices we can't match,
+     * and any failure simply leaves the search-link fallback in place.
+     */
+    private function ensureSamLink(Opportunity $opportunity, \App\Services\BidSources\SamGov\SamLinkResolver $samLinks): void
+    {
+        if ($opportunity->source?->value !== 'sam_gov'
+            || $opportunity->external_id
+            || ! $opportunity->solicitation_number
+            || \Illuminate\Support\Facades\Cache::has("sam_link_tried:{$opportunity->id}")) {
+            return;
+        }
+
+        try {
+            $noticeId = $samLinks->noticeIdForSolicitation((string) $opportunity->solicitation_number, timeout: 10);
+            if ($noticeId) {
+                $opportunity->forceFill([
+                    'external_id' => $noticeId,
+                    'source_url' => "https://sam.gov/workspace/contract/opp/{$noticeId}/view",
+                ])->saveQuietly();
+            } else {
+                \Illuminate\Support\Facades\Cache::put("sam_link_tried:{$opportunity->id}", true, now()->addDay());
+            }
+        } catch (\Throwable $e) {
+            // Non-fatal — fall back to the search link and try again on a later view.
+        }
+    }
+
+    /**
      * @return array<int,array{index:int,name:string,preview_url:string,download_url:string}>
      */
     private function samDocuments(Opportunity $opportunity): array

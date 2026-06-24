@@ -191,6 +191,34 @@ class Opportunity extends Model
         return $deadline ? (int) now()->startOfDay()->diffInDays($deadline, false) : null;
     }
 
+    /**
+     * A link to this notice on SAM.gov — guaranteed to exist for every
+     * opportunity. Prefers a stored SAM.gov URL, then the canonical
+     * /opp/{noticeId}/view page for SAM-sourced notices, and finally a SAM.gov
+     * search by the best identifier so the link always lands somewhere useful.
+     */
+    public function getSamUrlAttribute(): string
+    {
+        // SAM-sourced notices: the canonical workspace page, built from the SAM
+        // notice id (back-filled for older records by opportunities:backfill-sam-links).
+        if ($this->source === OpportunitySource::SamGov && $this->external_id) {
+            return 'https://sam.gov/workspace/contract/opp/'.$this->external_id.'/view';
+        }
+
+        // A stored SAM.gov link (e.g. a non-SAM source that still points at SAM).
+        if ($this->source_url && str_contains($this->source_url, 'sam.gov')) {
+            return $this->source_url;
+        }
+
+        // Fallback so every opportunity still lands on SAM.gov — a search by the
+        // best identifier we have.
+        $keyword = $this->solicitation_number ?: ($this->opportunity_number ?: $this->title);
+
+        return $keyword
+            ? 'https://sam.gov/search/?index=opp&keywords='.rawurlencode($keyword)
+            : 'https://sam.gov/search/?index=opp';
+    }
+
     public function scopeActive($query)
     {
         return $query->whereNotIn('status', ['awarded', 'lost', 'cancelled', 'archived']);

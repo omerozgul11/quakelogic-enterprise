@@ -23,7 +23,7 @@ class Product extends Model
 
     protected $fillable = [
         'ulid', 'organization_id', 'created_by', 'owner_id',
-        'sku', 'name', 'type', 'category', 'description', 'unit_of_measure',
+        'sku', 'name', 'type', 'category', 'description', 'image_path', 'unit_of_measure',
         'barcode', 'manufacturer', 'mpn',
         'unit_cost', 'unit_price', 'currency',
         'reorder_point', 'reorder_quantity', 'lead_time_days', 'weight',

@@ -8,6 +8,7 @@ use App\Models\OpportunityUserState;
 use App\Models\User;
 use App\Notifications\ActivityNotification;
 use App\Services\Mail\MailGatewayFactory;
+use App\Services\Mail\SystemMailGateway;
 use Illuminate\Console\Command;
 
 /**
@@ -122,28 +123,30 @@ class OpportunityDigestCommand extends Command
                 'is_automated' => true,
             ]);
 
+            // email => false: the full digest body is emailed separately below,
+            // so the bell notification stays in-app only (no duplicate email).
             $user->notify(new ActivityNotification([
                 'type' => 'opportunity',
                 'title' => $subject,
                 'message' => 'Your morning opportunity digest is in your inbox.',
                 'url' => route('opportunities.index', ['keywords' => $keywords]),
                 'icon' => 'target',
+                'email' => false,
             ]));
             $sentInbox++;
 
-            // Email the digest when the user has connected their own work mailbox,
-            // or when the global send flag is on (system mailer).
-            $sendThis = $send || (bool) $user->emailAccount?->isConnected();
-            if ($sendThis && $user->email) {
-                $ok = $gateways->forUser($user)->send($user->email, $user->name, $subject, $body);
+            // Email the full digest from the platform address to the user's
+            // connected work email (falling back to their login email).
+            $to = $user->emailAccount?->email ?: $user->email;
+            if ($to) {
+                $ok = (new SystemMailGateway())->send($to, $user->name, $subject, $body);
                 if ($ok) {
                     $emailed++;
                 }
             }
         }
 
-        $note = $send ? '' : ' · emailed only to users with a connected work email (or set FOLLOWUPS_DIGEST_SEND=true for all)';
-        $this->info(($dry ? '[dry-run] ' : '') . "Digests — users scanned: {$users->count()} · inbox: {$sentInbox} · emailed: {$emailed}{$note}");
+        $this->info(($dry ? '[dry-run] ' : '') . "Digests — users scanned: {$users->count()} · inbox: {$sentInbox} · emailed: {$emailed}");
 
         return self::SUCCESS;
     }

@@ -41,6 +41,16 @@ Schedule::command('proposals:health')->dailyAt('07:45')->withoutOverlapping();
 // the notifications table don't grow without bound.
 Schedule::command('notifications:prune')->dailyAt('03:00')->withoutOverlapping();
 
+// Daily: roll any due recurring costs/subscriptions (SaaS, rent, payroll) into
+// real expense rows and advance each schedule's next run date. Catch-up safe.
+Schedule::command('expenses:generate-recurring')->dailyAt('05:00')->withoutOverlapping();
+
+// Backstop poll for QuickBooks. Real-time sync is event-driven (the Intuit
+// webhook for QuickBooks→app, and the ExpenseObserver push for app→QuickBooks);
+// this periodic catch-up reconciles anything a webhook missed. No-ops when
+// nothing is connected; the fake client drives dev until creds are added.
+Schedule::command('quickbooks:sync')->everyFifteenMinutes()->withoutOverlapping();
+
 // Nightly database backup → gzipped dump uploaded to the S3/MinIO disk under
 // backups/, keeping the 14 most recent. The off-store copy + retention is the
 // safety net the platform previously lacked. Runs in the background so a slow

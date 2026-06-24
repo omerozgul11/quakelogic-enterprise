@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Target, FileText, Building2,
+    LayoutDashboard, Target, FileText,
     Users, Bell, LogOut, Settings, FileSearch, MessageSquare,
     BarChart3, Puzzle, Sparkles, ShieldCheck, KanbanSquare,
     Menu, X, Sun, Moon, ChevronDown, TrendingUp, Activity, BookOpen,
@@ -34,6 +34,7 @@ const sections: NavSection[] = [
     { items: [
         { label: 'Dashboard', href: '/', icon: LayoutDashboard },
         { label: 'Calendar', href: '/calendar', icon: CalendarDays },
+        { label: 'Inbox', href: '/follow-ups', icon: Inbox, permission: 'view follow ups' },
         { label: 'QuakeAI', href: '/ai', icon: Sparkles, permission: 'use ai assistant' },
         { label: 'Proposal Writer', href: '/ai/writer', icon: PenLine, permission: 'use ai assistant' },
         { label: 'Datasheet Writer', href: '/ai/datasheets', icon: ScrollText, permission: 'use ai assistant' },
@@ -54,14 +55,6 @@ const sections: NavSection[] = [
         items: [
             { label: 'Compliance', href: '/compliance', icon: ShieldCheck, permission: 'view compliance' },
             { label: 'Template Library', href: '/templates', icon: LibraryBig, permission: 'view templates' },
-        ],
-    },
-    {
-        title: 'Relationships',
-        items: [
-            { label: 'Companies/Agencies', href: '/companies', icon: Building2, permission: 'view crm' },
-            { label: 'Contacts', href: '/contacts', icon: Users, permission: 'view crm' },
-            { label: 'Inbox', href: '/follow-ups', icon: Inbox, permission: 'view follow ups' },
         ],
     },
     {
@@ -178,7 +171,7 @@ function timeAgo(iso: string | null): string {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
     const page = usePage<SharedProps>();
-    const { auth, flash, notifications_count, notifications, inbox_unread_count } = page.props;
+    const { auth, flash, notifications_count, notifications, inbox_unread_count, app } = page.props;
     const currentUrl = page.url;
     const matchedHref = activeHref(currentUrl);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -403,9 +396,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             >
                                 <Bell className="h-[18px] w-[18px]" />
                                 {notifications_count > 0 && (
-                                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white ring-2 ring-card">
-                                        {notifications_count > 9 ? '9+' : notifications_count}
-                                    </span>
+                                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
                                 )}
                             </button>
 
@@ -508,6 +499,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <Link href="/legal" className="transition-colors hover:text-foreground hover:underline" title="Terms, copyright & legal notice">
                         QuakeLogic Proposals — © {new Date().getFullYear()} QuakeLogic Inc.
                     </Link>
+                    {app?.server && (
+                        <span className="ml-1.5 text-muted-foreground/70" title="Application server">· served by {app.server}</span>
+                    )}
                 </footer>
             </div>
         </div>

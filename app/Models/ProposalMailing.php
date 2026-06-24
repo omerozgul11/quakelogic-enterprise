@@ -20,7 +20,7 @@ class ProposalMailing extends Model
 
     protected $fillable = [
         'ulid', 'organization_id', 'proposal_submission_id', 'carrier', 'scope',
-        'ups_tracking_number', 'recipient_name', 'recipient_address', 'deadline',
+        'ups_tracking_number', 'reference_type', 'recipient_name', 'recipient_address', 'deadline',
         'status', 'auto_track', 'scheduled_delivery', 'delivered_at', 'received_by', 'on_time',
         'proof_url', 'created_by',
     ];
@@ -68,6 +68,19 @@ class ProposalMailing extends Model
     public function latestEvent(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(MailingTrackingEvent::class)->latestOfMany('occurred_at');
+    }
+
+    /**
+     * The "Shipper created a label, UPS has not received the package yet" scan
+     * (UPS status codes M/MP). The earliest such event is the label-created /
+     * shipping date shown on list views.
+     */
+    public function labelCreatedEvent(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(MailingTrackingEvent::class)->ofMany(
+            ['occurred_at' => 'min'],
+            fn (Builder $query) => $query->whereIn('code', ['M', 'MP']),
+        );
     }
 
     public function documents(): HasMany

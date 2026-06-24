@@ -48,6 +48,24 @@ class DocumentController extends Controller
     {
         $this->authorize('update', $proposalSubmission);
 
+        // Multi-file drag-and-drop: store every dropped file as a plain
+        // attachment (no AI auto-fill — that's the single-file "read" path below).
+        if ($request->hasFile('files')) {
+            $request->validate([
+                'files' => 'required|array|max:25',
+                'files.*' => 'file|max:102400|mimetypes:application/pdf,image/jpeg,image/png|mimes:pdf,jpg,jpeg,png',
+                'document_type' => 'nullable|string|max:100',
+            ]);
+
+            $count = 0;
+            foreach ($request->file('files') as $dropped) {
+                $this->persistProposalFile($proposalSubmission, $dropped, $request->input('document_type'), $request->user()->id);
+                $count++;
+            }
+
+            return back()->with('success', $count . ' file' . ($count === 1 ? '' : 's') . ' uploaded.');
+        }
+
         $request->validate([
             // Security: only PDF and image files are accepted. Office/text formats
             // and archives are rejected. Validate by sniffed content type
@@ -74,13 +92,21 @@ class DocumentController extends Controller
             return back()->with('warning', 'Document uploaded, but no readable text was found.');
         }
 
+        $this->persistProposalFile($proposalSubmission, $file, $request->input('document_type'), $request->user()->id);
+
+        return back()->with('success', 'File uploaded successfully.');
+    }
+
+    /** Store one uploaded file on the private disk and record it as a ProposalFile. */
+    private function persistProposalFile(ProposalSubmission $proposalSubmission, \Illuminate\Http\UploadedFile $file, ?string $documentType, int $userId): ProposalFile
+    {
         $storedName = Str::ulid() . '.' . $file->getClientOriginalExtension();
         $path = $file->storeAs("proposals/{$proposalSubmission->id}", $storedName, 'local');
 
-        ProposalFile::create([
+        return ProposalFile::create([
             'ulid' => (string) Str::ulid(),
             'proposal_submission_id' => $proposalSubmission->id,
-            'uploaded_by' => $request->user()->id,
+            'uploaded_by' => $userId,
             'display_name' => $file->getClientOriginalName(),
             'original_filename' => $file->getClientOriginalName(),
             'stored_filename' => $storedName,
@@ -89,13 +115,11 @@ class DocumentController extends Controller
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),
             'checksum' => hash_file('sha256', $file->getRealPath()),
-            'document_type' => $request->input('document_type'),
+            'document_type' => $documentType,
             'status' => 'uploaded',
             'version' => 1,
             'is_current_version' => true,
         ]);
-
-        return back()->with('success', 'File uploaded successfully.');
     }
 
     public function previewProposalFile(Request $request, ProposalSubmission $proposalSubmission, ProposalFile $file): mixed

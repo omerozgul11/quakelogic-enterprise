@@ -308,6 +308,20 @@ class RolesPermissionsSeeder extends Seeder
             }
         }
 
+        // Expenses section: same posture — everyone reaches + views it; everyone
+        // except Read Only manages expenses (create/edit/approve/reimburse).
+        $expensesView = Permission::whereIn('name', ['access expenses', 'view expenses'])->pluck('id');
+        $expensesManage = Permission::whereIn('name', ['manage expenses'])->pluck('id');
+        foreach (Role::all(['id', 'name']) as $role) {
+            $grant = $role->name === 'Read Only' ? $expensesView : $expensesView->merge($expensesManage);
+            foreach ($grant as $permId) {
+                DB::table('role_has_permissions')->updateOrInsert([
+                    'permission_id' => $permId,
+                    'role_id' => $role->id,
+                ]);
+            }
+        }
+
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
     }
 }

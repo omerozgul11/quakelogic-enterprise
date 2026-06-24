@@ -90,12 +90,16 @@ export function StockOpModal({ open, onClose, op, product, warehouses, defaultWa
                             {err('to_warehouse_id') && <p className="mt-1 text-xs text-destructive">{err('to_warehouse_id')}</p>}
                         </div>
                     </div>
-                ) : (
+                ) : warehouses.length > 0 ? (
                     <div>
                         <label className="label">Warehouse *</label>
                         <Select className="w-full" value={form.data.warehouse_id} onChange={v => form.setData('warehouse_id', v)} options={whOptions} placeholder="Select…" />
                         {err('warehouse_id') && <p className="mt-1 text-xs text-destructive">{err('warehouse_id')}</p>}
                     </div>
+                ) : (
+                    <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+                        Stock is tracked in your <span className="font-medium text-foreground">Main Warehouse</span> — created automatically the first time.
+                    </p>
                 )}
 
                 {(op === 'receive' || op === 'issue' || op === 'transfer') && (

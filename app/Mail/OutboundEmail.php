@@ -15,14 +15,14 @@ class OutboundEmail extends Mailable
     public function __construct(
         public string $subjectLine,
         public string $bodyText,
-        public ?string $replyTo = null,
+        public ?string $replyToAddress = null,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
             subject: $this->subjectLine,
-            replyTo: $this->replyTo ? [$this->replyTo] : [],
+            replyTo: $this->replyToAddress ? [$this->replyToAddress] : [],
         );
     }
 

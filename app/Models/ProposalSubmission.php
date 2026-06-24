@@ -22,7 +22,7 @@ class ProposalSubmission extends Model
         'ulid', 'organization_id', 'opportunity_id', 'created_by', 'updated_by',
         'owner_id', 'proposal_manager_id', 'agency_id', 'company_id',
         'proposal_number', 'solicitation_number', 'project_name', 'proposal_type', 'status',
-        'submission_channel', 'submission_methods', 'submission_confirmation_number',
+        'submission_channel', 'submission_methods', 'submission_portal_url', 'submission_confirmation_number',
         'due_date', 'submission_date', 'award_date', 'expected_award_date',
         'last_client_contact_at', 'health_escalation_level',
         'proposal_value', 'award_value', 'win_probability', 'currency', 'estimated_margin',

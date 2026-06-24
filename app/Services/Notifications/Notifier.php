@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Enums\ProjectStatus;
+use App\Enums\ProposalStatus;
 use App\Models\Crm\Project;
 use App\Models\Crm\Task as CrmTask;
 use App\Models\Opportunity;
@@ -52,6 +53,7 @@ class Notifier
             'message' => trim($proposal->proposal_number . ' · ' . $proposal->project_name . ' — assigned by ' . $actor->name),
             'url' => route('proposals.show', $proposal),
             'icon' => 'user-check',
+            'email' => true,
         ]));
     }
 
@@ -87,6 +89,42 @@ class Notifier
             'message' => trim($proposal->proposal_number . ' is ' . $when . $on),
             'url' => route('proposals.show', $proposal),
             'icon' => 'alarm-clock',
+            'email' => true,
+        ]));
+    }
+
+    /**
+     * A proposal's status changed — notify the owner and the proposal's attached
+     * team members, except whoever made the change (so the editor — owner or not
+     * — isn't pinged about their own edit). Emailed, since it's a change to a
+     * proposal the recipient is responsible for.
+     */
+    public function proposalStatusChanged(ProposalSubmission $proposal, ProposalStatus $from, ProposalStatus $to, User $actor): void
+    {
+        $userIds = array_values(array_filter(array_unique(array_merge(
+            [$proposal->owner_id],
+            $proposal->teamMembers()->pluck('user_id')->all(),
+        ))));
+        if (!$userIds) {
+            return;
+        }
+
+        $recipients = User::whereIn('id', $userIds)
+            ->where('is_active', true)
+            ->where('id', '!=', $actor->id)
+            ->get()
+            ->filter(fn (User $u) => ($u->notification_preferences['channels']['proposal_update'] ?? true) !== false);
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new ActivityNotification([
+            'type' => 'proposal',
+            'title' => 'Status changed: ' . $proposal->project_name,
+            'message' => trim($proposal->proposal_number . ' moved from ' . $from->label() . ' to ' . $to->label() . ' by ' . $actor->name),
+            'url' => route('proposals.show', $proposal),
+            'icon' => 'refresh-cw',
+            'email' => true,
         ]));
     }
 
@@ -200,6 +238,7 @@ class Notifier
             'message' => trim($proposal->proposal_number . " — needs follow-up (escalation tier {$tier}d). Log a client contact to clear this."),
             'url' => route('proposals.show', $proposal),
             'icon' => 'heart-pulse',
+            'email' => true,
         ]));
     }
 
@@ -259,6 +298,7 @@ class Notifier
             'message' => trim($proposal->proposal_number . ' is pending award' . $waited . ' — check for a decision or follow up with the client.'),
             'url' => route('proposals.show', $proposal),
             'icon' => 'hourglass',
+            'email' => true,
         ]));
     }
 

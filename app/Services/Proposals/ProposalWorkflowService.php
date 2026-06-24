@@ -10,11 +10,11 @@ use Illuminate\Validation\ValidationException;
 class ProposalWorkflowService
 {
     public const ALLOWED_TRANSITIONS = [
-        'in_progress' => ['submitted'],
+        'in_progress' => ['submitted', 'protested'],
         'submitted' => ['award_pending', 'awarded', 'lost', 'protested'],
         'award_pending' => ['submitted', 'awarded', 'lost', 'protested'],
         'awarded' => ['completed', 'submitted', 'protested'],
-        'completed' => ['awarded'],
+        'completed' => ['awarded', 'protested'],
         // A lost proposal can be reopened — it must never be a dead-end the user
         // can't move out of.
         'lost' => ['submitted', 'awarded', 'in_progress', 'protested'],
@@ -130,6 +130,15 @@ class ProposalWorkflowService
             // (idempotent + gated by the org's project settings). Never blocks
             // the status change — handleProposalAwarded swallows + logs failures.
             app(\App\Services\Crm\ProjectCreationService::class)->handleProposalAwarded($proposal, $user);
+        }
+
+        // Notify everyone attached to the proposal of the status change (in-app +
+        // email). Never block the transition on a notification failure.
+        try {
+            app(\App\Services\Notifications\Notifier::class)
+                ->proposalStatusChanged($proposal, $currentStatus, $newStatus, $user);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Proposal status-change notification failed', ['proposal' => $proposal->id, 'error' => $e->getMessage()]);
         }
 
         return $proposal->refresh();

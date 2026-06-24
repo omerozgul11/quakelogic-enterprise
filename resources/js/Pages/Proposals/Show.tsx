@@ -7,6 +7,7 @@ import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
 import { Card, CardHeader, CardTitle, CardContent } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
+import { FileDropzone } from '@/Components/ui/FileDropzone';
 import { formatCurrency, formatDate, formatDateTime, healthDotClass, ProposalHealth, proposalTypeLabel, proposalTypeColor, proposalTypeHasValue } from '@/Lib/utils';
 import { ProposalSubmission, SharedProps } from '@/Types';
 import { ArrowLeft, FileText, Upload, Download, Users, ChevronRight, ChevronLeft, Sparkles, Building2, MessageSquare, Pencil, Eye, Trash2, Lock, ExternalLink, CheckCircle } from 'lucide-react';
@@ -118,7 +119,7 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
     const [showUpload, setShowUpload] = useState(false);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
     const [editing, setEditing] = useState(false);
-    const uploadForm = useForm({ file: null as File | null, document_type: '' });
+    const uploadForm = useForm({ files: [] as File[], document_type: '' });
 
     const detailsForm = useForm({
         project_name: proposal.project_name ?? '',
@@ -140,6 +141,7 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
     const editTypeHasValue = proposalTypeHasValue(detailsForm.data.proposal_type);
 
     const submissionMethods = (proposal as { submission_methods?: string[] }).submission_methods ?? [];
+    const submissionPortalUrl = (proposal as { submission_portal_url?: string | null }).submission_portal_url ?? null;
     const detailRows: Array<[string, string | null | undefined]> = [
         ['Type', proposalTypeLabel(proposalType)],
         ['Company', proposal.company?.name],
@@ -211,6 +213,7 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
 
     const handleUpload = (e: React.FormEvent) => {
         e.preventDefault();
+        if (uploadForm.data.files.length === 0) return;
         uploadForm.post(`/proposals/${proposal.id}/files`, {
             forceFormData: true,
             onSuccess: () => { setShowUpload(false); uploadForm.reset(); },
@@ -457,6 +460,20 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
                                                 </div>
                                             ))}
                                         </dl>
+                                        {submissionPortalUrl && submissionMethods.includes('portal') && (
+                                            <div className="flex items-center justify-between gap-3 border-b border-border py-2.5">
+                                                <dt className="shrink-0 text-sm text-muted-foreground">Submission Portal</dt>
+                                                <a
+                                                    href={submissionPortalUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-primary hover:underline"
+                                                >
+                                                    <span className="truncate">Open submission portal</span>
+                                                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                                </a>
+                                            </div>
+                                        )}
                                         {proposal.scope_summary && (
                                             <div className="mt-4 border-t border-border pt-4">
                                                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope Summary</p>
@@ -512,20 +529,19 @@ export default function ProposalShow({ proposal, createdBy, stepNav, countdown, 
                             <CardContent>
                                 {showUpload && (
                                     <form onSubmit={handleUpload} className="mb-4 space-y-3 rounded-xl border border-border bg-secondary/40 p-4">
-                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png"
-                                            onChange={e => uploadForm.setData('file', e.target.files?.[0] ?? null)}
-                                            className="w-full text-sm text-muted-foreground" required />
-                                        <input type="text" placeholder="Document type (optional)" value={uploadForm.data.document_type}
+                                        <FileDropzone
+                                            files={uploadForm.data.files}
+                                            onChange={fs => uploadForm.setData('files', fs)}
+                                            hint="Drop one or more PDF / image files here. Up to 100 MB each."
+                                        />
+                                        <input type="text" placeholder="Document type (optional — applied to all)" value={uploadForm.data.document_type}
                                             onChange={e => uploadForm.setData('document_type', e.target.value)} className="input" />
-                                        <p className="text-xs text-muted-foreground">
-                                            <Sparkles className="mr-1 inline h-3 w-3 text-primary" />
-                                            Only PDF and image (JPEG/PNG) files are accepted. PDFs are read automatically to fill in any missing details.
-                                        </p>
+                                        {uploadForm.errors.files && <p className="text-xs text-destructive">{uploadForm.errors.files}</p>}
                                         <div className="flex gap-2">
-                                            <Button type="submit" size="sm" disabled={uploadForm.processing}>
-                                                {uploadForm.processing ? 'Uploading…' : 'Upload'}
+                                            <Button type="submit" size="sm" disabled={uploadForm.processing || uploadForm.data.files.length === 0}>
+                                                {uploadForm.processing ? 'Uploading…' : `Upload${uploadForm.data.files.length ? ` ${uploadForm.data.files.length} file${uploadForm.data.files.length === 1 ? '' : 's'}` : ''}`}
                                             </Button>
-                                            <Button type="button" variant="secondary" size="sm" onClick={() => setShowUpload(false)}>Cancel</Button>
+                                            <Button type="button" variant="secondary" size="sm" onClick={() => { setShowUpload(false); uploadForm.reset(); }}>Cancel</Button>
                                         </div>
                                     </form>
                                 )}

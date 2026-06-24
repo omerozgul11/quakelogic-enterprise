@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Notifications\ActivityNotification;
 use App\Services\Mail\MailGatewayFactory;
+use App\Services\Mail\SystemMailGateway;
 use App\Services\Opportunities\OpportunityOversightService;
 use Illuminate\Console\Command;
 
@@ -81,17 +82,21 @@ class ExecutiveBriefingCommand extends Command
                     'is_automated' => true,
                 ]);
 
+                // email => false: the full briefing is emailed separately below.
                 $user->notify(new ActivityNotification([
                     'type' => 'opportunity',
                     'title' => 'Executive briefing ready',
                     'message' => $subject,
                     'url' => route('dashboard.opportunities'),
                     'icon' => 'gauge',
+                    'email' => false,
                 ]));
                 $sent++;
 
-                if ($user->emailAccount?->isConnected() && $user->email) {
-                    $gateways->forUser($user)->send($user->email, $user->name, $subject, $body);
+                // From the platform address to the user's connected work email.
+                $to = $user->emailAccount?->email ?: $user->email;
+                if ($to) {
+                    (new SystemMailGateway())->send($to, $user->name, $subject, $body);
                 }
             }
         }

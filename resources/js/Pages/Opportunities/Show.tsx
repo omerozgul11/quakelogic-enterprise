@@ -139,7 +139,13 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, t
                                     <InfoRow label="Set-Aside" value={opportunity.set_aside_type} />
                                     <InfoRow label="Place of Performance" value={opportunity.place_of_performance} />
                                     <InfoRow label="Source" value={<span className="chip">{sourceLabel(opportunity.source)}</span>} />
-                                    {opportunity.source_url && (
+                                    <InfoRow label="SAM.gov" value={
+                                        <a href={opportunity.sam_url} target="_blank" rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-primary hover:underline">
+                                            View on SAM.gov <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                    } />
+                                    {opportunity.source_url && opportunity.source !== 'sam_gov' && (
                                         <InfoRow label="Source Link" value={
                                             <a href={opportunity.source_url} target="_blank" rel="noopener noreferrer"
                                                 className="inline-flex items-center gap-1 text-primary hover:underline">
@@ -175,11 +181,9 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, t
                                 {samDocuments.length === 0 ? (
                                     <div className="text-sm text-muted-foreground">
                                         <p>This SAM.gov notice has no downloadable attachments — the details are in the description, or behind the notice's portal link.</p>
-                                        {opportunity.source_url && (
-                                            <a href={opportunity.source_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
-                                                View the full notice on SAM.gov <ExternalLink className="h-3 w-3" />
-                                            </a>
-                                        )}
+                                        <a href={opportunity.sam_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                            View the full notice on SAM.gov <ExternalLink className="h-3 w-3" />
+                                        </a>
                                     </div>
                                 ) : (
                                     <div className="space-y-2">

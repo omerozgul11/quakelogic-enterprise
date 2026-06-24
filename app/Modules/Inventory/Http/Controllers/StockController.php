@@ -27,7 +27,7 @@ class StockController extends Controller
 
         $this->inventory->receive(
             $product,
-            $this->warehouse($request, $data['warehouse_id']),
+            $this->warehouse($request, $data['warehouse_id'] ?? null),
             (float) $data['quantity'],
             (float) ($data['unit_cost'] ?? 0),
             $this->opts($request, $data),
@@ -43,7 +43,7 @@ class StockController extends Controller
 
         return $this->guarded(fn () => $this->inventory->issue(
             $product,
-            $this->warehouse($request, $data['warehouse_id']),
+            $this->warehouse($request, $data['warehouse_id'] ?? null),
             (float) $data['quantity'],
             $this->opts($request, $data),
         ), 'Stock issued.');
@@ -61,7 +61,7 @@ class StockController extends Controller
 
         return $this->guarded(fn () => $this->inventory->adjust(
             $product,
-            $this->warehouse($request, $data['warehouse_id']),
+            $this->warehouse($request, $data['warehouse_id'] ?? null),
             (float) $data['delta'],
             $this->opts($request, $data),
         ), 'Stock adjusted.');
@@ -78,7 +78,7 @@ class StockController extends Controller
 
         $this->inventory->count(
             $product,
-            $this->warehouse($request, $data['warehouse_id']),
+            $this->warehouse($request, $data['warehouse_id'] ?? null),
             (float) $data['counted_quantity'],
             $this->opts($request, $data),
         );
@@ -131,12 +131,31 @@ class StockController extends Controller
 
     private function warehouseRule(Request $request): array
     {
-        return ['required', Rule::exists('inventory_warehouses', 'id')->where('organization_id', $request->user()->organization_id)];
+        // Optional — when omitted, stock lands in the org's default warehouse
+        // (created on first use), so adjusting stock needs no warehouse setup.
+        return ['nullable', Rule::exists('inventory_warehouses', 'id')->where('organization_id', $request->user()->organization_id)];
     }
 
-    private function warehouse(Request $request, int|string $id): Warehouse
+    private function warehouse(Request $request, int|string|null $id): Warehouse
     {
-        return Warehouse::where('organization_id', $request->user()->organization_id)->findOrFail($id);
+        $orgId = $request->user()->organization_id;
+
+        if ($id) {
+            return Warehouse::where('organization_id', $orgId)->findOrFail($id);
+        }
+
+        // Fall back to the org's default warehouse, creating a "Main Warehouse"
+        // the first time so stock can be tracked without any warehouse setup.
+        return Warehouse::where('organization_id', $orgId)->orderByDesc('is_default')->orderBy('id')->first()
+            ?? Warehouse::create([
+                'organization_id' => $orgId,
+                'created_by' => $request->user()->id,
+                'name' => 'Main Warehouse',
+                'code' => 'MAIN',
+                'type' => 'main',
+                'is_default' => true,
+                'is_active' => true,
+            ]);
     }
 
     /** @return array<string,mixed> */

@@ -29,6 +29,9 @@ export interface Opportunity {
     solicitation_number?: string;
     source: string;
     external_id?: string;
+    source_url?: string;
+    /** Always-present link to the notice on SAM.gov (appended by the backend). */
+    sam_url: string;
     status: string;
     agency_name?: string;
     naics_code?: string;
@@ -185,7 +188,7 @@ export interface Impersonation {
 export interface SharedProps {
     auth: { user: User | null };
     flash: FlashMessages;
-    app: { name: string; version: string; switcher: AppLink[] };
+    app: { name: string; version: string; server: string; switcher: AppLink[] };
     notifications_count: number;
     notifications: NotificationItem[];
     inbox_unread_count: number;

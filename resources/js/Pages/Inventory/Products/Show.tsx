@@ -17,6 +17,8 @@ interface Product {
     id: number; ulid: string; sku: string; name: string;
     type: string; type_label: string; type_color: string;
     category: string | null; description: string | null; unit_of_measure: string;
+    image_url: string | null;
+    metadata: Record<string, string> | null;
     barcode: string | null; manufacturer: string | null; mpn: string | null;
     unit_cost: number; unit_price: number; currency: string;
     reorder_point: number | null; reorder_quantity: number | null;
@@ -35,6 +37,7 @@ interface Props {
     warehouses: WarehouseOption[];
     movement_types: { value: string; label: string }[];
     types: { value: string; label: string }[];
+    currencies: { value: string; label: string; symbol?: string }[];
     can: { manage: boolean; adjust: boolean };
 }
 
@@ -43,11 +46,12 @@ function when(iso: string | null): string {
     return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ProductShow({ product, stocks, movements, warehouses, types, can }: Props) {
+export default function ProductShow({ product, stocks, movements, warehouses, types, currencies, can }: Props) {
     const [editOpen, setEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [op, setOp] = useState<StockOp | null>(null);
+    const [delMovement, setDelMovement] = useState<MovementRow | null>(null);
 
     const confirmDelete = () => {
         setProcessing(true);
@@ -55,7 +59,6 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
     };
 
     const isLow = product.reorder_point !== null && product.total_on_hand <= product.reorder_point;
-    const noWarehouses = warehouses.length === 0;
 
     const opButtons: { op: StockOp; label: string; icon: React.ComponentType<{ className?: string }>; variant?: 'secondary' }[] = [
         { op: 'receive', label: 'Receive', icon: PlusCircle },
@@ -89,9 +92,16 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                 <div className="card-surface mb-6 p-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
-                                <Package className="h-7 w-7" />
-                            </div>
+                            {product.image_url ? (
+                                <a href={product.image_url} target="_blank" rel="noopener noreferrer" title="View full image"
+                                    className="block h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-border">
+                                    <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+                                </a>
+                            ) : (
+                                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+                                    <Package className="h-7 w-7" />
+                                </div>
+                            )}
                             <div>
                                 <h1 className="text-2xl font-bold tracking-tight text-foreground">{product.name}</h1>
                                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -121,14 +131,27 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                         <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4">
                             {opButtons.map(b => (
                                 <Button key={b.op} variant="secondary" size="sm" icon={b.icon}
-                                    onClick={() => setOp(b.op)} disabled={noWarehouses}>
+                                    onClick={() => setOp(b.op)}>
                                     {b.label}
                                 </Button>
                             ))}
-                            {noWarehouses && <span className="self-center text-xs text-muted-foreground">Add a warehouse first to move stock.</span>}
                         </div>
                     )}
                     {product.description && <p className="mt-4 whitespace-pre-line border-t border-border pt-4 text-sm text-muted-foreground">{product.description}</p>}
+
+                    {product.metadata && Object.keys(product.metadata).length > 0 && (
+                        <div className="mt-4 border-t border-border pt-4">
+                            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground/70">Additional details</h3>
+                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+                                {Object.entries(product.metadata).map(([key, value]) => (
+                                    <div key={key}>
+                                        <dt className="text-xs text-muted-foreground">{key}</dt>
+                                        <dd className="text-sm font-medium text-foreground">{String(value)}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -170,7 +193,10 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                     </Card>
 
                     <Card className="p-5 lg:col-span-2">
-                        <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><ArrowLeftRight className="h-4 w-4" /> Movement history</h2>
+                        <div className="mb-3 flex items-center justify-between">
+                            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><ArrowLeftRight className="h-4 w-4" /> Movement history</h2>
+                            {can.adjust && <Button size="sm" variant="secondary" icon={PlusCircle} onClick={() => setOp('adjust')}>Add</Button>}
+                        </div>
                         {movements.length === 0 ? (
                             <p className="py-4 text-sm text-muted-foreground">No movements yet.</p>
                         ) : (
@@ -179,6 +205,7 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                                     <thead><tr className="text-left text-xs uppercase text-muted-foreground/70">
                                         <th className="pb-2">When</th><th className="pb-2">Type</th><th className="pb-2">Warehouse</th>
                                         <th className="pb-2 text-right">Qty</th><th className="pb-2 text-right">Balance</th><th className="pb-2">Note</th><th className="pb-2">By</th>
+                                        {can.adjust && <th className="pb-2" />}
                                     </tr></thead>
                                     <tbody className="divide-y divide-border">
                                         {movements.map(m => (
@@ -190,6 +217,11 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                                                 <td className="py-2 text-right text-foreground">{m.quantity_after}</td>
                                                 <td className="py-2 max-w-[180px] truncate text-muted-foreground" title={m.note ?? ''}>{m.note || '—'}</td>
                                                 <td className="py-2 text-muted-foreground">{m.by || '—'}</td>
+                                                {can.adjust && (
+                                                    <td className="py-2 text-right">
+                                                        <button onClick={() => setDelMovement(m)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete movement"><Trash2 className="h-4 w-4" /></button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -200,7 +232,7 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                 </div>
             </div>
 
-            {editOpen && <ProductFormModal open onClose={() => setEditOpen(false)} product={product} types={types} />}
+            {editOpen && <ProductFormModal open onClose={() => setEditOpen(false)} product={product} types={types} currencies={currencies} />}
             {op && (
                 <StockOpModal
                     key={op}
@@ -219,6 +251,13 @@ export default function ProductShow({ product, stocks, movements, warehouses, ty
                 processing={processing}
                 title="Delete product?"
                 message={<>This soft-deletes <span className="font-medium text-foreground">{product.name}</span>. Stock history is retained.</>}
+            />
+            <ConfirmDialog
+                open={!!delMovement}
+                onClose={() => setDelMovement(null)}
+                onConfirm={() => { if (delMovement) router.delete(`/inventory/movements/${delMovement.id}`, { preserveScroll: true, onFinish: () => setDelMovement(null) }); }}
+                title="Delete movement?"
+                message={delMovement ? <>This removes the entry and reverses its effect on on-hand ({delMovement.quantity > 0 ? '+' : ''}{delMovement.quantity} {product.unit_of_measure}).</> : ''}
             />
         </InventoryLayout>
     );

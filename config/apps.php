@@ -42,68 +42,18 @@ return [
             'current' => false,
         ],
         [
-            'key' => 'inventory',
-            'name' => 'Inventory',
-            'description' => 'Product master, stock & warehouses',
-            'icon' => 'boxes',
-            // A section of this app (not a separate site): /inventory.
-            'url' => '/inventory',
+            'key' => 'expenses',
+            'name' => 'Expenses',
+            'description' => 'Expense tracking, budgets & reimbursements',
+            'icon' => 'receipt',
+            // A section of this app (not a separate site): /expenses.
+            'url' => '/expenses',
             'current' => false,
         ],
-        [
-            'key' => 'procurement',
-            'name' => 'Procurement',
-            'description' => 'Suppliers & purchase orders',
-            'icon' => 'shopping-cart',
-            // A section of this app (not a separate site): /procurement.
-            'url' => '/procurement',
-            'current' => false,
-        ],
-        [
-            'key' => 'manufacturing',
-            'name' => 'Manufacturing',
-            'description' => 'BOMs & work orders',
-            'icon' => 'factory',
-            // A section of this app (not a separate site): /manufacturing.
-            'url' => '/manufacturing',
-            'current' => false,
-        ],
-        [
-            'key' => 'assets',
-            'name' => 'Assets',
-            'description' => 'Instrument registry & maintenance',
-            'icon' => 'cpu',
-            // A section of this app (not a separate site): /assets.
-            'url' => '/assets',
-            'current' => false,
-        ],
-        [
-            'key' => 'calibration',
-            'name' => 'Calibration',
-            'description' => 'NIST-traceable certificates & due dates',
-            'icon' => 'badge-check',
-            // A section of this app (not a separate site): /calibration.
-            'url' => '/calibration',
-            'current' => false,
-        ],
-        [
-            'key' => 'tickets',
-            'name' => 'Service Desk',
-            'description' => 'Support, service & RMA tickets',
-            'icon' => 'life-buoy',
-            // A section of this app (not a separate site): /tickets.
-            'url' => '/tickets',
-            'current' => false,
-        ],
-        [
-            'key' => 'finance',
-            'name' => 'Finance',
-            'description' => 'Receivables, payments & credit notes',
-            'icon' => 'landmark',
-            // A section of this app (not a separate site): /finance.
-            'url' => '/finance',
-            'current' => false,
-        ],
+        // The Enterprise Hub sections — Finance (AR), Inventory, Procurement,
+        // Manufacturing, Assets, Calibration and Service Desk — are reached from
+        // inside the CRM section's sidebar (grouped nav), not as standalone hub
+        // apps, so they intentionally have no app-switcher entries.
     ],
 
 ];

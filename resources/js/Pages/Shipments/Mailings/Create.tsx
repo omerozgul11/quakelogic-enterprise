@@ -3,6 +3,7 @@ import { ArrowLeft, Truck } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Select } from '@/Components/ui/Select';
 import { Combobox } from '@/Components/ui/Combobox';
+import { CarrierField } from '@/Components/ui/CarrierField';
 
 interface LinkableProposal {
     id: number;
@@ -18,12 +19,15 @@ interface Props {
         recipient_address: string | null;
     } | null;
     linkableProposals: LinkableProposal[];
+    carrierOptions: { value: string; label: string }[];
+    referenceTypeOptions: { value: string; label: string }[];
 }
 
-export default function MailingsCreate({ prefill, linkableProposals }: Props) {
+export default function MailingsCreate({ prefill, linkableProposals, carrierOptions, referenceTypeOptions }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         ups_tracking_number: '',
         carrier: 'ups',
+        reference_type: 'orderNbr',
         scope: 'domestic',
         proposal_submission_id: prefill?.proposal_submission_id ? String(prefill.proposal_submission_id) : '',
         recipient_name: prefill?.recipient_name ?? '',
@@ -59,12 +63,14 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <label className="label">Carrier</label>
-                            <Select
+                            <CarrierField
                                 value={data.carrier}
                                 onChange={v => setData('carrier', v)}
-                                options={[{ value: 'ups', label: 'UPS' }]}
+                                options={carrierOptions}
                                 className="w-full"
                             />
+                            {errors.carrier && <p className="mt-1.5 text-sm text-destructive">{errors.carrier}</p>}
+                            <p className="mt-1.5 text-xs text-muted-foreground">UPS and J.B. Hunt are tracked live. Other carriers are tracked manually.</p>
                         </div>
                         <div>
                             <label className="label">Category</label>
@@ -90,6 +96,20 @@ export default function MailingsCreate({ prefill, linkableProposals }: Props) {
                         />
                         {errors.ups_tracking_number && <p className="mt-1.5 text-sm text-destructive">{errors.ups_tracking_number}</p>}
                     </div>
+
+                    {data.carrier === 'jbhunt' && (
+                        <div>
+                            <label className="label">Reference type</label>
+                            <Select
+                                value={data.reference_type}
+                                onChange={v => setData('reference_type', v)}
+                                options={referenceTypeOptions}
+                                className="w-full"
+                            />
+                            {errors.reference_type && <p className="mt-1.5 text-sm text-destructive">{errors.reference_type}</p>}
+                            <p className="mt-1.5 text-xs text-muted-foreground">What kind of number this is, so the J.B. Hunt tracking link opens the right shipment.</p>
+                        </div>
+                    )}
 
                     {linkableProposals.length > 0 && (
                         <div>

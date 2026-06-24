@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, usePage } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import { cn } from '@/Lib/utils';
 import { Logo } from '@/Components/ui/Logo';
-import { ChevronDown, LayoutDashboard, FileText, Truck, LayoutGrid, ExternalLink, FolderKanban, ContactRound, Boxes, ShoppingCart, Factory, Cpu, BadgeCheck, LifeBuoy, Landmark } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, FileText, Truck, LayoutGrid, ExternalLink, FolderKanban, ContactRound, Boxes, ShoppingCart, Factory, Cpu, BadgeCheck, LifeBuoy, Landmark, Receipt } from 'lucide-react';
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
     'file-text': FileText,
@@ -18,6 +19,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
     'badge-check': BadgeCheck,
     'life-buoy': LifeBuoy,
     landmark: Landmark,
+    receipt: Receipt,
 };
 
 /**
@@ -25,11 +27,55 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
  * entries link internally via Inertia; other apps are separate deployments
  * reached by their own URL (a same-tab redirect).
  */
-export function AppSwitcher({ onNavigate }: { onNavigate?: () => void }) {
+export function AppSwitcher({ onNavigate, activeKey }: { onNavigate?: () => void; activeKey?: string }) {
     const pageData = usePage<SharedProps>();
     const { app } = pageData.props;
     const path = pageData.url.split('?')[0];
     const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Anchor the portaled menu just below the launcher button.
+    const place = () => {
+        const rect = wrapRef.current?.getBoundingClientRect();
+        if (rect) setPos({ top: rect.bottom + 8, left: rect.left });
+    };
+
+    const toggle = () => {
+        if (open) { setOpen(false); return; }
+        place();
+        setOpen(true);
+    };
+
+    // The menu is portaled to <body> (so it escapes the sidebar's stacking
+    // context and paints above all page content). That means outside-click
+    // detection must allow clicks inside EITHER the button or the portaled menu;
+    // scroll/resize re-anchor it. Escape closes.
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e: MouseEvent) => {
+            const t = e.target as Node;
+            if (wrapRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+            setOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+        const onScroll = (e: Event) => {
+            if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+            place();
+        };
+        const onResize = () => place();
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        document.addEventListener('scroll', onScroll, true);
+        window.addEventListener('resize', onResize);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+            document.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('resize', onResize);
+        };
+    }, [open]);
 
     const apps = app.switcher ?? [];
 
@@ -38,21 +84,26 @@ export function AppSwitcher({ onNavigate }: { onNavigate?: () => void }) {
     // over / on /shipments/mailings).
     const isInternal = (url: string) => url.startsWith('/');
     const matchesPath = (url: string) => url === '/' || path === url || path.startsWith(url + '/');
-    const activeInternalUrl = apps
+    const detectedUrl = apps
         .filter(a => isInternal(a.url) && matchesPath(a.url))
         .reduce((best, a) => (a.url.length > best.length ? a.url : best), '');
-    // The logo subtitle reflects the section you're in (e.g. "Shipments" on /shipments).
-    const activeApp = apps.find(a => isInternal(a.url) && a.url === activeInternalUrl);
-    const logoSubtitle = activeApp?.name ?? 'Proposals';
+    // The active app is normally detected from the path, but a layout can declare
+    // it explicitly via `activeKey` — e.g. the CRM shell hosts /finance, /inventory,
+    // … which have no switcher entry of their own but still belong to "CRM".
+    const resolvedActiveKey = activeKey ?? apps.find(a => isInternal(a.url) && a.url === detectedUrl)?.key;
+    // The logo subtitle reflects the section you're in (e.g. "CRM", "Shipments").
+    // The Proposals home shows no subtitle — just the "QuakeLogic" wordmark.
+    const activeApp = apps.find(a => a.key === resolvedActiveKey);
+    const logoSubtitle = activeApp && activeApp.key !== 'proposals' ? activeApp.name : undefined;
     const close = () => {
         setOpen(false);
         onNavigate?.();
     };
 
     return (
-        <div className="relative">
+        <div ref={wrapRef} className="relative">
             <button
-                onClick={() => setOpen(v => !v)}
+                onClick={toggle}
                 title="Switch app"
                 className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-secondary"
             >
@@ -60,10 +111,11 @@ export function AppSwitcher({ onNavigate }: { onNavigate?: () => void }) {
                 <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
             </button>
 
-            {open && (
-                <>
-                    <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-                    <div className="animate-dropdown origin-top-left absolute left-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+            {open && pos && createPortal(
+                <div
+                    ref={menuRef}
+                    style={{ top: pos.top, left: pos.left }}
+                    className="animate-dropdown origin-top-left fixed z-[140] w-64 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
                         <Link
                             href="/"
                             onClick={close}
@@ -81,7 +133,7 @@ export function AppSwitcher({ onNavigate }: { onNavigate?: () => void }) {
                         {apps.map(item => {
                             const Icon = ICONS[item.icon] ?? LayoutGrid;
                             const internal = isInternal(item.url);
-                            const current = internal && item.url === activeInternalUrl;
+                            const current = item.key === resolvedActiveKey;
                             const inner = (
                                 <>
                                     <span className={cn(
@@ -114,8 +166,8 @@ export function AppSwitcher({ onNavigate }: { onNavigate?: () => void }) {
                                 </a>
                             );
                         })}
-                    </div>
-                </>
+                </div>,
+                document.body,
             )}
         </div>
     );

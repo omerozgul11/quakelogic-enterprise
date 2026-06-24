@@ -3,6 +3,12 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, UploadCloud, FileText, Image as ImageIcon, Table, File as FileIcon, X, Sparkles } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Select } from '@/Components/ui/Select';
+import { CarrierField } from '@/Components/ui/CarrierField';
+
+interface Props {
+    carrierOptions: { value: string; label: string }[];
+    referenceTypeOptions: { value: string; label: string }[];
+}
 
 const ACCEPT = '.csv,.pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.doc,.docx,application/pdf,image/*,text/csv,text/plain';
 const MAX_FILES = 20;
@@ -21,11 +27,12 @@ function humanSize(bytes: number) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export default function ShipmentsImport() {
+export default function ShipmentsImport({ carrierOptions, referenceTypeOptions }: Props) {
     const { data, setData, post, processing, errors } = useForm<{
         files: File[];
         pasted_text: string;
         carrier: string;
+        reference_type: string;
         scope: string;
         recipient_name: string;
         deadline: string;
@@ -33,6 +40,7 @@ export default function ShipmentsImport() {
         files: [],
         pasted_text: '',
         carrier: 'ups',
+        reference_type: 'orderNbr',
         scope: 'domestic',
         recipient_name: '',
         deadline: '',
@@ -155,12 +163,20 @@ export default function ShipmentsImport() {
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
                                 <label className="label">Carrier</label>
-                                <Select value={data.carrier} onChange={v => setData('carrier', v)} options={[{ value: 'ups', label: 'UPS' }]} className="w-full" />
+                                <CarrierField value={data.carrier} onChange={v => setData('carrier', v)} options={carrierOptions} className="w-full" />
+                                {errors.carrier && <p className="mt-1.5 text-sm text-destructive">{errors.carrier}</p>}
                             </div>
                             <div>
                                 <label className="label">Category</label>
                                 <Select value={data.scope} onChange={v => setData('scope', v)} options={[{ value: 'domestic', label: 'Domestic' }, { value: 'international', label: 'International' }]} className="w-full" />
                             </div>
+                            {data.carrier === 'jbhunt' && (
+                                <div>
+                                    <label className="label">Reference type</label>
+                                    <Select value={data.reference_type} onChange={v => setData('reference_type', v)} options={referenceTypeOptions} className="w-full" />
+                                    {errors.reference_type && <p className="mt-1.5 text-sm text-destructive">{errors.reference_type}</p>}
+                                </div>
+                            )}
                             <div>
                                 <label htmlFor="recipient" className="label">Recipient <span className="text-muted-foreground">(optional)</span></label>
                                 <input id="recipient" value={data.recipient_name} onChange={e => setData('recipient_name', e.target.value)} className="input" placeholder="Agency / office" />

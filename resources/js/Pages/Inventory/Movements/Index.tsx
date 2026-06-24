@@ -9,7 +9,7 @@ import { SearchInput } from '@/Components/ui/SearchInput';
 import { Select } from '@/Components/ui/Select';
 import { formatCurrency, cn } from '@/Lib/utils';
 import { PaginatedResponse } from '@/Types';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Trash2 } from 'lucide-react';
 
 interface MovementRow {
     id: number; type: string; type_label: string; type_color: string;
@@ -23,6 +23,7 @@ interface Props {
     filters: Record<string, string>;
     types: { value: string; label: string }[];
     warehouses: { id: number; name: string }[];
+    can: { manage: boolean };
 }
 
 function when(iso: string | null): string {
@@ -30,9 +31,15 @@ function when(iso: string | null): string {
     return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function MovementsIndex({ movements, filters, types, warehouses }: Props) {
+export default function MovementsIndex({ movements, filters, types, warehouses, can }: Props) {
     const apply = (patch: Record<string, string | undefined>) => {
         router.get('/inventory/movements', { ...filters, ...patch }, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const del = (m: MovementRow) => {
+        if (confirm(`Delete this ${m.type_label.toLowerCase()} entry? This reverses its effect on stock.`)) {
+            router.delete(`/inventory/movements/${m.id}`, { preserveScroll: true });
+        }
     };
 
     return (
@@ -62,11 +69,12 @@ export default function MovementsIndex({ movements, filters, types, warehouses }
                                     <th className="th text-right">Qty</th>
                                     <th className="th hidden text-right sm:table-cell">Balance</th>
                                     <th className="th hidden lg:table-cell">By</th>
+                                    {can.manage && <th className="th" />}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {movements.data.length === 0 ? (
-                                    <tr><td colSpan={7}><EmptyState icon={ArrowLeftRight} title="No movements" description="Stock activity will appear here." /></td></tr>
+                                    <tr><td colSpan={8}><EmptyState icon={ArrowLeftRight} title="No movements" description="Stock activity will appear here." /></td></tr>
                                 ) : movements.data.map(m => (
                                     <tr key={m.id}>
                                         <td className="td whitespace-nowrap text-muted-foreground">{when(m.occurred_at)}</td>
@@ -79,6 +87,11 @@ export default function MovementsIndex({ movements, filters, types, warehouses }
                                         <td className={cn('td text-right font-semibold', m.quantity < 0 ? 'text-red-600' : 'text-emerald-600')}>{m.quantity > 0 ? '+' : ''}{m.quantity}</td>
                                         <td className="td hidden text-right text-foreground sm:table-cell">{m.quantity_after}</td>
                                         <td className="td hidden text-muted-foreground lg:table-cell">{m.by || '—'}</td>
+                                        {can.manage && (
+                                            <td className="td text-right">
+                                                <button onClick={() => del(m)} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete entry"><Trash2 className="h-4 w-4" /></button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
