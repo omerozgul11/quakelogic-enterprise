@@ -144,7 +144,7 @@ export default function ClientShow({ client, leads, projects, invoices, proposal
                         id: l.id, href: '/crm/leads', primary: l.title, secondary: formatCurrency(l.value), color: l.status_color, label: l.status_label,
                     }))} />
                     <RelatedList title="Projects" icon={FolderKanban} empty="No projects." items={projects.map(p => ({
-                        id: p.id, href: `/crm/projects/${p.id}`, primary: p.name, secondary: `${p.progress}%`, color: p.status_color, label: p.status_label,
+                        id: p.id, href: `/projects/${p.id}`, primary: p.name, secondary: `${p.progress}%`, color: p.status_color, label: p.status_label,
                     }))} />
                     <RelatedList title="Invoices & estimates" icon={ReceiptText} empty="No billing yet." className="lg:col-span-2" items={invoices.map(i => ({
                         id: i.id, href: `/crm/invoices/${i.id}`, primary: i.number, secondary: formatCurrency(i.total, i.currency), color: i.status_color, label: i.status_label,

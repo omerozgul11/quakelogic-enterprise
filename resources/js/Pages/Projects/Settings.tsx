@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { CrmLayout } from '@/Components/layout/CrmLayout';
+import { ProjectsLayout } from '@/Components/layout/ProjectsLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
@@ -56,10 +56,10 @@ export default function ProjectSettings({ settings, statuses, managerRules, user
     };
 
     return (
-        <CrmLayout>
-            <Head title="Project Settings · CRM" />
+        <ProjectsLayout>
+            <Head title="Project Settings · Projects" />
             <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-                <Link href="/crm/projects" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+                <Link href="/projects" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
                     <ArrowLeft className="h-4 w-4" /> Projects
                 </Link>
                 <PageHeader icon={SettingsIcon} title="Project Settings" description="Govern how awarded proposals become projects" />
@@ -110,12 +110,12 @@ export default function ProjectSettings({ settings, statuses, managerRules, user
                     </Card>
 
                     <div className="flex justify-end">
-                        <Button onClick={() => form.put('/crm/projects/settings', { preserveScroll: true })} disabled={form.processing}>
+                        <Button onClick={() => form.put('/projects/settings', { preserveScroll: true })} disabled={form.processing}>
                             {form.processing ? 'Saving…' : 'Save Settings'}
                         </Button>
                     </div>
                 </div>
             </div>
-        </CrmLayout>
+        </ProjectsLayout>
     );
 }

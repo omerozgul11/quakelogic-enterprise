@@ -35,10 +35,19 @@ return [
         [
             'key' => 'crm',
             'name' => 'CRM',
-            'description' => 'Clients, leads, projects & invoices',
+            'description' => 'Clients, leads & invoices',
             'icon' => 'contact-round',
             // A section of this app (not a separate site): /crm.
             'url' => '/crm',
+            'current' => false,
+        ],
+        [
+            'key' => 'projects',
+            'name' => 'Projects',
+            'description' => 'Deliver awarded work — logistics, vendors & POs',
+            'icon' => 'folder-kanban',
+            // A section of this app (not a separate site): /projects.
+            'url' => '/projects',
             'current' => false,
         ],
         [

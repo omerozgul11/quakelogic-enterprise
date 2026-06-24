@@ -48,7 +48,7 @@ export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoi
                 <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <StatCard title="Clients" value={stats.clients} icon={Building2} tone="indigo" href="/crm/clients" />
                     <StatCard title="Open leads" value={stats.open_leads} subtitle={formatCurrency(stats.pipeline_value) + ' in pipeline'} icon={Target} tone="violet" href="/crm/leads" />
-                    <StatCard title="Active projects" value={stats.active_projects} icon={FolderKanban} tone="teal" href="/crm/projects" />
+                    <StatCard title="Active projects" value={stats.active_projects} icon={FolderKanban} tone="teal" href="/projects" />
                     <StatCard title="Outstanding" value={formatCurrency(stats.outstanding_amount)} subtitle={stats.overdue_invoices ? `${stats.overdue_invoices} overdue` : 'All current'} icon={ReceiptText} tone={stats.overdue_invoices ? 'rose' : 'emerald'} href="/crm/invoices" />
                 </div>
 
@@ -81,14 +81,14 @@ export default function CrmDashboard({ stats, pipeline, recentLeads, recentInvoi
                     <div className="card-surface p-5 lg:col-span-2">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Projects due</h2>
-                            <Link href="/crm/projects" className="text-sm font-medium text-primary hover:underline">All</Link>
+                            <Link href="/projects" className="text-sm font-medium text-primary hover:underline">All</Link>
                         </div>
                         {projectsDue.length === 0 ? (
                             <p className="py-6 text-center text-sm text-muted-foreground">No upcoming deadlines.</p>
                         ) : (
                             <div className="space-y-2">
                                 {projectsDue.map(p => (
-                                    <Link key={p.id} href={`/crm/projects/${p.id}`} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-secondary">
+                                    <Link key={p.id} href={`/projects/${p.id}`} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-secondary">
                                         <span className="min-w-0 flex-1">
                                             <span className="block truncate text-sm font-medium text-foreground">{p.name}</span>
                                             <span className="block text-xs text-muted-foreground">{formatDate(p.due_date)} · {p.progress}%</span>

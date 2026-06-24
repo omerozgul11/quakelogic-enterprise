@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { CrmLayout } from '@/Components/layout/CrmLayout';
+import { ProjectsLayout } from '@/Components/layout/ProjectsLayout';
 import { PageHeader } from '@/Components/ui/PageHeader';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
@@ -66,21 +66,21 @@ export default function ProjectsIndex({ projects, filters, stats, companies, own
     const [fromProposalOpen, setFromProposalOpen] = useState(false);
 
     const handleFilter = (key: string, value: string) => {
-        router.get('/crm/projects', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
+        router.get('/projects', { ...filters, [key]: value || undefined }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     return (
-        <CrmLayout>
-            <Head title="Projects · CRM" />
+        <ProjectsLayout>
+            <Head title="Projects" />
             <div className="p-4 sm:p-6">
                 <PageHeader
                     icon={FolderKanban}
                     title="Projects"
-                    description="Deliver awarded work — tasks, team, milestones & finances"
+                    description="Deliver awarded work — logistics, vendors, tasks, milestones & POs"
                     actions={
                         <div className="flex items-center gap-2">
                             {can.settings && (
-                                <Link href="/crm/projects/settings">
+                                <Link href="/projects/settings">
                                     <Button variant="secondary" icon={Settings}>Settings</Button>
                                 </Link>
                             )}
@@ -139,10 +139,10 @@ export default function ProjectsIndex({ projects, filters, stats, companies, own
                                     {projects.data.map(p => (
                                         <tr key={p.id} className="border-b border-border/60 transition-colors last:border-0 hover:bg-secondary/40">
                                             <td className="px-4 py-3">
-                                                <Link href={`/crm/projects/${p.id}`} className="block min-w-0">
+                                                <Link href={`/projects/${p.id}`} className="block min-w-0">
                                                     <span className="flex items-center gap-1.5 font-semibold text-foreground hover:text-primary">
                                                         {p.name}
-                                                        {p.from_proposal && <Sparkles className="h-3.5 w-3.5 text-primary" title="Created from a proposal" />}
+                                                        {p.from_proposal && <span title="Created from a proposal" className="inline-flex"><Sparkles className="h-3.5 w-3.5 text-primary" /></span>}
                                                     </span>
                                                     <span className="flex items-center gap-2 text-xs text-muted-foreground">
                                                         {p.project_number && <span className="font-mono">{p.project_number}</span>}
@@ -196,7 +196,7 @@ export default function ProjectsIndex({ projects, filters, stats, companies, own
             )}
 
             {fromProposalOpen && <FromProposalModal proposals={awardableProposals} onClose={() => setFromProposalOpen(false)} />}
-        </CrmLayout>
+        </ProjectsLayout>
     );
 }
 
@@ -205,7 +205,7 @@ function FromProposalModal({ proposals, onClose }: { proposals: Array<{ id: numb
 
     const create = () => {
         if (!form.data.proposal_submission_id) return;
-        form.post('/crm/projects', { onSuccess: () => onClose() });
+        form.post('/projects', { onSuccess: () => onClose() });
     };
 
     return (

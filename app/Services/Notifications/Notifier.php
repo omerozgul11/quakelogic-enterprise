@@ -313,7 +313,7 @@ class Notifier
             'type' => 'project',
             'title' => 'New project: ' . $project->name,
             'message' => trim($this->projectRef($project) . ' was created' . ($actor ? ' by ' . $actor->name : '') . '.'),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'folder-kanban',
         ]);
     }
@@ -328,7 +328,7 @@ class Notifier
             'type' => 'assignment',
             'title' => 'You were made project manager',
             'message' => trim($project->name . ' — assigned by ' . $actor->name),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'user-check',
         ], 'assignment');
     }
@@ -343,7 +343,7 @@ class Notifier
             'type' => 'assignment',
             'title' => 'You were added to a project',
             'message' => trim($project->name . ' — added by ' . $actor->name),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'users',
         ], 'assignment');
     }
@@ -358,7 +358,7 @@ class Notifier
             'type' => 'assignment',
             'title' => 'You were removed from a project',
             'message' => trim($project->name . ' — updated by ' . $actor->name),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'user-minus',
         ], 'assignment');
     }
@@ -373,7 +373,7 @@ class Notifier
             'type' => 'assignment',
             'title' => 'New task assigned: ' . $task->title,
             'message' => trim($project->name . ' — assigned by ' . $actor->name),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'check-square',
         ], 'assignment');
     }
@@ -384,7 +384,7 @@ class Notifier
             'type' => 'project',
             'title' => 'Project status: ' . $project->name,
             'message' => trim($this->projectRef($project) . ' moved from ' . $from->label() . ' to ' . $to->label() . ' by ' . $actor->name),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'refresh-cw',
         ]);
     }
@@ -397,7 +397,7 @@ class Notifier
             'type' => 'project',
             'title' => 'Project completed: ' . $project->name,
             'message' => trim($this->projectRef($project) . ' was marked completed' . ($actor ? ' by ' . $actor->name : '') . '.'),
-            'url' => route('crm.projects.show', $project),
+            'url' => route('projects.show', $project),
             'icon' => 'party-popper',
         ]);
     }

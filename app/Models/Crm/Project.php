@@ -28,6 +28,8 @@ class Project extends Model
         'ulid', 'organization_id', 'created_by', 'owner_id', 'project_manager_id', 'company_id',
         'proposal_submission_id', 'opportunity_id', 'contact_id',
         'name', 'code', 'project_number', 'status', 'description', 'notes',
+        'address', 'poc_name', 'poc_role', 'poc_phone', 'poc_email',
+        'reference_numbers', 'logistics', 'specs',
         'start_date', 'due_date', 'completed_at', 'budget', 'progress', 'created_via',
     ];
 
@@ -119,6 +121,20 @@ class Project extends Model
     public function files(): HasMany
     {
         return $this->hasMany(ProjectFile::class, 'crm_project_id')->latest();
+    }
+
+    public function vendors(): HasMany
+    {
+        return $this->hasMany(ProjectVendor::class, 'crm_project_id')->latest();
+    }
+
+    /**
+     * Purchase orders raised against this project. Reuses the Procurement
+     * module's PO records (cross-module link via crm_project_id).
+     */
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Procurement\Models\PurchaseOrder::class, 'crm_project_id')->latest();
     }
 
     public function activities(): HasMany

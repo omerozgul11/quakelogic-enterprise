@@ -2,11 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Building2, Users, Target, FolderKanban, ReceiptText, ContactRound,
-    Bell, LogOut, Menu, X, Sun, Moon, ChevronDown, Landmark, FileMinus,
-    Boxes, Package, Warehouse, ArrowLeftRight, ShoppingCart, Factory, ClipboardList,
-    ListTree, Wrench, Cpu, HardDrive, BadgeCheck, FileCheck, LifeBuoy, Ticket,
-    Settings, ShieldCheck, Clock,
+    LayoutDashboard, FolderKanban, Settings, ShieldCheck, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
@@ -16,99 +12,16 @@ interface NavItem {
     label: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
-}
-
-interface NavGroup {
-    /** Optional section header rendered above the group. */
-    label?: string;
-    /** Only show this group when the user holds this permission. */
     permission?: string;
-    items: NavItem[];
 }
 
-const navGroups: NavGroup[] = [
-    {
-        items: [
-            { label: 'Dashboard', href: '/crm', icon: LayoutDashboard },
-            { label: 'Clients', href: '/crm/clients', icon: Building2 },
-            { label: 'Contacts', href: '/crm/contacts', icon: Users },
-            { label: 'Leads', href: '/crm/leads', icon: Target },
-            { label: 'Projects', href: '/projects', icon: FolderKanban },
-            { label: 'Invoices', href: '/crm/invoices', icon: ReceiptText },
-            { label: 'Time Cards', href: '/crm/time-cards', icon: Clock },
-        ],
-    },
-    {
-        // The Enterprise Hub sections (Finance/AR + the ERP/WMS/EAM modules) all
-        // render inside the CRM shell so the sidebar stays put. Each group is
-        // gated by its own `access <section>` permission (every role has them).
-        label: 'Finance',
-        permission: 'access finance',
-        items: [
-            { label: 'Overview', href: '/finance', icon: Landmark },
-            { label: 'Receivables', href: '/finance/invoices', icon: ReceiptText },
-            { label: 'Credit Notes', href: '/finance/credit-notes', icon: FileMinus },
-        ],
-    },
-    {
-        label: 'Inventory',
-        permission: 'access inventory',
-        items: [
-            { label: 'Overview', href: '/inventory', icon: Boxes },
-            { label: 'Products', href: '/inventory/products', icon: Package },
-            { label: 'Warehouses', href: '/inventory/warehouses', icon: Warehouse },
-            { label: 'Movements', href: '/inventory/movements', icon: ArrowLeftRight },
-        ],
-    },
-    {
-        label: 'Procurement',
-        permission: 'access procurement',
-        items: [
-            { label: 'Overview', href: '/procurement', icon: ShoppingCart },
-            { label: 'Suppliers', href: '/procurement/suppliers', icon: Factory },
-            { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ClipboardList },
-        ],
-    },
-    {
-        label: 'Manufacturing',
-        permission: 'access manufacturing',
-        items: [
-            { label: 'Overview', href: '/manufacturing', icon: Factory },
-            { label: 'BOMs', href: '/manufacturing/boms', icon: ListTree },
-            { label: 'Work Orders', href: '/manufacturing/work-orders', icon: Wrench },
-        ],
-    },
-    {
-        label: 'Assets',
-        permission: 'access assets',
-        items: [
-            { label: 'Overview', href: '/assets', icon: Cpu },
-            { label: 'Registry', href: '/assets/registry', icon: HardDrive },
-        ],
-    },
-    {
-        label: 'Calibration',
-        permission: 'access calibration',
-        items: [
-            { label: 'Overview', href: '/calibration', icon: BadgeCheck },
-            { label: 'Certificates', href: '/calibration/certificates', icon: FileCheck },
-        ],
-    },
-    {
-        label: 'Service Desk',
-        permission: 'access tickets',
-        items: [
-            { label: 'Overview', href: '/tickets', icon: LifeBuoy },
-            { label: 'Tickets', href: '/tickets/queue', icon: Ticket },
-        ],
-    },
+const navItems: NavItem[] = [
+    { label: 'Projects', href: '/projects', icon: FolderKanban },
+    { label: 'Settings', href: '/projects/settings', icon: Settings, permission: 'manage all projects' },
 ];
 
-// Section roots (/crm, /finance) match exactly; everything else matches the
-// href or any path beneath it.
-const SECTION_ROOTS = ['/crm', '/finance', '/inventory', '/procurement', '/manufacturing', '/assets', '/calibration', '/tickets'];
 function isActive(path: string, href: string): boolean {
-    if (SECTION_ROOTS.includes(href)) return path === href;
+    if (href === '/projects') return path === '/projects' || (path.startsWith('/projects/') && !path.startsWith('/projects/settings'));
     return path === href || path.startsWith(href + '/');
 }
 
@@ -139,15 +52,13 @@ function timeAgo(iso: string | null): string {
     return days < 7 ? `${days}d ago` : new Date(iso).toLocaleDateString();
 }
 
-export function CrmLayout({ children }: { children: React.ReactNode }) {
+export function ProjectsLayout({ children }: { children: React.ReactNode }) {
     const page = usePage<SharedProps>();
     const { auth, flash, notifications_count, notifications } = page.props;
     const path = page.url.split('?')[0];
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
-    // Dismiss the notifications / account dropdowns on any outside click or Escape
-    // (a document listener also catches header clicks the overlay sits beneath).
     useEffect(() => {
         if (!notifOpen && !menuOpen) return;
         const onDown = (e: MouseEvent) => {
@@ -168,6 +79,9 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
 
     const [dark, toggleDark] = useDarkMode();
     const user = auth.user;
+    const isAdmin = user?.roles?.includes('Super Admin') ?? false;
+    const permissions = user?.permissions ?? [];
+    const items = navItems.filter(i => !i.permission || permissions.includes(i.permission));
     const recentNotifications = notifications ?? [];
 
     const openNotification = (n: SharedProps['notifications'][number]) => {
@@ -176,25 +90,10 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
     };
     const handleLogout = () => router.post('/logout');
 
-    // Collapsible sidebar sections. A section auto-expands while you're on one of
-    // its pages; manual expand/collapse is remembered across navigations.
-    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-        try { return JSON.parse(localStorage.getItem('crmNavGroups') ?? '{}'); } catch { return {}; }
-    });
-    const groupHasActive = (group: NavGroup) => group.items.some(item => isActive(path, item.href));
-    const isGroupOpen = (group: NavGroup) => groupHasActive(group) || openGroups[group.label ?? ''] === true;
-    const toggleGroup = (label: string) => {
-        setOpenGroups(prev => {
-            const next = { ...prev, [label]: !(prev[label] ?? false) };
-            try { localStorage.setItem('crmNavGroups', JSON.stringify(next)); } catch { /* ignore */ }
-            return next;
-        });
-    };
-
     const SidebarBody = ({ mobile = false }: { mobile?: boolean }) => (
         <div className="flex h-full flex-col">
             <div className="flex h-16 items-center justify-between px-3">
-                <AppSwitcher activeKey="crm" onNavigate={() => mobile && setSidebarOpen(false)} />
+                <AppSwitcher onNavigate={() => mobile && setSidebarOpen(false)} />
                 {mobile && (
                     <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
                         <X className="h-5 w-5" />
@@ -204,49 +103,26 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
 
             <div className="px-4 pb-1 pt-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-primary">
-                    <ContactRound className="h-3.5 w-3.5" /> CRM
+                    <FolderKanban className="h-3.5 w-3.5" /> Projects
                 </span>
             </div>
 
-            <nav className="sidebar-scroll flex-1 space-y-1 overflow-y-auto px-3 py-3">
-                {navGroups
-                    .filter(group => !group.permission || (user?.permissions ?? []).includes(group.permission))
-                    .map((group, gi) => {
-                        const renderItem = (item: NavItem) => {
-                            const Icon = item.icon;
-                            const active = isActive(path, item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={() => mobile && setSidebarOpen(false)}
-                                    className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
-                                >
-                                    <Icon className="h-[18px] w-[18px] shrink-0" />
-                                    <span className="min-w-0 truncate">{item.label}</span>
-                                </Link>
-                            );
-                        };
-
-                        // The core CRM group has no label — always shown, never collapses.
-                        if (!group.label) {
-                            return <div key="core" className="space-y-0.5">{group.items.map(renderItem)}</div>;
-                        }
-
-                        const open = isGroupOpen(group);
-                        return (
-                            <div key={group.label}>
-                                <button
-                                    onClick={() => toggleGroup(group.label!)}
-                                    className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:bg-secondary hover:text-foreground"
-                                >
-                                    <span className="truncate">{group.label}</span>
-                                    <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', open ? '' : '-rotate-90')} />
-                                </button>
-                                {open && <div className="mt-0.5 space-y-0.5">{group.items.map(renderItem)}</div>}
-                            </div>
-                        );
-                    })}
+            <nav className="sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
+                {items.map(item => {
+                    const Icon = item.icon;
+                    const active = isActive(path, item.href);
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => mobile && setSidebarOpen(false)}
+                            className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
+                        >
+                            <Icon className="h-[18px] w-[18px] shrink-0" />
+                            <span className="min-w-0 truncate">{item.label}</span>
+                        </Link>
+                    );
+                })}
             </nav>
 
             <div className="mt-auto p-3">
@@ -355,7 +231,7 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
                                         <Link href="/settings" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-secondary">
                                             <Settings className="h-4 w-4 text-muted-foreground" /> Settings
                                         </Link>
-                                        {user?.roles?.includes('Super Admin') && (
+                                        {isAdmin && (
                                             <Link href="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-secondary">
                                                 <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Admin Panel
                                             </Link>
@@ -383,7 +259,7 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
                 <main key={path} className="animate-page flex-1">{children}</main>
 
                 <footer className="py-4 text-center text-xs text-muted-foreground">
-                    QuakeLogic CRM — © {new Date().getFullYear()} QuakeLogic Inc.
+                    QuakeLogic Projects — © {new Date().getFullYear()} QuakeLogic Inc.
                 </footer>
             </div>
         </div>

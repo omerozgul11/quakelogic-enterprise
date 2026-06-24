@@ -30,7 +30,7 @@ class ProjectSettingsController extends Controller
         $user = $request->user();
         $settings = $this->creation->settingsFor($user->organization_id);
 
-        return Inertia::render('Crm/Projects/Settings', [
+        return Inertia::render('Projects/Settings', [
             'settings' => [
                 'auto_create_on_award' => $settings->auto_create_on_award,
                 'default_status' => $settings->default_status,

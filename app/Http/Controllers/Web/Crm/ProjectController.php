@@ -78,7 +78,7 @@ class ProjectController extends Controller
                 ->whereNotNull('due_date')->whereDate('due_date', '<', now())->count(),
         ];
 
-        return Inertia::render('Crm/Projects/Index', [
+        return Inertia::render('Projects/Index', [
             'projects' => $projects,
             'filters' => $request->only(['search', 'status', 'owner', 'mine']),
             'stats' => $stats,
@@ -106,7 +106,8 @@ class ProjectController extends Controller
             'tasks.assignee:id,name', 'tasks.comments.author:id,name',
             'members.user:id,name', 'members.addedBy:id,name',
             'milestones', 'projectNotes.author:id,name', 'files.uploader:id,name',
-            'activities.user:id,name',
+            'activities.user:id,name', 'vendors',
+            'purchaseOrders' => fn ($q) => $q->with('supplier:id,name')->orderByDesc('order_date'),
         ]);
 
         $invoices = Invoice::where('crm_project_id', $project->id)
@@ -116,7 +117,7 @@ class ProjectController extends Controller
         $canManageTeam = $user->can('manageTeam', $project);
         $canAdminister = $user->can('administer', $project);
 
-        return Inertia::render('Crm/Projects/Show', [
+        return Inertia::render('Projects/Show', [
             'project' => $this->detailPayload($project),
             'tasks' => $project->tasks->map(fn (Task $t) => $this->taskPayload($t, $user, $canManageTasks))->values(),
             'members' => $project->members->map(fn (ProjectMember $m) => [
@@ -163,6 +164,21 @@ class ProjectController extends Controller
                 'user' => $a->user?->name,
                 'created_at' => $a->created_at?->toIso8601String(),
             ])->values(),
+            'vendors' => $project->vendors->map(fn (\App\Models\Crm\ProjectVendor $v) => [
+                'id' => $v->id,
+                'category' => $v->category->value,
+                'category_label' => $v->category->label(),
+                'category_color' => $v->category->color(),
+                'company_name' => $v->company_name,
+                'contact_name' => $v->contact_name,
+                'phone' => $v->phone,
+                'email' => $v->email,
+                'notes' => $v->notes,
+            ])->values(),
+            'vendorCategories' => \App\Enums\Crm\ProjectVendorCategory::options(),
+            'purchaseOrders' => $project->purchaseOrders->map(fn ($po) => $this->poPayload($po))->values(),
+            'attachablePurchaseOrders' => $this->attachablePurchaseOrders($project),
+            'canProcurement' => $user->can('access procurement'),
             'invoices' => $invoices->map(fn (Invoice $i) => [
                 'id' => $i->id,
                 'number' => $i->number,
@@ -201,7 +217,7 @@ class ProjectController extends Controller
                 ->findOrFail($request->input('proposal_submission_id'));
             $project = $this->creation->createFromProposal($proposal, $user, automatic: false);
 
-            return redirect()->route('crm.projects.show', $project)->with('success', 'Project created from proposal.');
+            return redirect()->route('projects.show', $project)->with('success', 'Project created from proposal.');
         }
 
         $data = $this->validateProject($request);
@@ -233,7 +249,7 @@ class ProjectController extends Controller
         $this->activity->log($project, $user->id, 'created', 'Project created manually.');
         $this->notifier->projectCreated($project, $user);
 
-        return redirect()->route('crm.projects.show', $project)->with('success', 'Project created.');
+        return redirect()->route('projects.show', $project)->with('success', 'Project created.');
     }
 
     public function update(Request $request, Project $project): RedirectResponse
@@ -297,7 +313,7 @@ class ProjectController extends Controller
         $name = $project->name;
         $project->delete();
 
-        return redirect()->route('crm.projects.index')->with('success', "Project \"{$name}\" deleted.");
+        return redirect()->route('projects.index')->with('success', "Project \"{$name}\" deleted.");
     }
 
     // ── Team ────────────────────────────────────────────────────────────────
@@ -441,6 +457,82 @@ class ProjectController extends Controller
         $note->delete();
 
         return back()->with('success', 'Note deleted.');
+    }
+
+    // ── Vendor contacts (forklift, trucking, …) ──────────────────────────────
+
+    public function storeVendor(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorize('manageTasks', $project);
+        $user = $request->user();
+        $data = $this->validateVendor($request);
+
+        $vendor = $project->vendors()->create([
+            ...$data,
+            'organization_id' => $project->organization_id,
+            'created_by' => $user->id,
+        ]);
+
+        $this->activity->log($project, $user->id, 'vendor_added', "Vendor \"{$vendor->company_name}\" added.");
+
+        return back()->with('success', 'Vendor added.');
+    }
+
+    public function updateVendor(Request $request, Project $project, \App\Models\Crm\ProjectVendor $vendor): RedirectResponse
+    {
+        $this->authorize('manageTasks', $project);
+        abort_unless($vendor->crm_project_id === $project->id, 404);
+
+        $vendor->update($this->validateVendor($request));
+
+        return back()->with('success', 'Vendor updated.');
+    }
+
+    public function destroyVendor(Request $request, Project $project, \App\Models\Crm\ProjectVendor $vendor): RedirectResponse
+    {
+        $this->authorize('manageTasks', $project);
+        abort_unless($vendor->crm_project_id === $project->id, 404);
+        $name = $vendor->company_name;
+        $vendor->delete();
+
+        $this->activity->log($project, $request->user()->id, 'vendor_removed', "Vendor \"{$name}\" removed.");
+
+        return back()->with('success', 'Vendor removed.');
+    }
+
+    // ── Purchase orders (links to Procurement) ────────────────────────────────
+
+    public function attachPurchaseOrder(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorize('manageTasks', $project);
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'purchase_order_id' => ['required', Rule::exists('procurement_purchase_orders', 'id')
+                ->where('organization_id', $project->organization_id)],
+        ]);
+
+        $po = \App\Modules\Procurement\Models\PurchaseOrder::where('organization_id', $project->organization_id)
+            ->findOrFail($validated['purchase_order_id']);
+        $po->update(['crm_project_id' => $project->id]);
+
+        $this->activity->log($project, $user->id, 'po_linked', "Purchase order {$po->number} linked.");
+
+        return back()->with('success', 'Purchase order linked.');
+    }
+
+    public function detachPurchaseOrder(Request $request, Project $project, int $purchaseOrder): RedirectResponse
+    {
+        $this->authorize('manageTasks', $project);
+
+        $po = \App\Modules\Procurement\Models\PurchaseOrder::where('organization_id', $project->organization_id)
+            ->where('crm_project_id', $project->id)
+            ->findOrFail($purchaseOrder);
+        $po->update(['crm_project_id' => null]);
+
+        $this->activity->log($project, $request->user()->id, 'po_unlinked', "Purchase order {$po->number} unlinked.");
+
+        return back()->with('success', 'Purchase order unlinked.');
     }
 
     // ── Files ───────────────────────────────────────────────────────────────
@@ -636,6 +728,14 @@ class ProjectController extends Controller
             'project_number' => $project->project_number,
             'description' => $project->description,
             'notes' => $project->notes,
+            'address' => $project->address,
+            'poc_name' => $project->poc_name,
+            'poc_role' => $project->poc_role,
+            'poc_phone' => $project->poc_phone,
+            'poc_email' => $project->poc_email,
+            'reference_numbers' => $project->reference_numbers,
+            'logistics' => $project->logistics,
+            'specs' => $project->specs,
             'status' => $project->status->value,
             'status_label' => $project->status->label(),
             'status_color' => $project->status->color(),
@@ -720,6 +820,14 @@ class ProjectController extends Controller
             'status' => ['nullable', new Enum(ProjectStatus::class)],
             'description' => 'nullable|string',
             'notes' => 'nullable|string',
+            'address' => 'nullable|string|max:1000',
+            'poc_name' => 'nullable|string|max:255',
+            'poc_role' => 'nullable|string|max:255',
+            'poc_phone' => 'nullable|string|max:50',
+            'poc_email' => 'nullable|email|max:255',
+            'reference_numbers' => 'nullable|string|max:2000',
+            'logistics' => 'nullable|string|max:5000',
+            'specs' => 'nullable|string|max:20000',
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date',
             'budget' => 'nullable|numeric|min:0|max:9999999999999',
@@ -750,6 +858,61 @@ class ProjectController extends Controller
             'due_date' => 'nullable|date',
             'status' => ['nullable', new Enum(MilestoneStatus::class)],
         ]);
+    }
+
+    /** @return array<string,mixed> */
+    private function validateVendor(Request $request): array
+    {
+        return $request->validate([
+            'category' => ['required', new Enum(\App\Enums\Crm\ProjectVendorCategory::class)],
+            'company_name' => 'required|string|max:255',
+            'contact_name' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'notes' => 'nullable|string|max:2000',
+        ]);
+    }
+
+    /** @return array<string,mixed> */
+    private function poPayload(\App\Modules\Procurement\Models\PurchaseOrder $po): array
+    {
+        $status = $po->status instanceof \BackedEnum ? $po->status : null;
+
+        return [
+            'id' => $po->id,
+            'number' => $po->number,
+            'supplier' => $po->supplier?->name,
+            'status' => $status?->value ?? (string) $po->status,
+            'status_label' => $status?->label() ?? (string) $po->status,
+            'status_color' => $status?->color() ?? 'gray',
+            'total' => (float) $po->total,
+            'currency' => $po->currency,
+            'order_date' => $po->order_date?->toDateString(),
+            'expected_date' => $po->expected_date?->toDateString(),
+        ];
+    }
+
+    /**
+     * Org purchase orders not yet linked to any project — candidates the user
+     * can attach to this one.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function attachablePurchaseOrders(Project $project): array
+    {
+        return \App\Modules\Procurement\Models\PurchaseOrder::where('organization_id', $project->organization_id)
+            ->whereNull('crm_project_id')
+            ->with('supplier:id,name')
+            ->orderByDesc('order_date')
+            ->limit(100)
+            ->get()
+            ->map(fn ($po) => [
+                'id' => $po->id,
+                'number' => $po->number,
+                'supplier' => $po->supplier?->name,
+                'total' => (float) $po->total,
+            ])
+            ->all();
     }
 
     private function validateOrgUser(Request $request, string $field): int

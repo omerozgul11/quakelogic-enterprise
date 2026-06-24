@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEvent, useRef, useState } from 'react';
-import { CrmLayout } from '@/Components/layout/CrmLayout';
+import { ProjectsLayout } from '@/Components/layout/ProjectsLayout';
 import { Button } from '@/Components/ui/Button';
 import { Pill } from '@/Components/ui/Pill';
 import { Select } from '@/Components/ui/Select';
@@ -10,6 +10,7 @@ import { cn, formatCurrency, formatDate, getInitials, avatarGradient } from '@/L
 import {
     ArrowLeft, Pencil, Trash2, Plus, CalendarDays, Building2, FileText, Target, Users, ListChecks,
     Flag, Paperclip, StickyNote, DollarSign, History, Download, Upload, MessageSquare, Sparkles, UserPlus, X,
+    Truck, ShoppingCart, MapPin, Phone, Mail, Hash, ExternalLink, Link2, ClipboardList,
 } from 'lucide-react';
 
 interface Option { value: string; label: string; color?: string }
@@ -18,6 +19,8 @@ interface Person { id: number; name: string }
 interface Project {
     id: number; name: string; code?: string | null; project_number?: string | null;
     description?: string | null; notes?: string | null;
+    address?: string | null; poc_name?: string | null; poc_role?: string | null; poc_phone?: string | null; poc_email?: string | null;
+    reference_numbers?: string | null; logistics?: string | null; specs?: string | null;
     status: string; status_label: string; status_color: string; progress: number;
     budget: number | null; start_date: string | null; due_date: string | null; completed_at: string | null;
     created_via: string;
@@ -37,6 +40,9 @@ interface Note { id: number; body: string; author: string | null; author_id: num
 interface ProjectFile { id: number; name: string; size: number; mime_type: string | null; source: string; uploaded_by: string | null; created_at: string }
 interface Activity { id: number; action: string; description: string; user: string | null; created_at: string }
 interface Invoice { id: number; number: string; kind: string; status: string; total: number; amount_paid: number; balance: number }
+interface Vendor { id: number; category: string; category_label: string; category_color: string; company_name: string; contact_name: string | null; phone: string | null; email: string | null; notes: string | null }
+interface PurchaseOrder { id: number; number: string; supplier: string | null; status: string; status_label: string; status_color: string; total: number; currency: string; order_date: string | null; expected_date: string | null }
+interface AttachablePO { id: number; number: string; supplier: string | null; total: number }
 
 interface Props {
     project: Project;
@@ -47,6 +53,11 @@ interface Props {
     files: ProjectFile[];
     activities: Activity[];
     invoices: Invoice[];
+    vendors: Vendor[];
+    vendorCategories: Option[];
+    purchaseOrders: PurchaseOrder[];
+    attachablePurchaseOrders: AttachablePO[];
+    canProcurement: boolean;
     financials: { budget: number; invoiced: number; paid: number; outstanding: number; remaining_budget: number };
     companies: Person[];
     owners: Person[];
@@ -82,7 +93,9 @@ const TABS = [
     { key: 'overview', label: 'Overview', icon: ListChecks },
     { key: 'tasks', label: 'Tasks', icon: ListChecks },
     { key: 'team', label: 'Team', icon: Users },
-    { key: 'timeline', label: 'Timeline', icon: Flag },
+    { key: 'timeline', label: 'Milestones', icon: Flag },
+    { key: 'logistics', label: 'Logistics', icon: Truck },
+    { key: 'pos', label: 'Purchase Orders', icon: ShoppingCart },
     { key: 'files', label: 'Files', icon: Paperclip },
     { key: 'notes', label: 'Notes', icon: StickyNote },
     { key: 'linked', label: 'Linked', icon: FileText },
@@ -96,13 +109,26 @@ export default function ProjectShow(props: Props) {
     const [editOpen, setEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
-    const base = `/crm/projects/${project.id}`;
+    const base = `/projects/${project.id}`;
+
+    const tabCount = (key: typeof TABS[number]['key']): number | null => {
+        switch (key) {
+            case 'tasks': return props.tasks.length;
+            case 'team': return props.members.length;
+            case 'timeline': return props.milestones.length;
+            case 'logistics': return props.vendors.length;
+            case 'pos': return props.purchaseOrders.length;
+            case 'files': return props.files.length;
+            case 'notes': return props.notes.length;
+            default: return null;
+        }
+    };
 
     return (
-        <CrmLayout>
-            <Head title={`${project.name} · CRM`} />
+        <ProjectsLayout>
+            <Head title={`${project.name} · Projects`} />
             <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-                <Link href="/crm/projects" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+                <Link href="/projects" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
                     <ArrowLeft className="h-4 w-4" /> Projects
                 </Link>
 
@@ -143,7 +169,7 @@ export default function ProjectShow(props: Props) {
                     {TABS.map(t => {
                         const Icon = t.icon;
                         const active = tab === t.key;
-                        const count = t.key === 'tasks' ? props.tasks.length : t.key === 'team' ? props.members.length : t.key === 'timeline' ? props.milestones.length : t.key === 'files' ? props.files.length : t.key === 'notes' ? props.notes.length : null;
+                        const count = tabCount(t.key);
                         return (
                             <button key={t.key} onClick={() => setTab(t.key)}
                                 className={cn('flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
@@ -159,6 +185,8 @@ export default function ProjectShow(props: Props) {
                 {tab === 'tasks' && <TasksTab {...props} base={base} />}
                 {tab === 'team' && <TeamTab {...props} base={base} />}
                 {tab === 'timeline' && <TimelineTab {...props} base={base} />}
+                {tab === 'logistics' && <LogisticsTab {...props} base={base} />}
+                {tab === 'pos' && <PurchaseOrdersTab {...props} base={base} />}
                 {tab === 'files' && <FilesTab {...props} base={base} />}
                 {tab === 'notes' && <NotesTab {...props} base={base} />}
                 {tab === 'linked' && <LinkedTab project={project} />}
@@ -168,7 +196,7 @@ export default function ProjectShow(props: Props) {
 
             {editOpen && <ProjectFormModal open onClose={() => setEditOpen(false)} project={project} companies={props.companies} owners={props.owners} statuses={props.statuses} canAdminister={can.administer} />}
             <ConfirmDialog open={deleting} onClose={() => setDeleting(false)} onConfirm={() => router.delete(base)} title="Delete project?" message={<>This removes <span className="font-medium text-foreground">{project.name}</span> and all its tasks, team, files & history.</>} />
-        </CrmLayout>
+        </ProjectsLayout>
     );
 }
 
@@ -201,6 +229,12 @@ function OverviewTab({ project, members, activities }: Props) {
                         <p className="whitespace-pre-line text-sm text-muted-foreground">{project.description}</p>
                     </div>
                 )}
+                {project.specs && (
+                    <div className="card-surface p-5">
+                        <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Specifications</h3>
+                        <p className="whitespace-pre-line text-sm text-muted-foreground">{project.specs}</p>
+                    </div>
+                )}
                 {project.notes && (
                     <div className="card-surface p-5">
                         <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Notes</h3>
@@ -213,6 +247,196 @@ function OverviewTab({ project, members, activities }: Props) {
                 <ActivityList activities={activities.slice(0, 8)} compact />
             </div>
         </div>
+    );
+}
+
+/* ── Logistics: site / POC / reference numbers / vendors ─────────────────── */
+function LogisticsTab({ project, vendors, vendorCategories, base, can }: Props & { base: string }) {
+    const [modal, setModal] = useState<Vendor | null | 'new'>(null);
+    const [deleting, setDeleting] = useState<Vendor | null>(null);
+
+    const hasSite = project.address || project.poc_name || project.poc_phone || project.poc_email || project.reference_numbers;
+
+    return (
+        <div className="space-y-5">
+            <div className="grid gap-5 lg:grid-cols-2">
+                <div className="card-surface p-5">
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><MapPin className="h-4 w-4" /> Site & point of contact</h3>
+                    {hasSite ? (
+                        <dl className="space-y-3 text-sm">
+                            {project.address && <div><dt className="text-xs text-muted-foreground">Address</dt><dd className="mt-0.5 whitespace-pre-line font-medium text-foreground">{project.address}</dd></div>}
+                            {(project.poc_name || project.poc_role) && (
+                                <div><dt className="text-xs text-muted-foreground">Point of contact</dt>
+                                    <dd className="mt-0.5 font-medium text-foreground">{project.poc_name}{project.poc_role ? <span className="font-normal text-muted-foreground"> · {project.poc_role}</span> : ''}</dd>
+                                </div>
+                            )}
+                            {project.poc_phone && <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground" /><a href={`tel:${project.poc_phone}`} className="text-sm font-medium text-primary hover:underline">{project.poc_phone}</a></div>}
+                            {project.poc_email && <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground" /><a href={`mailto:${project.poc_email}`} className="text-sm font-medium text-primary hover:underline">{project.poc_email}</a></div>}
+                        </dl>
+                    ) : <p className="text-sm text-muted-foreground">No site / contact details yet. {can.manage && 'Use Edit to add them.'}</p>}
+                </div>
+
+                <div className="card-surface p-5">
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><Hash className="h-4 w-4" /> Reference numbers & logistics</h3>
+                    {project.reference_numbers || project.logistics ? (
+                        <div className="space-y-3 text-sm">
+                            {project.reference_numbers && <div><dt className="text-xs text-muted-foreground">Contract / order reference numbers</dt><dd className="mt-0.5 whitespace-pre-line font-medium text-foreground">{project.reference_numbers}</dd></div>}
+                            {project.logistics && <div><dt className="text-xs text-muted-foreground">Logistics notes</dt><dd className="mt-0.5 whitespace-pre-line text-muted-foreground">{project.logistics}</dd></div>}
+                        </div>
+                    ) : <p className="text-sm text-muted-foreground">No reference numbers or logistics notes yet. {can.manage && 'Use Edit to add them.'}</p>}
+                </div>
+            </div>
+
+            <div>
+                <div className="mb-3 flex items-center justify-between">
+                    <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><Truck className="h-4 w-4" /> Vendor contacts ({vendors.length})</h2>
+                    {can.manage && <Button size="sm" icon={Plus} onClick={() => setModal('new')}>Add Vendor</Button>}
+                </div>
+                {vendors.length === 0 ? (
+                    <div className="card-surface p-8 text-center text-sm text-muted-foreground">No vendor contacts yet — add the forklift, trucking, crane and other field vendors for this project.</div>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {vendors.map(v => (
+                            <div key={v.id} className="card-surface p-4">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-foreground">{v.company_name}</p><Pill color={v.category_color} label={v.category_label} /></div>
+                                        {v.contact_name && <p className="mt-0.5 text-xs text-muted-foreground">{v.contact_name}</p>}
+                                    </div>
+                                    {can.manage && (
+                                        <div className="flex shrink-0 items-center gap-1">
+                                            <button onClick={() => setModal(v)} className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                                            <button onClick={() => setDeleting(v)} className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="mt-2 space-y-1">
+                                    {v.phone && <a href={`tel:${v.phone}`} className="flex items-center gap-2 text-xs text-primary hover:underline"><Phone className="h-3 w-3" />{v.phone}</a>}
+                                    {v.email && <a href={`mailto:${v.email}`} className="flex items-center gap-2 text-xs text-primary hover:underline"><Mail className="h-3 w-3" />{v.email}</a>}
+                                </div>
+                                {v.notes && <p className="mt-2 whitespace-pre-line border-t border-border pt-2 text-xs text-muted-foreground">{v.notes}</p>}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {modal && <VendorModal base={base} vendor={modal === 'new' ? null : modal} categories={vendorCategories} onClose={() => setModal(null)} />}
+            <ConfirmDialog open={!!deleting} onClose={() => setDeleting(null)} onConfirm={() => { if (deleting) router.delete(`${base}/vendors/${deleting.id}`, { preserveScroll: true, onFinish: () => setDeleting(null) }); }} title="Remove vendor?" message={deleting ? <>Remove <span className="font-medium text-foreground">{deleting.company_name}</span>?</> : ''} />
+        </div>
+    );
+}
+
+function VendorModal({ base, vendor, categories, onClose }: { base: string; vendor: Vendor | null; categories: Option[]; onClose: () => void }) {
+    const isEdit = !!vendor;
+    const form = useForm({
+        category: vendor?.category ?? 'trucking',
+        company_name: vendor?.company_name ?? '',
+        contact_name: vendor?.contact_name ?? '',
+        phone: vendor?.phone ?? '',
+        email: vendor?.email ?? '',
+        notes: vendor?.notes ?? '',
+    });
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        const opts = { preserveScroll: true, onSuccess: () => { form.reset(); onClose(); } };
+        if (isEdit) form.put(`${base}/vendors/${vendor!.id}`, opts); else form.post(`${base}/vendors`, opts);
+    };
+    return (
+        <Modal open onClose={onClose} title={isEdit ? 'Edit Vendor' : 'Add Vendor'}
+            footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={submit as unknown as () => void} disabled={form.processing}>{form.processing ? 'Saving…' : isEdit ? 'Save' : 'Add Vendor'}</Button></>}>
+            <form onSubmit={submit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                    <div><label className="label">Type</label><Select className="w-full" value={form.data.category} onChange={v => form.setData('category', v)} options={categories.map(c => ({ value: c.value, label: c.label }))} /></div>
+                    <div><label className="label">Company *</label><input className="input" value={form.data.company_name} onChange={e => form.setData('company_name', e.target.value)} autoFocus />{form.errors.company_name && <p className="mt-1 text-xs text-destructive">{form.errors.company_name}</p>}</div>
+                </div>
+                <div><label className="label">Contact name</label><input className="input" value={form.data.contact_name} onChange={e => form.setData('contact_name', e.target.value)} placeholder="optional" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div><label className="label">Phone</label><input className="input" value={form.data.phone} onChange={e => form.setData('phone', e.target.value)} placeholder="optional" /></div>
+                    <div><label className="label">Email</label><input className="input" value={form.data.email} onChange={e => form.setData('email', e.target.value)} placeholder="optional" />{form.errors.email && <p className="mt-1 text-xs text-destructive">{form.errors.email}</p>}</div>
+                </div>
+                <div><label className="label">Notes</label><textarea className="input min-h-[56px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} placeholder="Rates, availability, gate hours…" /></div>
+            </form>
+        </Modal>
+    );
+}
+
+/* ── Purchase orders (Procurement links) ─────────────────────────────────── */
+function PurchaseOrdersTab({ purchaseOrders, attachablePurchaseOrders, canProcurement, base, can }: Props & { base: string }) {
+    const [attaching, setAttaching] = useState(false);
+    const [detaching, setDetaching] = useState<PurchaseOrder | null>(null);
+
+    return (
+        <div>
+            <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><ShoppingCart className="h-4 w-4" /> Purchase orders ({purchaseOrders.length})</h2>
+                {can.manage && (
+                    <div className="flex items-center gap-2">
+                        {canProcurement && <a href="/procurement/purchase-orders/create"><Button size="sm" variant="secondary" icon={Plus}>New PO</Button></a>}
+                        <Button size="sm" icon={Link2} onClick={() => setAttaching(true)} disabled={attachablePurchaseOrders.length === 0}>Link PO</Button>
+                    </div>
+                )}
+            </div>
+            {purchaseOrders.length === 0 ? (
+                <div className="card-surface p-8 text-center text-sm text-muted-foreground">
+                    No purchase orders linked yet. {can.manage && (attachablePurchaseOrders.length > 0 ? 'Link an existing PO from Procurement.' : 'Create a PO in Procurement, then link it here.')}
+                </div>
+            ) : (
+                <div className="card-surface divide-y divide-border p-0">
+                    {purchaseOrders.map(po => {
+                        const inner = (
+                            <>
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground"><ClipboardList className="h-4 w-4" /></span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="flex items-center gap-2 text-sm font-medium text-foreground"><span className="font-mono">{po.number}</span><Pill color={po.status_color} label={po.status_label} /></p>
+                                    <p className="text-xs text-muted-foreground">{po.supplier ?? 'No supplier'}{po.order_date ? ` · ${formatDate(po.order_date)}` : ''}{po.expected_date ? ` · expected ${formatDate(po.expected_date)}` : ''}</p>
+                                </div>
+                                <span className="text-sm font-semibold text-foreground">{formatCurrency(po.total)}</span>
+                            </>
+                        );
+                        return (
+                            <div key={po.id} className="flex items-center gap-3 px-4 py-3">
+                                {canProcurement ? (
+                                    <a href={`/procurement/purchase-orders/${po.id}`} className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80">{inner}</a>
+                                ) : <div className="flex min-w-0 flex-1 items-center gap-3">{inner}</div>}
+                                {can.manage && <button onClick={() => setDetaching(po)} className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Unlink"><X className="h-4 w-4" /></button>}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {attaching && <AttachPoModal base={base} options={attachablePurchaseOrders} onClose={() => setAttaching(false)} />}
+            <ConfirmDialog open={!!detaching} onClose={() => setDetaching(null)} onConfirm={() => { if (detaching) router.delete(`${base}/purchase-orders/${detaching.id}`, { preserveScroll: true, onFinish: () => setDetaching(null) }); }} title="Unlink purchase order?" message={detaching ? <>Unlink <span className="font-mono font-medium text-foreground">{detaching.number}</span> from this project? The PO itself is kept in Procurement.</> : ''} />
+        </div>
+    );
+}
+
+function AttachPoModal({ base, options, onClose }: { base: string; options: AttachablePO[]; onClose: () => void }) {
+    const form = useForm({ purchase_order_id: '' });
+    const submit = () => {
+        if (!form.data.purchase_order_id) return;
+        form.post(`${base}/purchase-orders`, { preserveScroll: true, onSuccess: () => onClose() });
+    };
+    return (
+        <Modal open onClose={onClose} title="Link a purchase order"
+            description="Attach an existing Procurement purchase order to this project."
+            footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={submit} disabled={form.processing || !form.data.purchase_order_id}>Link PO</Button></>}>
+            <div className="max-h-80 space-y-1.5 overflow-y-auto">
+                {options.map(po => (
+                    <button key={po.id} onClick={() => form.setData('purchase_order_id', String(po.id))}
+                        className={cn('flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                            form.data.purchase_order_id === String(po.id) ? 'border-primary bg-primary/10' : 'border-border hover:bg-secondary')}>
+                        <span className="min-w-0 flex-1">
+                            <span className="block font-mono text-sm font-medium text-foreground">{po.number}</span>
+                            <span className="block truncate text-xs text-muted-foreground">{po.supplier ?? 'No supplier'}</span>
+                        </span>
+                        <span className="text-sm font-medium text-foreground">{formatCurrency(po.total)}</span>
+                    </button>
+                ))}
+                {options.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No unlinked purchase orders available.</p>}
+            </div>
+        </Modal>
     );
 }
 
@@ -551,7 +775,7 @@ function LinkedTab({ project }: { project: Project }) {
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><FileText className="h-4 w-4" /> Proposal</h3>
                 {project.proposal ? (
                     <Link href={`/proposals/${project.proposal.id}`} className="block rounded-lg border border-border p-3 transition-colors hover:bg-secondary">
-                        <p className="font-mono text-xs text-muted-foreground">{project.proposal.number}</p>
+                        <p className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">{project.proposal.number}<ExternalLink className="h-3 w-3" /></p>
                         <p className="mt-0.5 text-sm font-medium text-foreground">{project.proposal.name}</p>
                         <p className="mt-1 text-xs capitalize text-muted-foreground">{String(project.proposal.status).replace('_', ' ')}</p>
                     </Link>
@@ -561,7 +785,7 @@ function LinkedTab({ project }: { project: Project }) {
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><Target className="h-4 w-4" /> Opportunity</h3>
                 {project.opportunity ? (
                     <Link href={`/opportunities/${project.opportunity.id}`} className="block rounded-lg border border-border p-3 transition-colors hover:bg-secondary">
-                        <p className="text-sm font-medium text-foreground">{project.opportunity.title}</p>
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">{project.opportunity.title}<ExternalLink className="h-3 w-3 text-muted-foreground" /></p>
                     </Link>
                 ) : <p className="text-sm text-muted-foreground">Not linked to an opportunity.</p>}
             </div>
@@ -569,7 +793,7 @@ function LinkedTab({ project }: { project: Project }) {
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><Building2 className="h-4 w-4" /> Customer</h3>
                 {project.company_id ? (
                     <Link href={`/crm/clients/${project.company_id}`} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary">
-                        <Building2 className="h-4 w-4 text-muted-foreground" /> {project.company}
+                        <Building2 className="h-4 w-4 text-muted-foreground" /> {project.company}<ExternalLink className="h-3 w-3 text-muted-foreground" />
                     </Link>
                 ) : <p className="text-sm text-muted-foreground">Internal project — no customer record.</p>}
             </div>

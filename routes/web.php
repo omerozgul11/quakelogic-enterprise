@@ -135,45 +135,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{lead}', [CrmLeadController::class, 'destroy'])->name('destroy');
         });
 
-        // Projects & tasks — the Project Management workspace.
-        Route::prefix('projects')->name('projects.')->group(function () {
-            Route::get('/', [CrmProjectController::class, 'index'])->name('index');
-            Route::post('/', [CrmProjectController::class, 'store'])->name('store');
-
-            // Admin settings (registered before the {project} wildcard).
-            Route::get('/settings', [CrmProjectSettingsController::class, 'edit'])->name('settings');
-            Route::match(['put', 'patch'], '/settings', [CrmProjectSettingsController::class, 'update'])->name('settings.update');
-
-            Route::get('/{project}', [CrmProjectController::class, 'show'])->name('show');
-            Route::match(['put', 'patch'], '/{project}', [CrmProjectController::class, 'update'])->name('update');
-            Route::delete('/{project}', [CrmProjectController::class, 'destroy'])->name('destroy');
-
-            // Tasks + comments
-            Route::post('/{project}/tasks', [CrmProjectController::class, 'storeTask'])->name('tasks.store');
-            Route::match(['put', 'patch'], '/{project}/tasks/{task}', [CrmProjectController::class, 'updateTask'])->name('tasks.update');
-            Route::delete('/{project}/tasks/{task}', [CrmProjectController::class, 'destroyTask'])->name('tasks.destroy');
-            Route::post('/{project}/tasks/{task}/comments', [CrmProjectController::class, 'storeTaskComment'])->name('tasks.comments.store');
-
-            // Team members
-            Route::post('/{project}/members', [CrmProjectController::class, 'storeMember'])->name('members.store');
-            Route::match(['put', 'patch'], '/{project}/members/{member}', [CrmProjectController::class, 'updateMember'])->name('members.update');
-            Route::delete('/{project}/members/{member}', [CrmProjectController::class, 'destroyMember'])->name('members.destroy');
-
-            // Milestones
-            Route::post('/{project}/milestones', [CrmProjectController::class, 'storeMilestone'])->name('milestones.store');
-            Route::match(['put', 'patch'], '/{project}/milestones/{milestone}', [CrmProjectController::class, 'updateMilestone'])->name('milestones.update');
-            Route::delete('/{project}/milestones/{milestone}', [CrmProjectController::class, 'destroyMilestone'])->name('milestones.destroy');
-
-            // Notes
-            Route::post('/{project}/notes', [CrmProjectController::class, 'storeNote'])->name('notes.store');
-            Route::delete('/{project}/notes/{note}', [CrmProjectController::class, 'destroyNote'])->name('notes.destroy');
-
-            // Files
-            Route::post('/{project}/files', [CrmProjectController::class, 'storeFile'])->name('files.store');
-            Route::get('/{project}/files/{file}/download', [CrmProjectController::class, 'downloadFile'])->name('files.download');
-            Route::delete('/{project}/files/{file}', [CrmProjectController::class, 'destroyFile'])->name('files.destroy');
-        });
-
         // Estimates, invoices & payments
         Route::prefix('invoices')->name('invoices.')->group(function () {
             Route::get('/', [CrmInvoiceController::class, 'index'])->name('index');
@@ -200,6 +161,56 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::match(['put', 'patch'], '/{timeEntry}', [CrmTimeClockController::class, 'update'])->name('update');
             Route::delete('/{timeEntry}', [CrmTimeClockController::class, 'destroy'])->name('destroy');
         });
+    });
+
+    // Projects — the Project Management app at /projects (its own app-switcher
+    // tile + layout). Reuses the CRM project controllers; gated by `access crm`
+    // (every role has it). Projects are created automatically from won proposals.
+    Route::prefix('projects')->name('projects.')->middleware('permission:access crm')->group(function () {
+        Route::get('/', [CrmProjectController::class, 'index'])->name('index');
+        Route::post('/', [CrmProjectController::class, 'store'])->name('store');
+
+        // Admin settings (registered before the {project} wildcard).
+        Route::get('/settings', [CrmProjectSettingsController::class, 'edit'])->name('settings');
+        Route::match(['put', 'patch'], '/settings', [CrmProjectSettingsController::class, 'update'])->name('settings.update');
+
+        Route::get('/{project}', [CrmProjectController::class, 'show'])->name('show');
+        Route::match(['put', 'patch'], '/{project}', [CrmProjectController::class, 'update'])->name('update');
+        Route::delete('/{project}', [CrmProjectController::class, 'destroy'])->name('destroy');
+
+        // Tasks + comments
+        Route::post('/{project}/tasks', [CrmProjectController::class, 'storeTask'])->name('tasks.store');
+        Route::match(['put', 'patch'], '/{project}/tasks/{task}', [CrmProjectController::class, 'updateTask'])->name('tasks.update');
+        Route::delete('/{project}/tasks/{task}', [CrmProjectController::class, 'destroyTask'])->name('tasks.destroy');
+        Route::post('/{project}/tasks/{task}/comments', [CrmProjectController::class, 'storeTaskComment'])->name('tasks.comments.store');
+
+        // Team members
+        Route::post('/{project}/members', [CrmProjectController::class, 'storeMember'])->name('members.store');
+        Route::match(['put', 'patch'], '/{project}/members/{member}', [CrmProjectController::class, 'updateMember'])->name('members.update');
+        Route::delete('/{project}/members/{member}', [CrmProjectController::class, 'destroyMember'])->name('members.destroy');
+
+        // Milestones
+        Route::post('/{project}/milestones', [CrmProjectController::class, 'storeMilestone'])->name('milestones.store');
+        Route::match(['put', 'patch'], '/{project}/milestones/{milestone}', [CrmProjectController::class, 'updateMilestone'])->name('milestones.update');
+        Route::delete('/{project}/milestones/{milestone}', [CrmProjectController::class, 'destroyMilestone'])->name('milestones.destroy');
+
+        // Notes
+        Route::post('/{project}/notes', [CrmProjectController::class, 'storeNote'])->name('notes.store');
+        Route::delete('/{project}/notes/{note}', [CrmProjectController::class, 'destroyNote'])->name('notes.destroy');
+
+        // Vendor contacts (forklift, trucking, crane, …)
+        Route::post('/{project}/vendors', [CrmProjectController::class, 'storeVendor'])->name('vendors.store');
+        Route::match(['put', 'patch'], '/{project}/vendors/{vendor}', [CrmProjectController::class, 'updateVendor'])->name('vendors.update');
+        Route::delete('/{project}/vendors/{vendor}', [CrmProjectController::class, 'destroyVendor'])->name('vendors.destroy');
+
+        // Purchase orders (links to the Procurement module's PO records)
+        Route::post('/{project}/purchase-orders', [CrmProjectController::class, 'attachPurchaseOrder'])->name('purchase-orders.attach');
+        Route::delete('/{project}/purchase-orders/{purchaseOrder}', [CrmProjectController::class, 'detachPurchaseOrder'])->name('purchase-orders.detach');
+
+        // Files
+        Route::post('/{project}/files', [CrmProjectController::class, 'storeFile'])->name('files.store');
+        Route::get('/{project}/files/{file}/download', [CrmProjectController::class, 'downloadFile'])->name('files.download');
+        Route::delete('/{project}/files/{file}', [CrmProjectController::class, 'destroyFile'])->name('files.destroy');
     });
 
     // Opportunities

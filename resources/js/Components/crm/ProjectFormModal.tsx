@@ -12,6 +12,14 @@ export interface EditableProject {
     status?: string;
     description?: string | null;
     notes?: string | null;
+    address?: string | null;
+    poc_name?: string | null;
+    poc_role?: string | null;
+    poc_phone?: string | null;
+    poc_email?: string | null;
+    reference_numbers?: string | null;
+    logistics?: string | null;
+    specs?: string | null;
     start_date?: string | null;
     due_date?: string | null;
     budget?: number | null;
@@ -39,6 +47,14 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
         status: project?.status ?? 'new',
         description: project?.description ?? '',
         notes: project?.notes ?? '',
+        address: project?.address ?? '',
+        poc_name: project?.poc_name ?? '',
+        poc_role: project?.poc_role ?? '',
+        poc_phone: project?.poc_phone ?? '',
+        poc_email: project?.poc_email ?? '',
+        reference_numbers: project?.reference_numbers ?? '',
+        logistics: project?.logistics ?? '',
+        specs: project?.specs ?? '',
         start_date: project?.start_date ?? '',
         due_date: project?.due_date ?? '',
         budget: project?.budget != null ? String(project.budget) : '',
@@ -59,8 +75,8 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
             due_date: data.due_date || null,
         }));
         const opts = { preserveScroll: true, onSuccess: () => { form.reset(); onClose(); } };
-        if (isEdit) form.put(`/crm/projects/${project!.id}`, opts);
-        else form.post('/crm/projects', opts);
+        if (isEdit) form.put(`/projects/${project!.id}`, opts);
+        else form.post('/projects', opts);
     };
 
     const err = (k: keyof typeof form.data) => form.errors[k as keyof typeof form.errors];
@@ -139,6 +155,49 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
                 <div>
                     <label className="label">Notes</label>
                     <textarea className="input min-h-[48px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} placeholder="Important internal notes…" />
+                </div>
+
+                <div className="border-t border-border pt-4">
+                    <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground/70">Site, logistics &amp; specs</p>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="label">Site / delivery address</label>
+                            <textarea className="input min-h-[48px]" value={form.data.address} onChange={e => form.setData('address', e.target.value)} placeholder="Street, city, state, ZIP…" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="label">Point of contact</label>
+                                <input className="input" value={form.data.poc_name} onChange={e => form.setData('poc_name', e.target.value)} placeholder="Name" />
+                            </div>
+                            <div>
+                                <label className="label">POC title / role</label>
+                                <input className="input" value={form.data.poc_role} onChange={e => form.setData('poc_role', e.target.value)} placeholder="optional" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="label">POC phone</label>
+                                <input className="input" value={form.data.poc_phone} onChange={e => form.setData('poc_phone', e.target.value)} placeholder="optional" />
+                            </div>
+                            <div>
+                                <label className="label">POC email</label>
+                                <input className="input" value={form.data.poc_email} onChange={e => form.setData('poc_email', e.target.value)} placeholder="optional" />
+                                {err('poc_email') && <p className="mt-1 text-xs text-destructive">{err('poc_email')}</p>}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="label">Contract / order reference numbers</label>
+                            <textarea className="input min-h-[48px]" value={form.data.reference_numbers} onChange={e => form.setData('reference_numbers', e.target.value)} placeholder="Contract #, delivery order #, award #…" />
+                        </div>
+                        <div>
+                            <label className="label">Logistics notes</label>
+                            <textarea className="input min-h-[48px]" value={form.data.logistics} onChange={e => form.setData('logistics', e.target.value)} placeholder="Delivery windows, gate hours, equipment needed, freight terms…" />
+                        </div>
+                        <div>
+                            <label className="label">Specifications</label>
+                            <textarea className="input min-h-[64px]" value={form.data.specs} onChange={e => form.setData('specs', e.target.value)} placeholder="Detailed product / project specifications…" />
+                        </div>
+                    </div>
                 </div>
             </form>
         </Modal>
