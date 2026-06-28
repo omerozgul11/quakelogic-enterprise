@@ -18,6 +18,7 @@ use App\Http\Controllers\Web\Crm\InvoiceController as CrmInvoiceController;
 use App\Http\Controllers\Web\Crm\LeadController as CrmLeadController;
 use App\Http\Controllers\Web\Crm\LeaveController as CrmLeaveController;
 use App\Http\Controllers\Web\Crm\ProjectController as CrmProjectController;
+use App\Http\Controllers\Web\Crm\QuickContactController as CrmQuickContactController;
 use App\Http\Controllers\Web\Crm\ProjectSettingsController as CrmProjectSettingsController;
 use App\Http\Controllers\Web\Crm\ReportController as CrmReportController;
 use App\Http\Controllers\Web\Crm\TimeClockController as CrmTimeClockController;
@@ -129,6 +130,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [CrmContactController::class, 'store'])->name('store');
             Route::match(['put', 'patch'], '/{contact}', [CrmContactController::class, 'update'])->name('update');
             Route::delete('/{contact}', [CrmContactController::class, 'destroy'])->name('destroy');
+        });
+
+        // Quick Contacts — shared rolodex of frequently-dialed reference numbers.
+        Route::prefix('quick-contacts')->name('quick-contacts.')->group(function () {
+            Route::get('/', [CrmQuickContactController::class, 'index'])->name('index');
+            Route::post('/', [CrmQuickContactController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/{quickContact}', [CrmQuickContactController::class, 'update'])->name('update');
+            Route::delete('/{quickContact}', [CrmQuickContactController::class, 'destroy'])->name('destroy');
         });
 
         // Leads & sales pipeline
