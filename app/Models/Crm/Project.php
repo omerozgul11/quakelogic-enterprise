@@ -31,6 +31,7 @@ class Project extends Model
         'address', 'poc_name', 'poc_role', 'poc_phone', 'poc_email',
         'reference_numbers', 'logistics', 'specs',
         'start_date', 'due_date', 'completed_at', 'budget', 'progress', 'created_via',
+        'ai_briefing', 'ai_briefing_generated_at', 'ai_briefing_by',
     ];
 
     protected function casts(): array
@@ -42,6 +43,7 @@ class Project extends Model
             'completed_at' => 'datetime',
             'budget' => 'decimal:2',
             'progress' => 'integer',
+            'ai_briefing_generated_at' => 'datetime',
         ];
     }
 
@@ -91,6 +93,11 @@ class Project extends Model
         return $this->belongsTo(Opportunity::class);
     }
 
+    public function briefingAuthor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'ai_briefing_by');
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'crm_project_id')->orderBy('position')->orderBy('id');
@@ -123,9 +130,65 @@ class Project extends Model
         return $this->hasMany(ProjectFile::class, 'crm_project_id')->latest();
     }
 
+    /** Document folders (one level) for organising project files. */
+    public function folders(): HasMany
+    {
+        return $this->hasMany(ProjectFolder::class, 'crm_project_id')->orderBy('sort_order')->orderBy('name');
+    }
+
     public function vendors(): HasMany
     {
         return $this->hasMany(ProjectVendor::class, 'crm_project_id')->latest();
+    }
+
+    /** Installation sites — primary first, then oldest. */
+    public function sites(): HasMany
+    {
+        return $this->hasMany(ProjectSite::class, 'crm_project_id')->orderByDesc('is_primary')->orderBy('id');
+    }
+
+    /** Typed customer/site stakeholder contacts (procurement, facilities, …). */
+    public function siteContacts(): HasMany
+    {
+        return $this->hasMany(ProjectContact::class, 'crm_project_id')->orderBy('name');
+    }
+
+    /** Equipment being installed for this project. */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(ProjectEquipment::class, 'crm_project_id')->orderBy('id');
+    }
+
+    /** Shipments bringing equipment to (or from) the site. */
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(ProjectShipment::class, 'crm_project_id')->latest();
+    }
+
+    /** On-site execution records (install, commissioning, training, …). */
+    public function executionRecords(): HasMany
+    {
+        return $this->hasMany(ProjectExecutionRecord::class, 'crm_project_id')
+            ->orderByRaw('scheduled_date is null, scheduled_date')->orderBy('id');
+    }
+
+    /** Reusable tick-off checklists (pre-departure, punch list, …). */
+    public function checklists(): HasMany
+    {
+        return $this->hasMany(ProjectChecklist::class, 'crm_project_id')->orderBy('sort_order')->orderBy('id');
+    }
+
+    /** Travel arrangements for the project trip (flights, lodging, …). */
+    public function travel(): HasMany
+    {
+        return $this->hasMany(ProjectTravel::class, 'crm_project_id')
+            ->orderByRaw('start_at is null, start_at')->orderBy('id');
+    }
+
+    /** Captured digital sign-offs (customer / PM / QA / acceptance …). */
+    public function signoffs(): HasMany
+    {
+        return $this->hasMany(ProjectSignoff::class, 'crm_project_id')->latest('signed_at');
     }
 
     /**

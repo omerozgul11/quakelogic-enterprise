@@ -16,6 +16,8 @@ class CarrierRegistry
 {
     private const KEY = 'custom_carriers';
 
+    private const HIDDEN_KEY = 'hidden_carriers';
+
     private const MAX_LEN = 50;
 
     /** @return list<string> the saved custom carrier names */
@@ -113,6 +115,57 @@ class CarrierRegistry
     {
         $settings = is_array($org->settings) ? $org->settings : [];
         $settings[self::KEY] = array_values($names);
+        $org->update(['settings' => $settings]);
+    }
+
+    // --- Hidden built-in carriers -------------------------------------------
+    // Built-in carriers are code-defined and can't be deleted, but an org can
+    // "remove" one it never uses — it's hidden from the Carriers page and the
+    // shipment carrier pickers until restored. Stored as normalized enum values.
+
+    /** @return list<string> the org's hidden built-in carrier values */
+    public function hidden(Organization $org): array
+    {
+        $stored = is_array($org->settings[self::HIDDEN_KEY] ?? null) ? $org->settings[self::HIDDEN_KEY] : [];
+
+        return collect($stored)
+            ->map(fn ($v) => mb_strtolower(trim((string) $v)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function isHidden(Organization $org, string $key): bool
+    {
+        return in_array(mb_strtolower(trim($key)), $this->hidden($org), true);
+    }
+
+    public function hide(Organization $org, string $key): void
+    {
+        $key = mb_strtolower(trim($key));
+        if ($key === '') {
+            return;
+        }
+        $hidden = $this->hidden($org);
+        if (! in_array($key, $hidden, true)) {
+            $hidden[] = $key;
+            $this->persistHidden($org, $hidden);
+        }
+    }
+
+    public function unhide(Organization $org, string $key): void
+    {
+        $key = mb_strtolower(trim($key));
+        $kept = array_values(array_filter($this->hidden($org), fn ($k) => $k !== $key));
+        $this->persistHidden($org, $kept);
+    }
+
+    /** @param list<string> $hidden */
+    private function persistHidden(Organization $org, array $hidden): void
+    {
+        $settings = is_array($org->settings) ? $org->settings : [];
+        $settings[self::HIDDEN_KEY] = array_values($hidden);
         $org->update(['settings' => $settings]);
     }
 }

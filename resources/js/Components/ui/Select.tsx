@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/Lib/utils';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 
 export interface SelectOption {
     value: string;
@@ -16,6 +16,10 @@ interface Props {
     placeholder?: string;
     className?: string;
     size?: 'sm' | 'md';
+    /** Adds a filter box at the top of the popup — use for long lists (companies, people…). */
+    searchable?: boolean;
+    /** Placeholder for the filter box when `searchable`. */
+    searchPlaceholder?: string;
 }
 
 /**
@@ -23,14 +27,20 @@ interface Props {
  * a card-style popup list, replacing the native <select> chrome. The popup is
  * portaled to <body> so it never gets clipped by scrollable containers.
  */
-export function Select({ value, options, onChange, placeholder, className, size = 'md' }: Props) {
+export function Select({ value, options, onChange, placeholder, className, size = 'md', searchable = false, searchPlaceholder = 'Search…' }: Props) {
     const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
     const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number; origin: 'top' | 'bottom' } | null>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
 
     const current = options.find(o => o.value === value);
-    const items: SelectOption[] = placeholder ? [{ value: '', label: placeholder }, ...options] : options;
+    const q = query.trim().toLowerCase();
+    const filtered = searchable && q ? options.filter(o => o.label.toLowerCase().includes(q)) : options;
+    // Hide the clearing placeholder while actively searching so an empty result
+    // collapses `items` to length 0 and the "No matches" state below can render.
+    const items: SelectOption[] = placeholder && !q ? [{ value: '', label: placeholder }, ...filtered] : filtered;
 
     const openMenu = () => {
         const rect = buttonRef.current?.getBoundingClientRect();
@@ -41,6 +51,7 @@ export function Select({ value, options, onChange, placeholder, className, size 
         const flip = below < 160 && rect.top > 300;
         const top = flip ? rect.top - maxHeight - 4 : rect.bottom + 4;
         setPos({ top, left: rect.left, width: rect.width, maxHeight, origin: flip ? 'bottom' : 'top' });
+        setQuery('');
         setOpen(true);
     };
 
@@ -64,8 +75,14 @@ export function Select({ value, options, onChange, placeholder, className, size 
         };
     }, [open]);
 
+    // Focus the filter box as soon as the searchable popup opens.
+    useEffect(() => {
+        if (open && searchable) searchRef.current?.focus();
+    }, [open, searchable]);
+
     const pick = (v: string) => {
         setOpen(false);
+        setQuery('');
         if (v !== value) onChange(v);
     };
 
@@ -100,6 +117,23 @@ export function Select({ value, options, onChange, placeholder, className, size 
                         )}
                         style={{ top: pos.top, left: pos.left, minWidth: pos.width, maxHeight: pos.maxHeight }}
                     >
+                        {searchable && (
+                            <div className="sticky top-0 z-10 border-b border-border bg-card p-1.5">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        ref={searchRef}
+                                        value={query}
+                                        onChange={e => setQuery(e.target.value)}
+                                        placeholder={searchPlaceholder}
+                                        className="h-8 w-full rounded-md border border-input bg-card pl-8 pr-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        {items.length === 0 && (
+                            <p className="px-3 py-3 text-center text-xs text-muted-foreground">No matches</p>
+                        )}
                         {items.map(o => {
                             const selected = o.value === value || (o.value === '' && !current);
                             return (

@@ -24,6 +24,7 @@ class MailingController extends Controller
         private readonly MailingTrackingService $tracking,
         private readonly \App\Services\Mailings\ShipmentProposalMatcher $matcher,
         private readonly \App\Services\Mailings\CarrierRegistry $carrierRegistry,
+        private readonly \App\Services\Mailings\MailingIngestService $ingest,
     ) {}
 
     public function dashboard(Request $request): Response
@@ -772,6 +773,72 @@ class MailingController extends Controller
         $this->authorize('viewAny', ProposalMailing::class);
         $orgId = $request->user()->organization_id;
 
+        [$updated, $skipped, $any] = $this->refreshActiveShipments($orgId);
+
+        if (! $any) {
+            return back()->with('warning', 'No active shipments to update.');
+        }
+
+        $msg = "Updated {$updated} shipment(s) from the carrier".($skipped ? " · {$skipped} left for the next run" : '').'.';
+
+        return back()->with($updated ? 'success' : 'warning', $updated ? $msg : 'No new carrier data right now.');
+    }
+
+    /**
+     * Dashboard "Sync now": pull shipments whose label was just created directly
+     * from the carrier account (UPS Quantum View), then refresh tracking on the
+     * active ones. The carrier pull runs ONLY when Quantum View is truly
+     * configured — otherwise the simulator would fabricate shipments, so we skip
+     * it and just refresh (never invent data on an unconfigured deployment).
+     */
+    public function sync(Request $request): RedirectResponse
+    {
+        $this->authorize('viewAny', ProposalMailing::class);
+        $orgId = $request->user()->organization_id;
+
+        $created = 0;
+        $pulled = false;
+        if ($this->quantumViewConfigured()) {
+            $pulled = true;
+            try {
+                $result = $this->ingest->ingest(now()->subHours(72));
+                $created = $result['created'];
+            } catch (\Throwable $e) {
+                $pulled = false; // carrier pull failed; the refresh below still runs
+            }
+        }
+
+        [$updated, $skipped, $any] = $this->refreshActiveShipments($orgId);
+
+        $parts = [];
+        if ($created > 0) {
+            $parts[] = "pulled {$created} new label".($created === 1 ? '' : 's');
+        }
+        if ($updated > 0) {
+            $parts[] = "updated {$updated} shipment".($updated === 1 ? '' : 's');
+        }
+        if ($skipped > 0) {
+            $parts[] = "{$skipped} left for the next run";
+        }
+
+        if ($parts !== []) {
+            return back()->with('success', 'Synced with the carrier — '.implode(' · ', $parts).'.');
+        }
+
+        // Nothing changed. Hint at why the label pull didn't run, when relevant.
+        $msg = $any || $pulled
+            ? 'Already up to date — no new carrier data right now.'
+            : 'Nothing to sync yet. New labels are pulled automatically once UPS Quantum View is connected (set UPS_QV_* in the app env).';
+
+        return back()->with('warning', $msg);
+    }
+
+    /**
+     * Refresh tracking for the org's active, auto-tracked shipments within a wall-
+     * clock budget. @return array{0:int,1:int,2:bool} [updated, skipped, hadAny]
+     */
+    private function refreshActiveShipments(int $orgId, float $budgetSeconds = 22.0): array
+    {
         $query = ProposalMailing::query()->forOrganization($orgId)->active();
         if (\Illuminate\Support\Facades\Schema::hasColumn('proposal_mailings', 'auto_track')) {
             $query->where('auto_track', true);
@@ -779,10 +846,10 @@ class MailingController extends Controller
         $mailings = $query->orderBy('id')->limit(150)->get();
 
         if ($mailings->isEmpty()) {
-            return back()->with('warning', 'No active shipments to update.');
+            return [0, 0, false];
         }
 
-        $budgetUntil = microtime(true) + 22.0;
+        $budgetUntil = microtime(true) + $budgetSeconds;
         $updated = 0;
         $skipped = 0;
         foreach ($mailings as $m) {
@@ -799,9 +866,17 @@ class MailingController extends Controller
             }
         }
 
-        $msg = "Updated {$updated} shipment(s) from UPS".($skipped ? " · {$skipped} left for the next run" : '').'.';
+        return [$updated, $skipped, true];
+    }
 
-        return back()->with($updated ? 'success' : 'warning', $updated ? $msg : 'UPS had no new data right now.');
+    /** Whether UPS Quantum View is really configured (real client, not the simulator). */
+    private function quantumViewConfigured(): bool
+    {
+        $ups = config('services.ups');
+        $qv = $ups['quantum_view'] ?? [];
+
+        return (bool) (($qv['enabled'] ?? false)
+            && ($ups['client_id'] ?? null) && ($ups['client_secret'] ?? null) && ($qv['subscription'] ?? null));
     }
 
     /**
@@ -943,13 +1018,20 @@ class MailingController extends Controller
      */
     private function carrierOptions(int $orgId): array
     {
+        // Carriers hidden ("removed") on the Carriers page aren't offered — unless a
+        // shipment still uses one, which the "used" loop below adds back.
+        $org = \App\Models\Organization::find($orgId);
+        $hidden = $org ? $this->carrierRegistry->hidden($org) : [];
+
         $options = [];
         foreach (\App\Enums\Carrier::cases() as $c) {
+            if (in_array($c->value, $hidden, true)) {
+                continue;
+            }
             $options[$c->value] = $c->label();
         }
 
         // Custom carriers registered on the Carriers page (even with no shipments yet).
-        $org = \App\Models\Organization::find($orgId);
         if ($org) {
             foreach ($this->carrierRegistry->names($org) as $name) {
                 if (! isset($options[$name])) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import { SharedProps } from '@/Types';
 import {
-    LayoutDashboard, Truck, Plug, ShieldCheck, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown, UploadCloud, Settings,
+    LayoutDashboard, Truck, Plug, ShieldCheck, Bell, LogOut, Menu, X, Sun, Moon, ChevronDown, UploadCloud, Settings, BadgeDollarSign,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { clearChat } from '@/Lib/chatStore';
@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
     { label: 'Shipments', href: '/shipments/mailings', icon: Truck },
     { label: 'Import', href: '/shipments/mailings/import', icon: UploadCloud },
     { label: 'Carriers', href: '/shipments/carriers', icon: Plug },
+    { label: 'Rate quotes', href: '/shipments/rates', icon: BadgeDollarSign },
     { label: 'Access', href: '/shipments/admin', icon: ShieldCheck, adminOnly: true },
 ];
 

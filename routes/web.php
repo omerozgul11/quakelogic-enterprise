@@ -70,10 +70,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Shipments — UPS tracking for mailed proposals (gated by `access shipments`).
     Route::prefix('shipments')->name('shipments.')->middleware('permission:access shipments')->group(function () {
         Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'dashboard'])->name('dashboard');
+        // Dashboard "Sync now": pull newly-created labels from the carrier + refresh.
+        Route::post('/sync', [\App\Http\Controllers\Web\MailingController::class, 'sync'])->name('sync');
         Route::get('/carriers', [\App\Http\Controllers\Web\CarriersController::class, 'index'])->name('carriers');
         Route::post('/carriers', [\App\Http\Controllers\Web\CarriersController::class, 'store'])->name('carriers.store');
         Route::post('/carriers/update', [\App\Http\Controllers\Web\CarriersController::class, 'update'])->name('carriers.update');
+        Route::post('/carriers/profile', [\App\Http\Controllers\Web\CarriersController::class, 'updateProfile'])->name('carriers.profile');
         Route::post('/carriers/remove', [\App\Http\Controllers\Web\CarriersController::class, 'destroy'])->name('carriers.remove');
+        Route::post('/carriers/restore', [\App\Http\Controllers\Web\CarriersController::class, 'restore'])->name('carriers.restore');
+
+        // Rate / spot-price quotes (manual today; live for credentialed carriers like DHL).
+        Route::prefix('rates')->name('rates.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Web\RateQuoteController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Web\RateQuoteController::class, 'create'])->name('create');
+            // Instant estimate from the DHL contract rate card (JSON; no spot-quote email needed).
+            Route::post('/estimate', [\App\Http\Controllers\Web\RateQuoteController::class, 'estimate'])->name('estimate');
+            Route::post('/', [\App\Http\Controllers\Web\RateQuoteController::class, 'store'])->name('store');
+            Route::get('/{ulid}/edit', [\App\Http\Controllers\Web\RateQuoteController::class, 'edit'])->name('edit');
+            Route::match(['put', 'patch'], '/{ulid}', [\App\Http\Controllers\Web\RateQuoteController::class, 'update'])->name('update');
+            Route::post('/{ulid}/request', [\App\Http\Controllers\Web\RateQuoteController::class, 'markRequested'])->name('request');
+            // Returned rate-sheet PDF (attach → AI extract → download / remove).
+            Route::post('/{ulid}/document', [\App\Http\Controllers\Web\RateQuoteController::class, 'uploadDocument'])->name('document.store');
+            Route::get('/{ulid}/document/download', [\App\Http\Controllers\Web\RateQuoteController::class, 'downloadDocument'])->name('document.download');
+            Route::delete('/{ulid}/document', [\App\Http\Controllers\Web\RateQuoteController::class, 'deleteDocument'])->name('document.destroy');
+            Route::post('/{ulid}/extract', [\App\Http\Controllers\Web\RateQuoteController::class, 'extract'])->name('extract');
+            Route::delete('/{ulid}', [\App\Http\Controllers\Web\RateQuoteController::class, 'destroy'])->name('destroy');
+        });
+
         Route::prefix('mailings')->name('mailings.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Web\MailingController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Web\MailingController::class, 'create'])->name('create');
@@ -256,14 +279,67 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::match(['put', 'patch'], '/{project}/vendors/{vendor}', [CrmProjectController::class, 'updateVendor'])->name('vendors.update');
         Route::delete('/{project}/vendors/{vendor}', [CrmProjectController::class, 'destroyVendor'])->name('vendors.destroy');
 
+        // Installation sites (site & safety briefing)
+        Route::post('/{project}/sites', [CrmProjectController::class, 'storeSite'])->name('sites.store');
+        Route::match(['put', 'patch'], '/{project}/sites/{site}', [CrmProjectController::class, 'updateSite'])->name('sites.update');
+        Route::delete('/{project}/sites/{site}', [CrmProjectController::class, 'destroySite'])->name('sites.destroy');
+
+        // Typed site / stakeholder contacts
+        Route::post('/{project}/contacts', [CrmProjectController::class, 'storeContact'])->name('contacts.store');
+        Route::match(['put', 'patch'], '/{project}/contacts/{contact}', [CrmProjectController::class, 'updateContact'])->name('contacts.update');
+        Route::delete('/{project}/contacts/{contact}', [CrmProjectController::class, 'destroyContact'])->name('contacts.destroy');
+
+        // Equipment being installed
+        Route::post('/{project}/equipment', [CrmProjectController::class, 'storeEquipment'])->name('equipment.store');
+        Route::match(['put', 'patch'], '/{project}/equipment/{equipment}', [CrmProjectController::class, 'updateEquipment'])->name('equipment.update');
+        Route::delete('/{project}/equipment/{equipment}', [CrmProjectController::class, 'destroyEquipment'])->name('equipment.destroy');
+
+        // Shipments (equipment moving to / from site)
+        Route::post('/{project}/shipments', [CrmProjectController::class, 'storeShipment'])->name('shipments.store');
+        Route::match(['put', 'patch'], '/{project}/shipments/{shipment}', [CrmProjectController::class, 'updateShipment'])->name('shipments.update');
+        Route::delete('/{project}/shipments/{shipment}', [CrmProjectController::class, 'destroyShipment'])->name('shipments.destroy');
+
+        // Execution records (installation / commissioning / training / …)
+        Route::post('/{project}/execution-records', [CrmProjectController::class, 'storeExecutionRecord'])->name('execution-records.store');
+        Route::match(['put', 'patch'], '/{project}/execution-records/{record}', [CrmProjectController::class, 'updateExecutionRecord'])->name('execution-records.update');
+        Route::delete('/{project}/execution-records/{record}', [CrmProjectController::class, 'destroyExecutionRecord'])->name('execution-records.destroy');
+
+        // Checklists & items
+        Route::post('/{project}/checklists', [CrmProjectController::class, 'storeChecklist'])->name('checklists.store');
+        Route::match(['put', 'patch'], '/{project}/checklists/{checklist}', [CrmProjectController::class, 'updateChecklist'])->name('checklists.update');
+        Route::delete('/{project}/checklists/{checklist}', [CrmProjectController::class, 'destroyChecklist'])->name('checklists.destroy');
+        Route::post('/{project}/checklists/{checklist}/items', [CrmProjectController::class, 'storeChecklistItem'])->name('checklists.items.store');
+        Route::match(['put', 'patch'], '/{project}/checklists/{checklist}/items/{item}', [CrmProjectController::class, 'updateChecklistItem'])->name('checklists.items.update');
+        Route::delete('/{project}/checklists/{checklist}/items/{item}', [CrmProjectController::class, 'destroyChecklistItem'])->name('checklists.items.destroy');
+
+        // Travel arrangements
+        Route::post('/{project}/travel', [CrmProjectController::class, 'storeTravel'])->name('travel.store');
+        Route::match(['put', 'patch'], '/{project}/travel/{travel}', [CrmProjectController::class, 'updateTravel'])->name('travel.update');
+        Route::delete('/{project}/travel/{travel}', [CrmProjectController::class, 'destroyTravel'])->name('travel.destroy');
+
+        // Digital sign-offs
+        Route::post('/{project}/signoffs', [CrmProjectController::class, 'storeSignoff'])->name('signoffs.store');
+        Route::delete('/{project}/signoffs/{signoff}', [CrmProjectController::class, 'destroySignoff'])->name('signoffs.destroy');
+
+        // AI field briefing + printable Field Packet (PDF)
+        Route::post('/{project}/briefing', [CrmProjectController::class, 'generateBriefing'])->name('briefing.generate');
+        Route::get('/{project}/field-packet', [CrmProjectController::class, 'fieldPacket'])->name('field-packet');
+
         // Purchase orders (links to the Procurement module's PO records)
         Route::post('/{project}/purchase-orders', [CrmProjectController::class, 'attachPurchaseOrder'])->name('purchase-orders.attach');
         Route::delete('/{project}/purchase-orders/{purchaseOrder}', [CrmProjectController::class, 'detachPurchaseOrder'])->name('purchase-orders.detach');
 
-        // Files
+        // Files (with folders + version history)
         Route::post('/{project}/files', [CrmProjectController::class, 'storeFile'])->name('files.store');
         Route::get('/{project}/files/{file}/download', [CrmProjectController::class, 'downloadFile'])->name('files.download');
+        Route::patch('/{project}/files/{file}/move', [CrmProjectController::class, 'moveFile'])->name('files.move');
+        Route::patch('/{project}/files/{file}/restore-version', [CrmProjectController::class, 'restoreFileVersion'])->name('files.restore-version');
         Route::delete('/{project}/files/{file}', [CrmProjectController::class, 'destroyFile'])->name('files.destroy');
+
+        // Document folders
+        Route::post('/{project}/folders', [CrmProjectController::class, 'storeFolder'])->name('folders.store');
+        Route::match(['put', 'patch'], '/{project}/folders/{folder}', [CrmProjectController::class, 'updateFolder'])->name('folders.update');
+        Route::delete('/{project}/folders/{folder}', [CrmProjectController::class, 'destroyFolder'])->name('folders.destroy');
     });
 
     // Opportunities

@@ -4,6 +4,7 @@ import { Modal } from '@/Components/ui/Modal';
 import { Button } from '@/Components/ui/Button';
 import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
+import { statusLabel } from '@/Lib/utils';
 
 export interface EditableProject {
     id: number;
@@ -35,15 +36,18 @@ interface Props {
     companies: Array<{ id: number; name: string }>;
     owners: Array<{ id: number; name: string }>;
     statuses: Array<{ value: string; label: string }>;
+    /** Existing proposals (not yet linked) selectable as the related proposal on a new project. */
+    proposals?: Array<{ id: number; number: string; name: string; status: string }>;
     /** Owner reassignment is admin-only. */
     canAdminister?: boolean;
 }
 
-export function ProjectFormModal({ open, onClose, project, companies, owners, statuses, canAdminister = false }: Props) {
+export function ProjectFormModal({ open, onClose, project, companies, owners, statuses, proposals = [], canAdminister = false }: Props) {
     const isEdit = !!project;
     const form = useForm({
         name: project?.name ?? '',
         code: project?.code ?? '',
+        proposal_submission_id: '',
         status: project?.status ?? 'new',
         description: project?.description ?? '',
         notes: project?.notes ?? '',
@@ -67,6 +71,7 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
         e.preventDefault();
         form.transform(data => ({
             ...data,
+            proposal_submission_id: data.proposal_submission_id || null,
             company_id: data.company_id || null,
             owner_id: data.owner_id || null,
             project_manager_id: data.project_manager_id || null,
@@ -108,10 +113,22 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
                         <input className="input" value={form.data.code} onChange={e => form.setData('code', e.target.value)} placeholder="optional" />
                     </div>
                 </div>
+                {!isEdit && proposals.length > 0 && (
+                    <div>
+                        <label className="label">Related proposal</label>
+                        <Select className="w-full" value={form.data.proposal_submission_id} onChange={v => form.setData('proposal_submission_id', v)}
+                            placeholder="— None —" searchable searchPlaceholder="Search by name or number…"
+                            options={proposals.map(p => ({ value: String(p.id), label: `${p.number} — ${p.name}${p.status ? ` (${statusLabel(p.status)})` : ''}` }))} />
+                        {err('proposal_submission_id')
+                            ? <p className="mt-1 text-xs text-destructive">{err('proposal_submission_id')}</p>
+                            : <p className="mt-1 text-xs text-muted-foreground">Links this project to an existing proposal and its documents.</p>}
+                    </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="label">Client</label>
                         <Select className="w-full" value={form.data.company_id} onChange={v => form.setData('company_id', v)} placeholder="— None —"
+                            searchable searchPlaceholder="Search clients…"
                             options={companies.map(c => ({ value: String(c.id), label: c.name }))} />
                     </div>
                     <div>
@@ -125,12 +142,14 @@ export function ProjectFormModal({ open, onClose, project, companies, owners, st
                         <div>
                             <label className="label">Owner</label>
                             <Select className="w-full" value={form.data.owner_id} onChange={v => form.setData('owner_id', v)} placeholder="— Me —"
+                                searchable searchPlaceholder="Search people…"
                                 options={owners.map(o => ({ value: String(o.id), label: o.name }))} />
                         </div>
                     )}
                     <div>
                         <label className="label">Project manager</label>
                         <Select className="w-full" value={form.data.project_manager_id} onChange={v => form.setData('project_manager_id', v)} placeholder="— Unassigned —"
+                            searchable searchPlaceholder="Search people…"
                             options={owners.map(o => ({ value: String(o.id), label: o.name }))} />
                     </div>
                     <div>

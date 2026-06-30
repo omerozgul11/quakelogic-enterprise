@@ -43,6 +43,7 @@ interface Props {
     owners: Array<{ id: number; name: string }>;
     statuses: Array<{ value: string; label: string; color: string }>;
     awardableProposals: Array<{ id: number; number: string; name: string }>;
+    linkableProposals: Array<{ id: number; number: string; name: string; status: string }>;
     can: { manage: boolean; manageAll: boolean; settings: boolean };
 }
 
@@ -60,7 +61,7 @@ function StatCard({ icon: Icon, label, value, tone }: { icon: React.ComponentTyp
     );
 }
 
-export default function ProjectsIndex({ projects, filters, stats, companies, owners, statuses, awardableProposals, can }: Props) {
+export default function ProjectsIndex({ projects, filters, stats, companies, owners, statuses, awardableProposals, linkableProposals, can }: Props) {
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<ProjectRow | null>(null);
     const [fromProposalOpen, setFromProposalOpen] = useState(false);
@@ -101,7 +102,7 @@ export default function ProjectsIndex({ projects, filters, stats, companies, own
 
                 <Card className="mb-4 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <SearchInput className="min-w-0 flex-1 sm:max-w-sm" initial={filters.search ?? ''} onSearch={v => handleFilter('search', v)} placeholder="Search by name or number…" />
+                        <SearchInput className="min-w-0 flex-1 sm:max-w-sm" initial={filters.search ?? ''} onSearch={v => handleFilter('search', v)} placeholder="Search name, number, serial #, tracking #, site, contact…" />
                         <Select value={filters.status ?? ''} onChange={v => handleFilter('status', v)} options={statuses.map(s => ({ value: s.value, label: s.label }))} placeholder="All statuses" className="w-full sm:w-48" />
                         {can.manageAll && (
                             <Select value={filters.owner ?? ''} onChange={v => handleFilter('owner', v)} options={owners.map(o => ({ value: String(o.id), label: o.name }))} placeholder="All owners" className="w-full sm:w-48" />
@@ -191,6 +192,7 @@ export default function ProjectsIndex({ projects, filters, stats, companies, own
                     companies={companies}
                     owners={owners}
                     statuses={statuses}
+                    proposals={linkableProposals}
                     canAdminister={can.manageAll}
                 />
             )}
@@ -201,12 +203,18 @@ export default function ProjectsIndex({ projects, filters, stats, companies, own
 }
 
 function FromProposalModal({ proposals, onClose }: { proposals: Array<{ id: number; number: string; name: string }>; onClose: () => void }) {
-    const form = useForm({ proposal_submission_id: '' });
+    const form = useForm({ proposal_submission_id: '', from_proposal: true });
+    const [query, setQuery] = useState('');
 
     const create = () => {
         if (!form.data.proposal_submission_id) return;
         form.post('/projects', { onSuccess: () => onClose() });
     };
+
+    const q = query.trim().toLowerCase();
+    const visible = q
+        ? proposals.filter(p => p.name.toLowerCase().includes(q) || p.number.toLowerCase().includes(q))
+        : proposals;
 
     return (
         <Modal open onClose={onClose} title="Create project from proposal"
@@ -215,8 +223,11 @@ function FromProposalModal({ proposals, onClose }: { proposals: Array<{ id: numb
                 <Button variant="ghost" onClick={onClose}>Cancel</Button>
                 <Button onClick={create} disabled={form.processing || !form.data.proposal_submission_id}>{form.processing ? 'Creating…' : 'Create Project'}</Button>
             </>}>
+            {proposals.length > 0 && (
+                <SearchInput className="mb-3" initial="" onSearch={setQuery} delay={120} placeholder="Search by name or proposal number…" />
+            )}
             <div className="max-h-80 space-y-1.5 overflow-y-auto">
-                {proposals.map(p => (
+                {visible.map(p => (
                     <button
                         key={p.id}
                         onClick={() => form.setData('proposal_submission_id', String(p.id))}
@@ -230,6 +241,7 @@ function FromProposalModal({ proposals, onClose }: { proposals: Array<{ id: numb
                     </button>
                 ))}
                 {proposals.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No awarded proposals without a project.</p>}
+                {proposals.length > 0 && visible.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No proposals match “{query}”.</p>}
             </div>
         </Modal>
     );

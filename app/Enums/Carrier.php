@@ -63,4 +63,20 @@ enum Carrier: string
             self::Dhl => 'https://www.dhl.com/en/express/tracking.html?AWB='.$trackingNumber,
         };
     }
+
+    /**
+     * The carrier's account login page — a sensible default shown on the Carriers
+     * page so staff can jump to where they sign in. Orgs can override it with their
+     * own URL (stored per carrier in Organization.settings via CarrierProfileService).
+     */
+    public function loginUrl(): ?string
+    {
+        return match ($this) {
+            self::Ups => 'https://www.ups.com/lasso/login',
+            self::JbHunt => 'https://www.jbhunt.com/account',
+            self::RlCarriers => 'https://www.rlcarriers.com/login',
+            self::Fedex => 'https://www.fedex.com/secure-login/en-us/',
+            self::Dhl => 'https://mydhl.express.dhl/',
+        };
+    }
 }

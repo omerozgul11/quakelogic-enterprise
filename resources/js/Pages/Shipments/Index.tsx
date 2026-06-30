@@ -46,10 +46,12 @@ const TILES = [
 ] as const;
 
 export default function ShipmentsDashboard({ stats, recent, issues, scope, scopeCounts }: Props) {
-    const [updating, setUpdating] = useState(false);
-    const updateAll = () => {
-        setUpdating(true);
-        router.post('/shipments/mailings/refresh-all', {}, { preserveScroll: true, onFinish: () => setUpdating(false) });
+    const [syncing, setSyncing] = useState(false);
+    // Sync now: pull shipments whose label was just created directly from the
+    // carrier account, then refresh tracking on the active ones.
+    const sync = () => {
+        setSyncing(true);
+        router.post('/shipments/sync', {}, { preserveScroll: true, onFinish: () => setSyncing(false) });
     };
 
     // Keep the counts live: re-fetch whenever the user returns to this tab/window
@@ -113,8 +115,8 @@ export default function ShipmentsDashboard({ stats, recent, issues, scope, scope
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <button onClick={updateAll} disabled={updating} className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary disabled:opacity-60">
-                            <RefreshCw className={`h-4 w-4 ${updating ? 'animate-spin' : ''}`} /> {updating ? 'Updating…' : 'Update all'}
+                        <button onClick={sync} disabled={syncing} title="Pull newly-created labels from the carrier and refresh tracking" className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary disabled:opacity-60">
+                            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Syncing…' : 'Sync now'}
                         </button>
                         <Link href="/shipments/mailings/import" className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary">
                             <UploadCloud className="h-4 w-4" /> Import

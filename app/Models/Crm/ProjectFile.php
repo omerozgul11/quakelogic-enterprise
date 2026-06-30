@@ -17,14 +17,30 @@ class ProjectFile extends Model
     protected $table = 'crm_project_files';
 
     protected $fillable = [
-        'ulid', 'organization_id', 'crm_project_id', 'uploaded_by',
+        'ulid', 'organization_id', 'crm_project_id', 'crm_project_folder_id', 'uploaded_by',
         'display_name', 'original_filename', 'stored_filename',
         'disk', 'path', 'mime_type', 'size', 'checksum', 'source',
+        'version', 'is_current_version', 'parent_file_id',
     ];
 
     protected function casts(): array
     {
-        return ['size' => 'integer'];
+        return [
+            'size' => 'integer',
+            'version' => 'integer',
+            'is_current_version' => 'boolean',
+        ];
+    }
+
+    /** Root id of this file's version family (itself when it is the original). */
+    public function rootId(): int
+    {
+        return $this->parent_file_id ?? $this->id;
+    }
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(ProjectFolder::class, 'crm_project_folder_id');
     }
 
     protected static function boot(): void
