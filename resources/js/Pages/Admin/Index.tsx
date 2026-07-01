@@ -7,7 +7,7 @@ import { StatCard } from '@/Components/ui/StatCard';
 import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
 import { formatDate, generatePassword } from '@/Lib/utils';
-import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check, Mail, LogIn } from 'lucide-react';
+import { Users, Shield, Edit, UserCheck, UserX, X, Plus, Trash2, Wand2, Eye, EyeOff, Copy, Check, Mail, LogIn, Tags, Inbox } from 'lucide-react';
 import { useState } from 'react';
 
 interface MailboxState {
@@ -304,9 +304,13 @@ export default function AdminIndex({ users, roles, auth }: Props) {
                     title="Admin Panel"
                     description={`${users.total} ${users.total === 1 ? 'user' : 'users'} in your organization`}
                     actions={
-                        <Button icon={Plus} onClick={() => { setEditingUser(null); setShowCreate(v => !v); }}>
-                            Add User
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <a href="/admin/bidprime"><Button variant="secondary" icon={Inbox}>BidPrime</Button></a>
+                            <a href="/admin/keyword-groups"><Button variant="secondary" icon={Tags}>Keyword Groups</Button></a>
+                            <Button icon={Plus} onClick={() => { setEditingUser(null); setShowCreate(v => !v); }}>
+                                Add User
+                            </Button>
+                        </div>
                     }
                 />
 

@@ -286,22 +286,64 @@ class SamGovClient
         ];
     }
 
-    public function getOpportunity(string $noticeId): ?BidSourceResultDTO
+    public function getOpportunity(string $noticeId, ?\DateTimeInterface $postedNear = null): ?BidSourceResultDTO
     {
+        // SAM's v2 search requires postedFrom/postedTo and rejects a range a full
+        // year (or more) apart — "Date range must be null year(s) apart". Use a
+        // window just under a year, centered on the notice's posting date when we
+        // know it, so notices older than a year still resolve.
+        [$from, $to] = $this->noticeDateWindow($postedNear);
+
         $response = Http::timeout(30)->get(rtrim($this->baseUrl, '/') . '/search', [
             'api_key' => $this->apiKey,
             'noticeid' => $noticeId,
             'limit' => 1,
-            'postedFrom' => now()->subYear()->format('m/d/Y'),
-            'postedTo' => now()->format('m/d/Y'),
+            'postedFrom' => $from,
+            'postedTo' => $to,
         ]);
 
+        // Throttling (429) or a SAM-side error (5xx) is transient — surface it as
+        // an exception so the caller retries later instead of caching a bogus
+        // "no documents" miss. A 4xx (e.g. bad/expired notice) is a real miss.
+        if ($response->status() === 429 || $response->serverError()) {
+            Log::warning('SAM.gov opportunity lookup throttled/unavailable', [
+                'status' => $response->status(),
+                'body' => substr($response->body(), 0, 200),
+            ]);
+            throw new SamThrottledException("SAM.gov lookup failed (HTTP {$response->status()})");
+        }
         if (!$response->successful()) {
             return null;
         }
 
         $items = $response->json('opportunitiesData', []) ?? [];
         return $items ? $this->mapToDto($items[0]) : null;
+    }
+
+    /**
+     * A valid SAM postedFrom/postedTo window (just under one year): centered on a
+     * known posting date, else the trailing ~year up to today. m/d/Y strings.
+     *
+     * @return array{0:string,1:string}
+     */
+    private function noticeDateWindow(?\DateTimeInterface $postedNear): array
+    {
+        $today = Carbon::now();
+
+        if ($postedNear) {
+            $from = Carbon::parse($postedNear->format('Y-m-d'))->subDays(7);
+            $to = $from->copy()->addDays(350);
+            if ($to->greaterThan($today)) {
+                $to = $today->copy();
+            }
+            if ($from->greaterThan($to)) {
+                $from = $to->copy()->subDays(350);
+            }
+
+            return [$from->format('m/d/Y'), $to->format('m/d/Y')];
+        }
+
+        return [$today->copy()->subDays(364)->format('m/d/Y'), $today->format('m/d/Y')];
     }
 
     private function mapToDto(array $i): BidSourceResultDTO

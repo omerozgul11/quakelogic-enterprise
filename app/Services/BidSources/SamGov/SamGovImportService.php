@@ -177,13 +177,28 @@ class SamGovImportService
 
     private function updateOpportunity(Opportunity $opportunity, $result): void
     {
+        $raw = $result->rawData;
+
+        // A sparse re-import (e.g. full-text search) carries no resourceLinks —
+        // preserve documents a richer import or the backfill already pulled so a
+        // later sync doesn't wipe them.
+        if (is_array($raw) && empty($raw['resourceLinks'])) {
+            $existing = (array) ($opportunity->raw_source_data ?? []);
+            if (! empty($existing['resourceLinks'])) {
+                $raw['resourceLinks'] = $existing['resourceLinks'];
+            }
+            if (! empty($existing['links']) && empty($raw['links'])) {
+                $raw['links'] = $existing['links'];
+            }
+        }
+
         // Sparse sources (e.g. full-text search) may carry nulls for fields a
         // previous import already filled — never overwrite data with null.
         $opportunity->update(array_filter([
             'due_date' => $result->dueDate,
             'estimated_value' => $result->estimatedValue,
             'description' => $result->description,
-            'raw_source_data' => $result->rawData,
+            'raw_source_data' => $raw,
         ], fn ($v) => $v !== null));
     }
 }

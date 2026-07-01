@@ -3,9 +3,11 @@
 namespace App\Modules\Procurement\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Procurement\Enums\PurchaseOrderStatus;
+use App\Modules\Procurement\Enums\SupplierStatus;
 use App\Modules\Procurement\Http\Requests\PurchaseOrderRequest;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\PurchaseOrderItem;
@@ -15,6 +17,7 @@ use App\Modules\Procurement\Services\PurchaseOrderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -74,10 +77,11 @@ class PurchaseOrderController extends Controller
         $data = $request->validated();
 
         $po = DB::transaction(function () use ($data, $user) {
+            $supplierId = $this->resolveSupplierId($data, $user);
             $po = PurchaseOrder::create([
                 'organization_id' => $user->organization_id,
                 'created_by' => $user->id,
-                'procurement_supplier_id' => $data['procurement_supplier_id'],
+                'procurement_supplier_id' => $supplierId,
                 'inventory_warehouse_id' => $data['inventory_warehouse_id'] ?? null,
                 'number' => $this->numbers->generate($user->organization_id),
                 'status' => PurchaseOrderStatus::Draft,
@@ -94,6 +98,10 @@ class PurchaseOrderController extends Controller
 
             return $po;
         });
+
+        // Email the supplier a copy and confirm to the internal buyer. Runs
+        // after commit so a mail hiccup can't roll back the created PO.
+        $this->service->notifyCreated($po);
 
         return redirect()->route('procurement.purchase-orders.show', $po)->with('success', "Purchase order {$po->number} created.");
     }
@@ -215,9 +223,13 @@ class PurchaseOrderController extends Controller
     public function markSent(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
     {
         $this->authorize('update', $purchaseOrder);
-        $this->service->markSent($purchaseOrder);
+        $po = $this->service->markSent($purchaseOrder);
 
-        return back()->with('success', 'Marked as sent to supplier.');
+        $message = $po->emailed_at
+            ? "Purchase order {$po->number} sent and emailed to the supplier."
+            : "Purchase order {$po->number} marked as sent — no supplier email on file.";
+
+        return back()->with('success', $message);
     }
 
     public function cancel(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
@@ -258,6 +270,64 @@ class PurchaseOrderController extends Controller
         }
 
         return back()->with('success', 'Goods received.');
+    }
+
+    /**
+     * The supplier id for the PO: an existing selection, or a brand-new supplier
+     * created inline from the "supplier doesn't exist yet" details on the form.
+     * Runs inside the create transaction so the supplier and PO commit together.
+     */
+    private function resolveSupplierId(array $data, User $user): int
+    {
+        if (! empty($data['procurement_supplier_id'])) {
+            return (int) $data['procurement_supplier_id'];
+        }
+
+        $ns = $data['new_supplier'] ?? [];
+
+        $supplier = Supplier::create([
+            'organization_id' => $user->organization_id,
+            'created_by' => $user->id,
+            'owner_id' => $user->id,
+            'name' => $ns['name'],
+            'code' => $this->uniqueSupplierCode($ns['code'] ?? null, $ns['name'], $user->organization_id),
+            'category' => $ns['category'] ?? null,
+            'status' => SupplierStatus::Active,
+            'email' => $ns['email'] ?? null,
+            'phone' => $ns['phone'] ?? null,
+            'website' => $ns['website'] ?? null,
+            'address_line1' => $ns['address_line1'] ?? null,
+            'city' => $ns['city'] ?? null,
+            'state' => $ns['state'] ?? null,
+            'postal_code' => $ns['postal_code'] ?? null,
+            'country' => $ns['country'] ?? null,
+            'payment_terms' => $ns['payment_terms'] ?? null,
+            'currency' => $data['currency'] ?? 'USD',
+            'tax_id' => $ns['tax_id'] ?? null,
+            'notes' => $ns['notes'] ?? null,
+        ]);
+
+        return $supplier->id;
+    }
+
+    /** A supplier code unique within the org — the given one, or derived from the name. */
+    private function uniqueSupplierCode(?string $provided, string $name, int $orgId): string
+    {
+        $base = $provided !== null && trim($provided) !== ''
+            ? strtoupper(trim($provided))
+            : strtoupper(Str::slug($name, ''));
+        $base = substr((string) preg_replace('/[^A-Z0-9]/', '', $base), 0, 12);
+        if ($base === '') {
+            $base = 'SUP';
+        }
+
+        $code = $base;
+        $n = 1;
+        while (Supplier::withTrashed()->where('organization_id', $orgId)->where('code', $code)->exists()) {
+            $code = $base.'-'.(++$n);
+        }
+
+        return $code;
     }
 
     /** Persist PO line items from validated request data. */

@@ -32,6 +32,7 @@ class Opportunity extends Model
         'description', 'scope', 'requirements_summary', 'notes', 'go_no_go_notes',
         'go_no_go_decision', 'go_no_go_decided_by', 'go_no_go_decided_at',
         'raw_source_data', 'matched_keywords', 'is_duplicate_flagged', 'duplicate_of', 'canonical_hash',
+        'relevance_score', 'priority', 'score_breakdown',
     ];
 
     protected function casts(): array
@@ -60,6 +61,9 @@ class Opportunity extends Model
             'is_duplicate_flagged' => 'boolean',
             'raw_source_data' => 'array',
             'matched_keywords' => 'array',
+            'relevance_score' => 'integer',
+            'priority' => \App\Enums\OpportunityPriority::class,
+            'score_breakdown' => 'array',
         ];
     }
 

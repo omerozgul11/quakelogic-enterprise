@@ -6,7 +6,7 @@ import { Card } from '@/Components/ui/Card';
 import { EmptyState } from '@/Components/ui/EmptyState';
 import { Pagination } from '@/Components/ui/Pagination';
 import { NotificationItem } from '@/Types';
-import { Bell, FileText, Target, Trash2, CheckCheck } from 'lucide-react';
+import { Bell, FileText, Target, Trash2, CheckCheck, ShoppingCart } from 'lucide-react';
 
 interface Paginated<T> {
     data: T[];
@@ -24,6 +24,7 @@ interface Props {
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
     'file-text': FileText,
     target: Target,
+    'shopping-cart': ShoppingCart,
     bell: Bell,
 };
 

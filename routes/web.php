@@ -31,6 +31,8 @@ use App\Http\Controllers\Web\ProposalController;
 use App\Http\Controllers\Web\ProposalCostController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\AdminController;
+use App\Http\Controllers\Web\BidPrimeAdminController;
+use App\Http\Controllers\Web\OpportunityKeywordGroupController;
 use App\Http\Controllers\Web\SettingsController;
 use App\Http\Controllers\Web\IntegrationController;
 use App\Http\Controllers\Web\NotificationController;
@@ -78,6 +80,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/carriers/profile', [\App\Http\Controllers\Web\CarriersController::class, 'updateProfile'])->name('carriers.profile');
         Route::post('/carriers/remove', [\App\Http\Controllers\Web\CarriersController::class, 'destroy'])->name('carriers.remove');
         Route::post('/carriers/restore', [\App\Http\Controllers\Web\CarriersController::class, 'restore'])->name('carriers.restore');
+        // DHL tracking push subscriptions — connect a tracking number / account so
+        // DHL pushes live updates to our webhook, or disconnect one.
+        Route::post('/carriers/dhl/subscribe', [\App\Http\Controllers\Web\DhlSubscriptionController::class, 'subscribe'])->name('carriers.dhl.subscribe');
+        Route::post('/carriers/dhl/unsubscribe', [\App\Http\Controllers\Web\DhlSubscriptionController::class, 'destroy'])->name('carriers.dhl.unsubscribe');
 
         // Rate / spot-price quotes (manual today; live for credentialed carriers like DHL).
         Route::prefix('rates')->name('rates.')->group(function () {
@@ -559,6 +565,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/users/{user}/mailbox/test', [AdminController::class, 'testUserMailbox'])->name('users.mailbox.test');
         Route::delete('/users/{user}/mailbox', [AdminController::class, 'disconnectUserMailbox'])->name('users.mailbox.disconnect');
         Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('audit-logs');
+
+        // Opportunity keyword groups — editable source of truth for scoring.
+        Route::get('/keyword-groups', [OpportunityKeywordGroupController::class, 'index'])->name('keyword-groups.index');
+        Route::post('/keyword-groups', [OpportunityKeywordGroupController::class, 'store'])->name('keyword-groups.store');
+        Route::match(['put', 'patch'], '/keyword-groups/{keywordGroup}', [OpportunityKeywordGroupController::class, 'update'])->name('keyword-groups.update');
+        Route::delete('/keyword-groups/{keywordGroup}', [OpportunityKeywordGroupController::class, 'destroy'])->name('keyword-groups.destroy');
+
+        // BidPrime email intake — review dashboard, reprocess + approve/reject.
+        Route::prefix('bidprime')->name('bidprime.')->group(function () {
+            Route::get('/', [BidPrimeAdminController::class, 'index'])->name('index');
+            Route::get('/emails/{email}', [BidPrimeAdminController::class, 'showEmail'])->name('emails.show');
+            Route::post('/import-now', [BidPrimeAdminController::class, 'importNow'])->name('import-now');
+            Route::post('/reprocess-recent', [BidPrimeAdminController::class, 'reprocessRecent'])->name('reprocess-recent');
+            Route::post('/reprocess-failed', [BidPrimeAdminController::class, 'reprocessFailed'])->name('reprocess-failed');
+            Route::post('/emails/{email}/reprocess', [BidPrimeAdminController::class, 'reprocessEmail'])->name('emails.reprocess');
+            Route::post('/opportunities/{opportunity}/approve', [BidPrimeAdminController::class, 'approveOpportunity'])->name('opportunities.approve');
+            Route::post('/opportunities/{opportunity}/reject', [BidPrimeAdminController::class, 'rejectOpportunity'])->name('opportunities.reject');
+        });
     });
 
     // Settings

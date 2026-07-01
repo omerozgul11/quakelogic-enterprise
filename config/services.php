@@ -130,6 +130,29 @@ return [
     ],
 
     /*
+    | DHL — "Shipment Tracking - Unified" + Push. One DHL-API-Key powers both the
+    | request/response tracking API (manual "Refresh", RealDhlTrackingClient) and
+    | the push subscriptions that deliver live updates to our webhook
+    | (POST /api/dhl/webhook/{token}). Until DHL_API_KEY is set, DHL stays manual /
+    | push-only and no calls hit DHL (a fake drives the test suite). base_url is
+    | DHL's single production host.
+    */
+    'dhl' => [
+        'api_key' => env('DHL_API_KEY'),
+        'base_url' => env('DHL_BASE_URL', 'https://api-eu.dhl.com'),
+        'push' => [
+            // Secret path segment on our webhook URL — DHL doesn't sign push
+            // notifications, so this unguessable token authenticates inbound calls.
+            // Generate a random string; the same value goes in the URL you register
+            // with DHL. Without it the webhook rejects everything (401).
+            'webhook_token' => env('DHL_PUSH_WEBHOOK_TOKEN'),
+            // Optional explicit callback URL registered with DHL; defaults to
+            // APP_URL + /api/dhl/webhook/{token} when blank.
+            'webhook_url' => env('DHL_PUSH_WEBHOOK_URL'),
+        ],
+    ],
+
+    /*
     | Exchange rates shown on the dashboard. Refreshed on a schedule into a cache
     | the dashboard reads instantly. Source chain (best first):
     |   1. realtime  — free, no-key, near-real-time market quotes (Yahoo Finance).

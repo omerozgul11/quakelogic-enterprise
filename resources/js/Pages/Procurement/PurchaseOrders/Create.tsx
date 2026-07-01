@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEvent } from 'react';
+import { FormEvent, useState } from 'react';
 import { ProcurementLayout } from '@/Components/layout/ProcurementLayout';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
@@ -18,7 +18,14 @@ interface Line { inventory_product_id: string; description: string; sku: string;
 
 const emptyLine: Line = { inventory_product_id: '', description: '', sku: '', quantity_ordered: '1', unit_cost: '0' };
 
+const emptyNewSupplier = {
+    name: '', code: '', category: '', email: '', phone: '', website: '',
+    payment_terms: '', tax_id: '', address_line1: '', city: '', state: '',
+    postal_code: '', country: '', notes: '',
+};
+
 export default function PurchaseOrderCreate({ suppliers, warehouses, products }: Props) {
+    const [newSupplier, setNewSupplier] = useState(false);
     const form = useForm({
         procurement_supplier_id: '',
         inventory_warehouse_id: '',
@@ -28,8 +35,13 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products }:
         tax_rate: '0',
         shipping_amount: '0',
         notes: '',
+        new_supplier: { ...emptyNewSupplier },
         items: [{ ...emptyLine }] as Line[],
     });
+
+    const setNs = (patch: Partial<typeof emptyNewSupplier>) =>
+        form.setData('new_supplier', { ...form.data.new_supplier, ...patch });
+    const nsErr = (k: string) => (form.errors as Record<string, string>)[`new_supplier.${k}`];
 
     const setLine = (i: number, patch: Partial<Line>) => {
         const items = form.data.items.map((l, idx) => (idx === i ? { ...l, ...patch } : l));
@@ -52,6 +64,11 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products }:
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
+        form.transform(data => ({
+            ...data,
+            procurement_supplier_id: newSupplier ? null : data.procurement_supplier_id,
+            new_supplier: newSupplier ? data.new_supplier : null,
+        }));
         form.post('/procurement/purchase-orders', { preserveScroll: true });
     };
     const lineErr = (i: number, field: string) => (form.errors as Record<string, string>)[`items.${i}.${field}`];
@@ -72,11 +89,28 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products }:
                 <Card className="mb-4 p-5">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <label className="label">Supplier *</label>
-                            <Select className="w-full" value={form.data.procurement_supplier_id} placeholder="Select supplier…"
-                                onChange={v => { const s = suppliers.find(su => String(su.id) === v); form.setData(d => ({ ...d, procurement_supplier_id: v, currency: s?.currency ?? d.currency })); }}
-                                options={suppliers.map(s => ({ value: String(s.id), label: `${s.name} (${s.code})` }))} />
-                            {form.errors.procurement_supplier_id && <p className="mt-1 text-xs text-destructive">{form.errors.procurement_supplier_id}</p>}
+                            <div className="flex items-center justify-between gap-2">
+                                <label className="label">Supplier *</label>
+                                <button type="button" onClick={() => setNewSupplier(v => !v)}
+                                    className="text-xs font-medium text-primary hover:underline">
+                                    {newSupplier ? 'Choose existing' : '+ New supplier'}
+                                </button>
+                            </div>
+                            {newSupplier ? (
+                                <>
+                                    <input className="input" autoFocus placeholder="New supplier name"
+                                        value={form.data.new_supplier.name} onChange={e => setNs({ name: e.target.value })} />
+                                    {nsErr('name') && <p className="mt-1 text-xs text-destructive">{nsErr('name')}</p>}
+                                </>
+                            ) : (
+                                <>
+                                    <Select className="w-full" value={form.data.procurement_supplier_id} placeholder="Select supplier…"
+                                        searchable searchPlaceholder="Search suppliers…"
+                                        onChange={v => { const s = suppliers.find(su => String(su.id) === v); form.setData(d => ({ ...d, procurement_supplier_id: v, currency: s?.currency ?? d.currency })); }}
+                                        options={suppliers.map(s => ({ value: String(s.id), label: `${s.name} (${s.code})` }))} />
+                                    {form.errors.procurement_supplier_id && <p className="mt-1 text-xs text-destructive">{form.errors.procurement_supplier_id}</p>}
+                                </>
+                            )}
                         </div>
                         <div>
                             <label className="label">Receive into warehouse</label>
@@ -94,6 +128,65 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products }:
                         </div>
                     </div>
                 </Card>
+
+                {newSupplier && (
+                    <Card className="mb-4 p-5">
+                        <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">New supplier details</h2>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div>
+                                <label className="label">Code</label>
+                                <input className="input" placeholder="Auto if blank" value={form.data.new_supplier.code} onChange={e => setNs({ code: e.target.value })} />
+                                {nsErr('code') && <p className="mt-1 text-xs text-destructive">{nsErr('code')}</p>}
+                            </div>
+                            <div>
+                                <label className="label">Category</label>
+                                <input className="input" value={form.data.new_supplier.category} onChange={e => setNs({ category: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">Payment terms</label>
+                                <input className="input" placeholder="Net 30" value={form.data.new_supplier.payment_terms} onChange={e => setNs({ payment_terms: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">Email</label>
+                                <input type="email" className="input" value={form.data.new_supplier.email} onChange={e => setNs({ email: e.target.value })} />
+                                {nsErr('email') && <p className="mt-1 text-xs text-destructive">{nsErr('email')}</p>}
+                            </div>
+                            <div>
+                                <label className="label">Phone</label>
+                                <input className="input" value={form.data.new_supplier.phone} onChange={e => setNs({ phone: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">Website</label>
+                                <input className="input" value={form.data.new_supplier.website} onChange={e => setNs({ website: e.target.value })} />
+                            </div>
+                            <div className="sm:col-span-2">
+                                <label className="label">Address</label>
+                                <input className="input" value={form.data.new_supplier.address_line1} onChange={e => setNs({ address_line1: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">City</label>
+                                <input className="input" value={form.data.new_supplier.city} onChange={e => setNs({ city: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">State</label>
+                                <input className="input" value={form.data.new_supplier.state} onChange={e => setNs({ state: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">Postal code</label>
+                                <input className="input" value={form.data.new_supplier.postal_code} onChange={e => setNs({ postal_code: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">Country</label>
+                                <input className="input" value={form.data.new_supplier.country} onChange={e => setNs({ country: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="label">Tax ID</label>
+                                <input className="input" value={form.data.new_supplier.tax_id} onChange={e => setNs({ tax_id: e.target.value })} />
+                            </div>
+                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground">Saved as a new supplier when you create the purchase order — currency {form.data.currency || 'USD'}.</p>
+                    </Card>
+                )}
 
                 <Card className="mb-4 overflow-hidden">
                     <div className="border-b border-border px-5 py-3"><h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Line items</h2></div>
@@ -115,6 +208,7 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products }:
                                         <tr key={i} className="align-top">
                                             <td className="px-3 py-2">
                                                 <Select className="w-full" value={l.inventory_product_id} placeholder="— Custom line —"
+                                                    searchable searchPlaceholder="Search products by name or SKU…"
                                                     onChange={v => pickProduct(i, v)} options={productOptions} />
                                                 <input className="input mt-1.5 h-9" placeholder="Description *" value={l.description} onChange={e => setLine(i, { description: e.target.value })} />
                                                 {lineErr(i, 'description') && <p className="mt-1 text-xs text-destructive">{lineErr(i, 'description')}</p>}

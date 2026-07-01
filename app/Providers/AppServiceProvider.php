@@ -44,6 +44,18 @@ class AppServiceProvider extends ServiceProvider
             return new \App\Services\Ups\QuantumView\FakeQuantumViewClient();
         });
 
+        // Shipments: DHL tracking push subscription client — real only when the
+        // DHL-API-Key is present; otherwise an in-memory fake drives dev/tests so
+        // the subscribe → validate → activate flow is exercisable without DHL.
+        $this->app->singleton(\App\Services\Dhl\DhlPushClient::class, function () {
+            $dhl = config('services.dhl');
+            if (! empty($dhl['api_key'])) {
+                return new \App\Services\Dhl\RealDhlPushClient($dhl['api_key'], $dhl['base_url']);
+            }
+
+            return new \App\Services\Dhl\FakeDhlPushClient();
+        });
+
         // SAM.gov client: use real if configured, fake otherwise
         $this->app->singleton(SamGovConnector::class, function () {
             $apiKey = config('integrations.sam_gov.api_key');
@@ -62,6 +74,22 @@ class AppServiceProvider extends ServiceProvider
 
         // BidPrime client binding
         $this->app->singleton(FakeBidPrimeClient::class);
+
+        // BidPrime-via-Gmail inbox reader: the live IMAP client only when ingest
+        // is enabled, credentials are present, AND the IMAP client class exists
+        // (added at go-live with webklex/php-imap); otherwise the fake fixture
+        // inbox drives dev/tests. So the toggle is final — dropping in the real
+        // client + App Password activates it with no further wiring.
+        $this->app->singleton(\App\Services\Email\Gmail\GmailInboxClient::class, function () {
+            $cfg = (array) config('integrations.bidprime.email');
+            if (($cfg['enabled'] ?? false)
+                && ! empty($cfg['username']) && ! empty($cfg['password'])
+                && class_exists(\App\Services\Email\Gmail\ImapGmailInboxClient::class)) {
+                return new \App\Services\Email\Gmail\ImapGmailInboxClient($cfg);
+            }
+
+            return new \App\Services\Email\Gmail\FakeGmailInboxClient();
+        });
     }
 
     public function boot(): void
