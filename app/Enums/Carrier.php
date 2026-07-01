@@ -29,7 +29,7 @@ enum Carrier: string
     /** Whether a real tracking integration exists for this carrier today. */
     public function supported(): bool
     {
-        return in_array($this, [self::Ups, self::JbHunt, self::RlCarriers], true);
+        return in_array($this, [self::Ups, self::JbHunt, self::RlCarriers, self::Dhl], true);
     }
 
     public function color(): string

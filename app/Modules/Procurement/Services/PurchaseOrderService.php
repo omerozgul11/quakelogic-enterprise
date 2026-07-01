@@ -2,11 +2,18 @@
 
 namespace App\Modules\Procurement\Services;
 
+use App\Models\User;
 use App\Modules\Inventory\Services\InventoryService;
 use App\Modules\Procurement\Enums\PurchaseOrderStatus;
+use App\Modules\Procurement\Mail\PurchaseOrderMail;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\PurchaseOrderItem;
+use App\Modules\Procurement\Models\SupplierContact;
+use App\Notifications\ActivityNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use RuntimeException;
 
 /**
@@ -46,8 +53,86 @@ class PurchaseOrderService
     public function submit(PurchaseOrder $po): PurchaseOrder
     {
         $po->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
+        $this->notifyApprovers($po);
 
         return $po;
+    }
+
+    /**
+     * Fire the "purchase order created" notices: email the supplier a copy of
+     * the PO and send the internal buyer (its creator) an in-app + email
+     * confirmation. Best-effort — a mail failure is logged and never blocks the
+     * request. Call this after the create transaction has committed.
+     */
+    public function notifyCreated(PurchaseOrder $po): void
+    {
+        $this->emailSupplierCopy($po);
+
+        $creator = $po->creator()->first();
+        if ($creator) {
+            try {
+                $creator->notify(new ActivityNotification([
+                    'type' => 'procurement',
+                    'title' => "Purchase order {$po->number} created",
+                    'message' => $this->summaryLine($po),
+                    'url' => route('procurement.purchase-orders.show', $po),
+                    'icon' => 'shopping-cart',
+                    'email' => true,
+                ]));
+            } catch (\Throwable $e) {
+                Log::warning('Purchase order creator notification failed', ['po' => $po->number, 'error' => $e->getMessage()]);
+            }
+        }
+    }
+
+    /** Email the supplier (or its primary contact) a copy of the PO. */
+    private function emailSupplierCopy(PurchaseOrder $po): void
+    {
+        $email = $this->vendorEmail($po);
+        if (! $email) {
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new PurchaseOrderMail($po));
+            $po->forceFill(['emailed_at' => now()])->save();
+        } catch (\Throwable $e) {
+            Log::warning('Purchase order supplier email failed', ['po' => $po->number, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** In-app + email alert to everyone who can approve, that a PO is waiting. */
+    private function notifyApprovers(PurchaseOrder $po): void
+    {
+        $approvers = User::query()
+            ->where('organization_id', $po->organization_id)
+            ->permission('approve purchase orders')
+            ->get();
+
+        if ($approvers->isEmpty()) {
+            return;
+        }
+
+        try {
+            Notification::send($approvers, new ActivityNotification([
+                'type' => 'procurement',
+                'title' => "Approval needed: purchase order {$po->number}",
+                'message' => $this->summaryLine($po).' — submitted for approval.',
+                'url' => route('procurement.purchase-orders.show', $po),
+                'icon' => 'shopping-cart',
+                'email' => true,
+            ]));
+        } catch (\Throwable $e) {
+            Log::warning('Purchase order approver notification failed', ['po' => $po->number, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** Short one-line summary of a PO for notification bodies. */
+    private function summaryLine(PurchaseOrder $po): string
+    {
+        $supplier = $po->supplier()->value('name') ?? 'Supplier';
+
+        return $supplier.' — '.number_format((float) $po->total, 2).' '.$po->currency;
     }
 
     public function approve(PurchaseOrder $po, int $approvedBy): PurchaseOrder
@@ -61,11 +146,47 @@ class PurchaseOrderService
         return $po;
     }
 
+    /**
+     * Mark the PO as sent and email it to the supplier (its email, or the
+     * primary contact's). The status advances even if the email can't be sent
+     * (logged) so the workflow never gets stuck on a mail hiccup.
+     */
     public function markSent(PurchaseOrder $po): PurchaseOrder
     {
-        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $email = $this->vendorEmail($po);
+        $emailedAt = null;
+
+        if ($email) {
+            try {
+                Mail::to($email)->send(new PurchaseOrderMail($po));
+                $emailedAt = now();
+            } catch (\Throwable $e) {
+                Log::warning('Purchase order vendor email failed', ['po' => $po->number, 'error' => $e->getMessage()]);
+            }
+        }
+
+        $attrs = ['status' => PurchaseOrderStatus::Sent];
+        if ($emailedAt !== null) {
+            $attrs['emailed_at'] = $emailedAt;
+        }
+        $po->forceFill($attrs)->save();
 
         return $po;
+    }
+
+    /** The supplier's email, or its primary contact's, or null if none on file. */
+    public function vendorEmail(PurchaseOrder $po): ?string
+    {
+        $supplier = $po->supplier()->first();
+        if (! $supplier) {
+            return null;
+        }
+        if ($supplier->email) {
+            return $supplier->email;
+        }
+
+        return SupplierContact::where('procurement_supplier_id', $supplier->id)
+            ->orderByDesc('is_primary')->orderBy('id')->value('email');
     }
 
     public function cancel(PurchaseOrder $po): PurchaseOrder

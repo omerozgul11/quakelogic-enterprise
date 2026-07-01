@@ -76,6 +76,18 @@
     transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
   }
 
+  /* Number fields: drop the native up/down spinner. Keystrokes are policed
+     in JS (see Lib/numericInput) so only digits and a single dot get through. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   ::-webkit-scrollbar { width: 11px; height: 11px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {

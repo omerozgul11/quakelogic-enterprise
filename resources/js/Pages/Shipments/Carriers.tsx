@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
-import { Plug, CheckCircle2, FlaskConical, Clock, Plus, Truck, Trash2, Pencil, Check, X, ExternalLink, ArrowDownToLine, ArrowUpFromLine, RotateCcw } from 'lucide-react';
+import { Plug, CheckCircle2, FlaskConical, Clock, Plus, Truck, Trash2, Pencil, Check, X, ExternalLink, ArrowDownToLine, ArrowUpFromLine, RotateCcw, Zap, Copy } from 'lucide-react';
 import { ShipmentsLayout } from '@/Components/layout/ShipmentsLayout';
 import { Pill } from '@/Components/ui/Pill';
 
@@ -36,11 +36,65 @@ const STATUS_META: Record<CarrierRow['status'], { label: string; color: string; 
 
 interface HiddenCarrier { key: string; name: string; color: string }
 
-export default function Carriers({ carriers, hiddenCarriers }: { carriers: CarrierRow[]; hiddenCarriers: HiddenCarrier[] }) {
+interface DhlSubscription {
+    ulid: string;
+    type: 'shipment' | 'account';
+    tracking_number: string | null;
+    account_number: string | null;
+    status: string;
+    created_at: string | null;
+}
+
+interface DhlPanel {
+    apiConfigured: boolean;
+    pushConfigured: boolean;
+    webhookUrl: string | null;
+    subscriptions: DhlSubscription[];
+}
+
+const SUB_STATUS: Record<string, { label: string; color: string }> = {
+    pending: { label: 'Pending validation', color: 'amber' },
+    validating: { label: 'Validating', color: 'amber' },
+    ready: { label: 'Live', color: 'green' },
+    failed: { label: 'Failed', color: 'red' },
+    removed: { label: 'Removed', color: 'gray' },
+};
+
+export default function Carriers({ carriers, hiddenCarriers, dhl }: { carriers: CarrierRow[]; hiddenCarriers: HiddenCarrier[]; dhl?: DhlPanel }) {
     const [name, setName] = useState('');
     const [saving, setSaving] = useState(false);
     const [editKey, setEditKey] = useState<string | null>(null);
     const [draft, setDraft] = useState<Draft>({ name: '', login_url: '', import_number: '', export_number: '' });
+    const [tracking, setTracking] = useState('');
+    const [subscribing, setSubscribing] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    const dhlReady = !!dhl?.apiConfigured && !!dhl?.pushConfigured;
+
+    const subscribe = (e: React.FormEvent) => {
+        e.preventDefault();
+        const value = tracking.trim();
+        if (!value || subscribing) return;
+        setSubscribing(true);
+        router.post('/shipments/carriers/dhl/subscribe', { tracking_number: value, type: 'shipment' }, {
+            preserveScroll: true,
+            onSuccess: () => setTracking(''),
+            onFinish: () => setSubscribing(false),
+        });
+    };
+
+    const unsubscribe = (ulid: string) => {
+        if (!confirm('Remove this DHL push subscription? DHL will stop sending live updates for it.')) return;
+        router.post('/shipments/carriers/dhl/unsubscribe', { ulid }, { preserveScroll: true });
+    };
+
+    const copyWebhook = () => {
+        if (!dhl?.webhookUrl) return;
+        navigator.clipboard?.writeText(dhl.webhookUrl).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        });
+    };
 
     const add = (e: React.FormEvent) => {
         e.preventDefault();
@@ -242,6 +296,89 @@ export default function Carriers({ carriers, hiddenCarriers }: { carriers: Carri
                         );
                     })}
                 </div>
+
+                {dhl && (
+                    <div className="mt-8 rounded-xl border border-border bg-card p-5 shadow-soft">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-600"><Zap className="h-5 w-5" /></span>
+                                <div>
+                                    <h2 className="text-base font-semibold text-foreground">DHL live tracking (push)</h2>
+                                    <p className="text-xs text-muted-foreground">DHL pushes shipment status to this app in real time — no polling, updates arrive within seconds.</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                                <Pill color={dhl.apiConfigured ? 'green' : 'gray'} label={dhl.apiConfigured ? 'API key set' : 'API key missing'} />
+                                <Pill color={dhl.pushConfigured ? 'green' : 'gray'} label={dhl.pushConfigured ? 'Webhook ready' : 'Webhook token missing'} />
+                            </div>
+                        </div>
+
+                        {!dhlReady && (
+                            <div className="mt-4 rounded-lg bg-secondary/60 p-3 text-xs text-muted-foreground">
+                                To go live, set <code className="font-mono text-foreground">DHL_API_KEY</code> and{' '}
+                                <code className="font-mono text-foreground">DHL_PUSH_WEBHOOK_TOKEN</code> (any random string) in the app env, then restart — no code redeploy needed. Then register the webhook URL below in the DHL developer portal.
+                            </div>
+                        )}
+
+                        {dhl.webhookUrl && (
+                            <div className="mt-4">
+                                <label className="label">Webhook URL — register this in the DHL developer portal</label>
+                                <div className="flex items-center gap-2">
+                                    <code className="flex-1 truncate rounded-lg border border-border bg-secondary/40 px-3 py-2 font-mono text-xs text-foreground">{dhl.webhookUrl}</code>
+                                    <button type="button" onClick={copyWebhook} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-secondary">
+                                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copied' : 'Copy'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <form onSubmit={subscribe} className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="flex-1">
+                                <label htmlFor="dhl-tracking" className="label">Subscribe a DHL tracking number</label>
+                                <input
+                                    id="dhl-tracking"
+                                    value={tracking}
+                                    onChange={e => setTracking(e.target.value)}
+                                    className="input h-9 font-mono"
+                                    placeholder="e.g. 00340434292135100186"
+                                    maxLength={100}
+                                    disabled={!dhlReady}
+                                />
+                                <p className="mt-1.5 text-xs text-muted-foreground">DHL confirms the webhook, then pushes every update for this shipment. Account-wide subscriptions need DHL business approval.</p>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={subscribing || !tracking.trim() || !dhlReady}
+                                className="bg-brand-gradient shadow-glow inline-flex items-center justify-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:opacity-60"
+                            >
+                                <Plus className="h-4 w-4" /> {subscribing ? 'Subscribing…' : 'Subscribe'}
+                            </button>
+                        </form>
+
+                        {dhl.subscriptions.length > 0 && (
+                            <div className="mt-5 border-t border-border pt-4">
+                                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">Push subscriptions</h3>
+                                <div className="divide-y divide-border">
+                                    {dhl.subscriptions.map(s => {
+                                        const meta = SUB_STATUS[s.status] ?? { label: s.status, color: 'gray' };
+                                        return (
+                                            <div key={s.ulid} className="flex items-center gap-3 py-2.5">
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate font-mono text-sm text-foreground">{s.tracking_number || s.account_number || '—'}</span>
+                                                    <span className="text-xs text-muted-foreground">{s.type === 'account' ? 'Account' : 'Shipment'}{s.created_at ? ` · ${s.created_at}` : ''}</span>
+                                                </span>
+                                                <Pill color={meta.color} label={meta.label} />
+                                                <button onClick={() => unsubscribe(s.ulid)} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-destructive">
+                                                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {hiddenCarriers.length > 0 && (
                     <div className="mt-8 border-t border-border pt-6">

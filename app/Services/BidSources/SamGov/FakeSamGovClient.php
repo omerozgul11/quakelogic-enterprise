@@ -80,7 +80,7 @@ class FakeSamGovClient
         return array_values(array_slice($awards, 0, 40));
     }
 
-    public function getOpportunity(string $noticeId): ?BidSourceResultDTO
+    public function getOpportunity(string $noticeId, ?\DateTimeInterface $postedNear = null): ?BidSourceResultDTO
     {
         foreach ($this->fakeOpportunities as $opp) {
             if ($opp->externalId === $noticeId) {

@@ -48,6 +48,7 @@ interface Props {
     };
     contacts: OppContact[];
     samDocuments: SamDocument[];
+    samDocumentsPending?: boolean;
     timeline: TimelineEntry[];
     lifecycle: Lifecycle;
     recommendedOwners: RecommendedOwner[];
@@ -71,7 +72,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 const HEALTH_TONE: Record<string, string> = { healthy: 'green', warning: 'amber', critical: 'red' };
 
-export default function OpportunityShow({ opportunity, contacts, samDocuments, timeline, lifecycle, recommendedOwners, health, reactionOptions, stageOptions, assignableUsers, can }: Props) {
+export default function OpportunityShow({ opportunity, contacts, samDocuments, samDocumentsPending, timeline, lifecycle, recommendedOwners, health, reactionOptions, stageOptions, assignableUsers, can }: Props) {
     const application = opportunity.proposals?.[0];
     const [preview, setPreview] = useState<PreviewFile | null>(null);
 
@@ -180,10 +181,22 @@ export default function OpportunityShow({ opportunity, contacts, samDocuments, t
                             <CardContent>
                                 {samDocuments.length === 0 ? (
                                     <div className="text-sm text-muted-foreground">
-                                        <p>This SAM.gov notice has no downloadable attachments — the details are in the description, or behind the notice's portal link.</p>
-                                        <a href={opportunity.sam_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
-                                            View the full notice on SAM.gov <ExternalLink className="h-3 w-3" />
-                                        </a>
+                                        {opportunity.source === 'sam_gov' && samDocumentsPending ? (
+                                            <p>We're still pulling this notice's solicitation documents from SAM.gov — check back shortly. In the meantime, open them directly on the notice.</p>
+                                        ) : opportunity.source === 'sam_gov' ? (
+                                            <p>This SAM.gov notice has no downloadable attachments — the details are in the description, or behind the notice's portal link.</p>
+                                        ) : (
+                                            <p>No attachments were pulled automatically — the solicitation documents are on the original posting.</p>
+                                        )}
+                                        {opportunity.source !== 'sam_gov' && opportunity.source_url ? (
+                                            <a href={opportunity.source_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                                Open the original posting on {sourceLabel(opportunity.source)} <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        ) : (
+                                            <a href={opportunity.sam_url} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                                                View the full notice on SAM.gov <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="space-y-2">

@@ -19,9 +19,32 @@ class PurchaseOrderRequest extends FormRequest
 
         return [
             'procurement_supplier_id' => [
-                'required',
+                'nullable',
+                'required_without:new_supplier.name',
                 Rule::exists('procurement_suppliers', 'id')->where('organization_id', $orgId)->whereNull('deleted_at'),
             ],
+
+            // Inline "supplier doesn't exist yet" creation: supply either an
+            // existing supplier id above, or a new supplier's name (+ optional
+            // details) here. The controller creates it alongside the PO.
+            'new_supplier' => ['nullable', 'array'],
+            'new_supplier.name' => ['nullable', 'required_without:procurement_supplier_id', 'string', 'max:255'],
+            'new_supplier.code' => [
+                'nullable', 'string', 'max:40',
+                Rule::unique('procurement_suppliers', 'code')->where('organization_id', $orgId)->whereNull('deleted_at'),
+            ],
+            'new_supplier.category' => ['nullable', 'string', 'max:120'],
+            'new_supplier.email' => ['nullable', 'email', 'max:255'],
+            'new_supplier.phone' => ['nullable', 'string', 'max:40'],
+            'new_supplier.website' => ['nullable', 'string', 'max:255'],
+            'new_supplier.payment_terms' => ['nullable', 'string', 'max:60'],
+            'new_supplier.tax_id' => ['nullable', 'string', 'max:60'],
+            'new_supplier.address_line1' => ['nullable', 'string', 'max:255'],
+            'new_supplier.city' => ['nullable', 'string', 'max:120'],
+            'new_supplier.state' => ['nullable', 'string', 'max:120'],
+            'new_supplier.postal_code' => ['nullable', 'string', 'max:30'],
+            'new_supplier.country' => ['nullable', 'string', 'max:120'],
+            'new_supplier.notes' => ['nullable', 'string'],
             'inventory_warehouse_id' => [
                 'nullable',
                 Rule::exists('inventory_warehouses', 'id')->where('organization_id', $orgId)->whereNull('deleted_at'),
@@ -52,5 +75,24 @@ class PurchaseOrderRequest extends FormRequest
             'tax_rate' => $this->tax_rate ?? 0,
             'shipping_amount' => $this->shipping_amount ?? 0,
         ]);
+    }
+
+    /** @return array<string,string> */
+    public function attributes(): array
+    {
+        return [
+            'new_supplier.name' => 'supplier name',
+            'new_supplier.code' => 'supplier code',
+            'new_supplier.email' => 'supplier email',
+        ];
+    }
+
+    /** @return array<string,string> */
+    public function messages(): array
+    {
+        return [
+            'procurement_supplier_id.required_without' => 'Select a supplier, or add a new one.',
+            'new_supplier.name.required_without' => 'Enter the new supplier’s name.',
+        ];
     }
 }

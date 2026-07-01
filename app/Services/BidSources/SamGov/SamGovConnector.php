@@ -26,9 +26,9 @@ class SamGovConnector implements BidSourceConnectorInterface
         ]));
     }
 
-    public function fetchOpportunity(string $externalId): ?BidSourceResultDTO
+    public function fetchOpportunity(string $externalId, ?\DateTimeInterface $postedNear = null): ?BidSourceResultDTO
     {
-        return $this->client->getOpportunity($externalId);
+        return $this->client->getOpportunity($externalId, $postedNear);
     }
 
     /**

@@ -14,6 +14,13 @@ class MailGatewayFactory
      */
     public function forUser(?User $user): MailGateway
     {
+        // When central sending is enforced, every email goes out through the
+        // system mailer (the platform's single verified address) — the per-user
+        // "send from your own work mailbox" override is bypassed.
+        if (config('integrations.mail.force_central_sender', true)) {
+            return new SystemMailGateway();
+        }
+
         $account = $user?->emailAccount;
 
         if ($account && $account->isConnected()) {

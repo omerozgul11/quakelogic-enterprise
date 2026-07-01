@@ -1101,6 +1101,13 @@ class MailingController extends Controller
             return $credentialed || app()->runningUnitTests();
         }
 
+        // DHL, like J.B. Hunt, has no production simulator — the DHL-API-Key enables
+        // the pull tracking API (manual refresh + polling); without it DHL is
+        // push-only/manual. Live updates still arrive via the webhook regardless.
+        if ($enum === \App\Enums\Carrier::Dhl) {
+            return (bool) config('services.dhl.api_key') || app()->runningUnitTests();
+        }
+
         return true;
     }
 

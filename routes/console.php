@@ -13,6 +13,23 @@ Artisan::command('inspire', function () {
 // Scheduled jobs
 Schedule::command('bids:sync sam-gov')->dailyAt('06:00')->withoutOverlapping();
 Schedule::command('bids:sync bidprime')->dailyAt('06:30')->withoutOverlapping();
+// BidPrime via Gmail: only scheduled once live ingest is enabled (otherwise the
+// fake inbox would create demo opportunities). Manual: php artisan bidprime:ingest-email
+if (config('integrations.bidprime.email.enabled')) {
+    Schedule::command('bidprime:ingest-email')->dailyAt('06:15')->withoutOverlapping();
+}
+// Daily: pull missing solicitation documents for opportunities that synced
+// without them (SAM full-text imports / BidPrime leads). Each is resolved to its
+// SAM.gov notice and the official record's resourceLinks are merged in. Bounded
+// per night and throttled for SAM's rate limits; runs after the source syncs.
+// Backfill the whole history by hand: php artisan opportunities:backfill-sam-documents
+// Pull solicitation documents for ALL opportunities that still lack them, every
+// day. Non-force so it converges: notices confirmed empty are skipped for a week
+// (quota goes to unchecked/new ones), and it self-stops when SAM starts throttling,
+// resuming the next day until the whole backlog — and each day's new arrivals — is
+// covered. No --limit: cache-served rows are skipped instantly, quota is the real bound.
+Schedule::command('opportunities:backfill-sam-documents')
+    ->dailyAt('07:05')->withoutOverlapping()->runInBackground();
 Schedule::command('follow-ups:generate')->dailyAt('08:00')->withoutOverlapping();
 // Monthly status follow-up per open proposal (emails only when a mailbox is connected).
 Schedule::command('follow-ups:monthly')->monthlyOn(1, '08:30')->withoutOverlapping();

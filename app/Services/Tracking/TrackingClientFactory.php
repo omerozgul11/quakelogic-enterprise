@@ -3,6 +3,9 @@
 namespace App\Services\Tracking;
 
 use App\Enums\Carrier;
+use App\Services\Dhl\DhlShipmentMapper;
+use App\Services\Dhl\FakeDhlTrackingClient;
+use App\Services\Dhl\RealDhlTrackingClient;
 use App\Services\JbHunt\FakeJbHuntTrackingClient;
 use App\Services\JbHunt\RealJbHuntTrackingClient;
 use App\Services\Rl\FakeRlCarriersTrackingClient;
@@ -29,6 +32,7 @@ class TrackingClientFactory
             $enum === Carrier::Ups => $this->ups(),
             $enum === Carrier::JbHunt => $this->jbHunt(),
             $enum === Carrier::RlCarriers => $this->rlCarriers(),
+            $enum === Carrier::Dhl => $this->dhl(),
             $enum !== null => new UnsupportedCarrierClient($enum->label()),
             default => new UnsupportedCarrierClient(
                 is_string($carrier) && trim($carrier) !== '' ? trim($carrier) : 'This carrier'
@@ -92,5 +96,23 @@ class TrackingClientFactory
             $rl['api_base_url'] ?? 'https://api.rlc.com',
             $rl['web_base_url'] ?? 'https://www.rlcarriers.com',
         );
+    }
+
+    private function dhl(): CarrierTrackingClient
+    {
+        $dhl = config('services.dhl');
+
+        // The DHL-API-Key powers both the pull tracking API (this client) and the
+        // push subscriptions. With a key, manual refresh + polling work; live
+        // updates additionally arrive via the webhook (DhlPushIngestService).
+        if (! empty($dhl['api_key'])) {
+            return new RealDhlTrackingClient($dhl['api_key'], $dhl['base_url'], new DhlShipmentMapper());
+        }
+
+        // No key: like J.B. Hunt, DHL has no production simulator — it stays push-
+        // driven/manual rather than fabricating data. The fake only drives tests.
+        return app()->runningUnitTests()
+            ? new FakeDhlTrackingClient()
+            : new UnsupportedCarrierClient('DHL');
     }
 }

@@ -26,7 +26,7 @@ class PurchaseOrder extends Model
         'ulid', 'organization_id', 'crm_project_id', 'created_by', 'procurement_supplier_id', 'inventory_warehouse_id',
         'number', 'status', 'order_date', 'expected_date', 'currency',
         'subtotal', 'tax_rate', 'tax_amount', 'shipping_amount', 'total',
-        'notes', 'approved_by', 'approved_at',
+        'notes', 'approved_by', 'approved_at', 'emailed_at',
     ];
 
     protected function casts(): array
@@ -36,6 +36,7 @@ class PurchaseOrder extends Model
             'order_date' => 'date',
             'expected_date' => 'date',
             'approved_at' => 'datetime',
+            'emailed_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'tax_rate' => 'decimal:2',
             'tax_amount' => 'decimal:2',

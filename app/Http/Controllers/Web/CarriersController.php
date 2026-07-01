@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\Carrier;
 use App\Http\Controllers\Controller;
+use App\Models\DhlPushSubscription;
 use App\Models\Organization;
 use App\Models\ProposalMailing;
 use App\Services\Mailings\CarrierProfileService;
@@ -35,11 +36,14 @@ class CarriersController extends Controller
         $upsLive = (bool) ($ups['sync_enabled'] && $ups['client_id'] && $ups['client_secret']);
         $jbh = config('services.jbhunt');
         $jbhuntLive = (bool) ($jbh['sync_enabled'] && $jbh['client_id'] && $jbh['client_secret']);
+        // DHL is live once the DHL-API-Key is present (powers both pull tracking and push).
+        $dhlLive = (bool) config('services.dhl.api_key');
 
         // Whether each live-capable carrier has real credentials configured.
         $credentialed = [
             Carrier::Ups->value => $upsLive,
             Carrier::JbHunt->value => $jbhuntLive,
+            Carrier::Dhl->value => $dhlLive,
         ];
 
         // Carriers that track live WITHOUT credentials (R+L's public tracing page
@@ -124,7 +128,41 @@ class CarriersController extends Controller
         return Inertia::render('Shipments/Carriers', [
             'carriers' => $carriers->concat($custom)->values(),
             'hiddenCarriers' => $hiddenCarriers,
+            'dhl' => $this->dhlPanel($orgId, $dhlLive),
         ]);
+    }
+
+    /**
+     * DHL push-integration status for the Carriers page: whether the API key +
+     * webhook token are configured, the webhook URL to register with DHL, and this
+     * org's live push subscriptions.
+     *
+     * @return array<string,mixed>
+     */
+    private function dhlPanel(int $orgId, bool $apiConfigured): array
+    {
+        $token = config('services.dhl.push.webhook_token');
+
+        $subscriptions = DhlPushSubscription::forOrganization($orgId)
+            ->latest()
+            ->get()
+            ->map(fn (DhlPushSubscription $s) => [
+                'ulid' => $s->ulid,
+                'type' => $s->type,
+                'tracking_number' => $s->tracking_number,
+                'account_number' => $s->account_number,
+                'status' => $s->status,
+                'created_at' => optional($s->created_at)->toDateString(),
+            ])->values();
+
+        return [
+            'apiConfigured' => $apiConfigured,
+            'pushConfigured' => (bool) $token,
+            'webhookUrl' => $token
+                ? (config('services.dhl.push.webhook_url') ?: url('/api/dhl/webhook/'.$token))
+                : null,
+            'subscriptions' => $subscriptions,
+        ];
     }
 
     public function store(Request $request): RedirectResponse

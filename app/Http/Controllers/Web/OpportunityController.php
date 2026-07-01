@@ -358,10 +358,18 @@ class OpportunityController extends Controller
 
         $opportunity->append('sam_url');
 
+        // Pull the solicitation files in on first view if they weren't captured at
+        // import; the status tells us whether an empty list is a confirmed "no
+        // attachments" or just not-fetched-yet (so the UI doesn't cry wolf).
+        $docService = app(OpportunityDocumentService::class);
+        $docStatus = $docService->ensure($opportunity);
+        $samDocuments = $this->samDocuments($opportunity, $docService);
+
         return Inertia::render('Opportunities/Show', [
             'opportunity' => $opportunity,
             'contacts' => $contacts,
-            'samDocuments' => $this->samDocuments($opportunity),
+            'samDocuments' => $samDocuments,
+            'samDocumentsPending' => $samDocuments === [] && ! in_array($docStatus, ['none', 'none_cached'], true),
             'timeline' => $this->timeline($opportunity),
             'lifecycle' => [
                 'stage' => $opportunity->assignment_stage?->value,
@@ -473,9 +481,9 @@ class OpportunityController extends Controller
     /**
      * @return array<int,array{index:int,name:string,preview_url:string,download_url:string}>
      */
-    private function samDocuments(Opportunity $opportunity): array
+    private function samDocuments(Opportunity $opportunity, OpportunityDocumentService $docs): array
     {
-        return collect(app(OpportunityDocumentService::class)->list($opportunity))
+        return collect($docs->list($opportunity))
             ->map(fn ($d) => [
                 'index' => $d['index'],
                 'name' => $d['name'],
@@ -495,6 +503,7 @@ class OpportunityController extends Controller
     {
         $this->authorize('view', $opportunity);
 
+        $docs->ensure($opportunity);
         $url = $docs->urlAt($opportunity, $index);
         abort_if($url === null, 404, 'Document not found.');
 
