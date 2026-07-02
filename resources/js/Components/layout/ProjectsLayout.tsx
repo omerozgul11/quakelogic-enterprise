@@ -7,6 +7,7 @@ import {
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
 import { HeaderClock } from '@/Components/layout/HeaderClock';
+import { MenuSearch, menuMatches } from '@/Components/layout/MenuSearch';
 
 interface NavItem {
     label: string;
@@ -59,6 +60,7 @@ export function ProjectsLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
+    const [menuQuery, setMenuQuery] = useState('');
     useEffect(() => {
         if (!notifOpen && !menuOpen) return;
         const onDown = (e: MouseEvent) => {
@@ -107,22 +109,34 @@ export function ProjectsLayout({ children }: { children: React.ReactNode }) {
                 </span>
             </div>
 
+            <MenuSearch value={menuQuery} onChange={setMenuQuery} />
+
             <nav className="sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-                {items.map(item => {
-                    const Icon = item.icon;
-                    const active = isActive(path, item.href);
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => mobile && setSidebarOpen(false)}
-                            className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
-                        >
-                            <Icon className="h-[18px] w-[18px] shrink-0" />
-                            <span className="min-w-0 truncate">{item.label}</span>
-                        </Link>
-                    );
-                })}
+                {(() => {
+                    const visible = items.filter(item => menuMatches(item.label, menuQuery));
+                    if (visible.length === 0) {
+                        return (
+                            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                No menu items match “{menuQuery.trim()}”.
+                            </p>
+                        );
+                    }
+                    return visible.map(item => {
+                        const Icon = item.icon;
+                        const active = isActive(path, item.href);
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => mobile && setSidebarOpen(false)}
+                                className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
+                            >
+                                <Icon className="h-[18px] w-[18px] shrink-0" />
+                                <span className="min-w-0 truncate">{item.label}</span>
+                            </Link>
+                        );
+                    });
+                })()}
             </nav>
 
             <div className="mt-auto p-3">
@@ -149,11 +163,11 @@ export function ProjectsLayout({ children }: { children: React.ReactNode }) {
                 'glass-panel fixed inset-y-0 left-0 z-50 w-64 transform shadow-2xl transition-transform duration-300 ease-in-out lg:hidden',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
-                <SidebarBody mobile />
+                {SidebarBody({ mobile: true })}
             </aside>
 
             <aside className="glass-panel hidden w-64 shrink-0 lg:block">
-                <div className="sticky top-0 h-screen"><SidebarBody /></div>
+                <div className="sticky top-0 h-screen">{SidebarBody({})}</div>
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">

@@ -50,19 +50,10 @@ return [
             'url' => '/projects',
             'current' => false,
         ],
-        [
-            'key' => 'expenses',
-            'name' => 'Expenses',
-            'description' => 'Expense tracking, budgets & reimbursements',
-            'icon' => 'receipt',
-            // A section of this app (not a separate site): /expenses.
-            'url' => '/expenses',
-            'current' => false,
-        ],
-        // The Enterprise Hub sections — Finance (AR), Inventory, Procurement,
-        // Manufacturing, Assets, Calibration and Service Desk — are reached from
-        // inside the CRM section's sidebar (grouped nav), not as standalone hub
-        // apps, so they intentionally have no app-switcher entries.
+        // The Enterprise Hub sections — Expenses, Finance (AR), Inventory,
+        // Procurement, Manufacturing, Assets, Calibration and Service Desk — are
+        // reached from inside the CRM section's sidebar (grouped nav), not as
+        // standalone hub apps, so they intentionally have no app-switcher entries.
     ],
 
 ];

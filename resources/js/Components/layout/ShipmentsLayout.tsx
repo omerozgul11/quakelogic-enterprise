@@ -8,6 +8,7 @@ import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { clearChat } from '@/Lib/chatStore';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
 import { HeaderClock } from '@/Components/layout/HeaderClock';
+import { MenuSearch, menuMatches } from '@/Components/layout/MenuSearch';
 import { ShipmentsAiChat } from '@/Components/layout/ShipmentsAiChat';
 
 interface NavItem {
@@ -69,6 +70,7 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
+    const [menuQuery, setMenuQuery] = useState('');
     // Dismiss the notifications / account dropdowns on any outside click or Escape
     // (a document listener also catches header clicks the overlay sits beneath).
     useEffect(() => {
@@ -118,22 +120,36 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                 </span>
             </div>
 
+            <MenuSearch value={menuQuery} onChange={setMenuQuery} />
+
             <nav className="sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-                {navItems.filter(item => !item.adminOnly || isAdmin).map(item => {
-                    const Icon = item.icon;
-                    const active = isActive(path, item.href);
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => mobile && setSidebarOpen(false)}
-                            className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
-                        >
-                            <Icon className="h-[18px] w-[18px] shrink-0" />
-                            <span className="min-w-0 truncate">{item.label}</span>
-                        </Link>
-                    );
-                })}
+                {(() => {
+                    const visible = navItems
+                        .filter(item => !item.adminOnly || isAdmin)
+                        .filter(item => menuMatches(item.label, menuQuery));
+                    if (visible.length === 0) {
+                        return (
+                            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                No menu items match “{menuQuery.trim()}”.
+                            </p>
+                        );
+                    }
+                    return visible.map(item => {
+                        const Icon = item.icon;
+                        const active = isActive(path, item.href);
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => mobile && setSidebarOpen(false)}
+                                className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
+                            >
+                                <Icon className="h-[18px] w-[18px] shrink-0" />
+                                <span className="min-w-0 truncate">{item.label}</span>
+                            </Link>
+                        );
+                    });
+                })()}
             </nav>
 
             <div className="mt-auto p-3">
@@ -160,11 +176,11 @@ export function ShipmentsLayout({ children }: { children: React.ReactNode }) {
                 'glass-panel fixed inset-y-0 left-0 z-50 w-64 transform shadow-2xl transition-transform duration-300 ease-in-out lg:hidden',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
-                <SidebarBody mobile />
+                {SidebarBody({ mobile: true })}
             </aside>
 
             <aside className="glass-panel hidden w-64 shrink-0 lg:block">
-                <div className="sticky top-0 h-screen"><SidebarBody /></div>
+                <div className="sticky top-0 h-screen">{SidebarBody({})}</div>
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">

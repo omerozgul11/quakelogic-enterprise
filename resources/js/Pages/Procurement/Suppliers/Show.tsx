@@ -7,10 +7,11 @@ import { Pill } from '@/Components/ui/Pill';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { SupplierFormModal, EditableSupplier } from '@/Components/procurement/SupplierFormModal';
 import { SupplierContactModal, EditableSupplierContact } from '@/Components/procurement/SupplierContactModal';
+import { VendorPortalAccess } from '@/Components/procurement/VendorPortalAccess';
 import { formatCurrency, cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { ArrowLeft, Factory, Pencil, Trash2, Plus, Mail, Phone, Globe, MapPin, Star, BadgeCheck, ShoppingCart } from 'lucide-react';
 
-interface Contact extends EditableSupplierContact { id: number; name: string }
+interface Contact extends EditableSupplierContact { id: number; name: string; portal_enabled: boolean; portal_last_login_at?: string | null }
 interface Supplier extends EditableSupplier {
     id: number; code: string; name: string; status_label: string; status_color: string; contacts: Contact[];
 }
@@ -112,19 +113,22 @@ export default function SupplierShow({ supplier, orders, spend, statuses, can }:
                         ) : (
                             <div className="space-y-2">
                                 {supplier.contacts.map(c => (
-                                    <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
-                                                {c.name} {c.is_primary && <BadgeCheck className="h-3.5 w-3.5 text-primary" />}
+                                    <div key={c.id} className="rounded-lg border border-border px-3 py-2">
+                                        <div className="flex items-center gap-3">
+                                            <span className="min-w-0 flex-1">
+                                                <span className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
+                                                    {c.name} {c.is_primary && <BadgeCheck className="h-3.5 w-3.5 text-primary" />}
+                                                </span>
+                                                <span className="block truncate text-xs text-muted-foreground">{c.title || c.email || c.phone || '—'}</span>
                                             </span>
-                                            <span className="block truncate text-xs text-muted-foreground">{c.title || c.email || c.phone || '—'}</span>
-                                        </span>
-                                        {can.manage && (
-                                            <span className="flex items-center gap-1">
-                                                <button onClick={() => { setEditContact(c); setContactOpen(true); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                                                <button onClick={() => setDelContact(c)} className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-                                            </span>
-                                        )}
+                                            {can.manage && (
+                                                <span className="flex items-center gap-1">
+                                                    <button onClick={() => { setEditContact(c); setContactOpen(true); }} className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                                                    <button onClick={() => setDelContact(c)} className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                                                </span>
+                                            )}
+                                        </div>
+                                        {can.manage && <VendorPortalAccess supplierId={supplier.id} contact={c} />}
                                     </div>
                                 ))}
                             </div>

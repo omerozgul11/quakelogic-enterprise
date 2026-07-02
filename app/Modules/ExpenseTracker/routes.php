@@ -20,6 +20,7 @@ Route::prefix('expenses')->name('expenses.')->middleware('permission:access expe
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
 
     // Expenses
+    Route::post('/extract', [ExpenseController::class, 'extract'])->name('extract'); // AI receipt → prefill
     Route::get('/list', [ExpenseController::class, 'index'])->name('index');
     Route::post('/list', [ExpenseController::class, 'store'])->name('store');
     Route::get('/list/{expense}', [ExpenseController::class, 'show'])->name('show');
@@ -34,6 +35,10 @@ Route::prefix('expenses')->name('expenses.')->middleware('permission:access expe
     Route::post('/list/{expense}/receipts', [ExpenseController::class, 'storeReceipt'])->name('receipts.store');
     Route::get('/list/{expense}/receipts/{attachment}', [ExpenseController::class, 'downloadReceipt'])->name('receipts.download');
     Route::delete('/list/{expense}/receipts/{attachment}', [ExpenseController::class, 'destroyReceipt'])->name('receipts.destroy');
+
+    // Payments (paid / partially paid / due)
+    Route::post('/list/{expense}/payments', [ExpenseController::class, 'storePayment'])->name('payments.store');
+    Route::delete('/list/{expense}/payments/{payment}', [ExpenseController::class, 'destroyPayment'])->name('payments.destroy');
 
     // Categories
     Route::prefix('categories')->name('categories.')->group(function () {

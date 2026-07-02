@@ -6,17 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Procurement\Enums\ApprovalStatus;
 use App\Modules\Procurement\Enums\PurchaseOrderStatus;
 use App\Modules\Procurement\Enums\SupplierStatus;
 use App\Modules\Procurement\Http\Requests\PurchaseOrderRequest;
+use App\Modules\Procurement\Http\Requests\SendDocumentRequest;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\PurchaseOrderItem;
 use App\Modules\Procurement\Models\Supplier;
+use App\Modules\Procurement\Services\ApprovalService;
+use App\Modules\Procurement\Services\ProcurementDocumentService;
 use App\Modules\Procurement\Services\ProcurementNumberService;
 use App\Modules\Procurement\Services\PurchaseOrderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -106,7 +111,7 @@ class PurchaseOrderController extends Controller
         return redirect()->route('procurement.purchase-orders.show', $po)->with('success', "Purchase order {$po->number} created.");
     }
 
-    public function show(Request $request, PurchaseOrder $purchaseOrder): Response
+    public function show(Request $request, PurchaseOrder $purchaseOrder, ProcurementDocumentService $docs): Response
     {
         $this->authorize('view', $purchaseOrder);
 
@@ -116,6 +121,7 @@ class PurchaseOrderController extends Controller
             'approver:id,name',
             'items' => fn ($q) => $q->orderBy('position')->orderBy('id'),
             'items.product:id,sku,name',
+            'attachments.uploader:id,name',
         ]);
 
         return Inertia::render('Procurement/PurchaseOrders/Show', [
@@ -157,8 +163,53 @@ class PurchaseOrderController extends Controller
                 'manage' => $request->user()->can('manage purchase orders'),
                 'approve' => $request->user()->can('approve purchase orders'),
                 'receive' => $request->user()->can('receive goods'),
+                'createBill' => $request->user()->can('manage bills'),
             ],
+            'bills' => $purchaseOrder->bills()->orderByDesc('id')->get(['id', 'number', 'payment_status', 'total', 'currency'])
+                ->map(fn ($b) => [
+                    'id' => $b->id, 'number' => $b->number,
+                    'payment_status' => $b->payment_status->value,
+                    'payment_status_label' => $b->payment_status->label(),
+                    'payment_status_color' => $b->payment_status->color(),
+                    'total' => (float) $b->total, 'currency' => $b->currency,
+                ]),
+            'send' => array_merge($docs->sendMeta($purchaseOrder), [
+                'pdf_url' => route('procurement.purchase-orders.pdf', $purchaseOrder),
+                'send_url' => route('procurement.purchase-orders.send-email', $purchaseOrder),
+                'emailed_at' => $purchaseOrder->emailed_at?->toIso8601String(),
+            ]),
+            'attachments' => AttachmentController::serialize($purchaseOrder),
+            'approval' => ApprovalController::serialize($purchaseOrder->latestApproval(), $request->user()),
         ]);
+    }
+
+    /** Stream the branded PO PDF inline (view/download in the browser). */
+    public function pdf(Request $request, PurchaseOrder $purchaseOrder, ProcurementDocumentService $docs)
+    {
+        $this->authorize('view', $purchaseOrder);
+
+        return response($docs->pdf($purchaseOrder), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$docs->filename($purchaseOrder).'"',
+        ]);
+    }
+
+    /** Email the PO (as a PDF, with a covering message) to the supplier. */
+    public function sendEmail(SendDocumentRequest $request, PurchaseOrder $purchaseOrder, ProcurementDocumentService $docs): RedirectResponse
+    {
+        $this->authorize('update', $purchaseOrder);
+
+        try {
+            $docs->sendEmail($purchaseOrder, $request->validated());
+        } catch (\Throwable $e) {
+            Log::warning('Purchase order send-email failed', ['po' => $purchaseOrder->number, 'error' => $e->getMessage()]);
+
+            return back()->with('error', 'Could not send the email. '.$e->getMessage());
+        }
+
+        $this->service->markEmailed($purchaseOrder);
+
+        return back()->with('success', "Purchase order {$purchaseOrder->number} emailed to {$request->validated()['to']}.");
     }
 
     public function update(PurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): RedirectResponse
@@ -204,10 +255,12 @@ class PurchaseOrderController extends Controller
         return redirect()->route('procurement.purchase-orders.index')->with('success', "Purchase order {$number} deleted.");
     }
 
-    public function submit(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
+    public function submit(Request $request, PurchaseOrder $purchaseOrder, ApprovalService $approvals): RedirectResponse
     {
         $this->authorize('update', $purchaseOrder);
         $this->service->submit($purchaseOrder);
+        // Instantiate a multi-level chain if one is configured; else simple approve governs.
+        $approvals->start($purchaseOrder, $request->user()->id);
 
         return back()->with('success', 'Submitted for approval.');
     }
@@ -215,6 +268,9 @@ class PurchaseOrderController extends Controller
     public function approve(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
     {
         $this->authorize('approve', $purchaseOrder);
+        if ($purchaseOrder->latestApproval()?->status === ApprovalStatus::Pending) {
+            return back()->with('error', 'This purchase order is in a multi-level approval chain — use the approval panel.');
+        }
         $this->service->approve($purchaseOrder, $request->user()->id);
 
         return back()->with('success', "Purchase order {$purchaseOrder->number} approved.");
@@ -348,6 +404,23 @@ class PurchaseOrderController extends Controller
     }
 
     /** @return array<string,mixed> */
+    /** Raise a draft purchase order for a vendor by copying a CRM sales invoice/estimate. */
+    public function storeFromInvoice(Request $request, \App\Models\Crm\Invoice $invoice): RedirectResponse
+    {
+        $this->authorize('create', PurchaseOrder::class);
+        abort_unless($invoice->organization_id === $request->user()->organization_id, 404);
+
+        $validated = $request->validate([
+            'procurement_supplier_id' => ['required', \Illuminate\Validation\Rule::exists('procurement_suppliers', 'id')
+                ->where('organization_id', $request->user()->organization_id)],
+        ]);
+
+        $po = $this->service->fromCrmInvoice($invoice, (int) $validated['procurement_supplier_id'], $request->user()->id);
+
+        return redirect()->route('procurement.purchase-orders.show', $po)
+            ->with('success', "Draft purchase order created from {$invoice->number}.");
+    }
+
     private function formData(Request $request): array
     {
         $orgId = $request->user()->organization_id;
@@ -359,6 +432,7 @@ class PurchaseOrderController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'code']),
             'products' => Product::where('organization_id', $orgId)->where('is_active', true)
                 ->orderBy('name')->get(['id', 'sku', 'name', 'unit_cost']),
+            'sourceInvoices' => PurchaseRequestController::sourceInvoices($orgId),
         ];
     }
 }

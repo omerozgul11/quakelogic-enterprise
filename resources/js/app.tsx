@@ -7,12 +7,16 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ImpersonationBanner } from '@/Components/layout/ImpersonationBanner';
 import { installNumericInputGuard } from '@/Lib/numericInput';
+import { installRowLinkNavigation } from '@/Lib/rowLinks';
 import { Impersonation, SharedProps } from '@/Types';
 
 const appName = import.meta.env.VITE_APP_NAME || 'QuakeLogic Proposals';
 
 // Keep every number field to digits and a single dot (no letters, `e`, `+/-`).
 installNumericInputGuard();
+
+// Make whole `tr.row-link` rows clickable across every list view.
+installRowLinkNavigation();
 
 // Wraps the Inertia app so the impersonation banner is mounted once, above every
 // page/layout, and re-reads the shared `impersonating` prop on each navigation.

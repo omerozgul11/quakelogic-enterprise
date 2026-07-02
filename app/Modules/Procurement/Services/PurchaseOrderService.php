@@ -24,7 +24,48 @@ use RuntimeException;
  */
 class PurchaseOrderService
 {
-    public function __construct(private readonly InventoryService $inventory) {}
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly ProcurementNumberService $numbers,
+    ) {}
+
+    /**
+     * Raise a draft purchase order for a chosen vendor from a CRM sales invoice
+     * or estimate, copying its line items. The CRM document is read-only.
+     */
+    public function fromCrmInvoice(\App\Models\Crm\Invoice $invoice, int $supplierId, int $actorId): PurchaseOrder
+    {
+        return DB::transaction(function () use ($invoice, $supplierId, $actorId) {
+            $po = PurchaseOrder::create([
+                'organization_id' => $invoice->organization_id,
+                'created_by' => $actorId,
+                'procurement_supplier_id' => $supplierId,
+                'crm_project_id' => $invoice->crm_project_id,
+                'number' => $this->numbers->generate($invoice->organization_id),
+                'status' => PurchaseOrderStatus::Draft,
+                'order_date' => now()->toDateString(),
+                'currency' => $invoice->currency ?: 'USD',
+                'tax_rate' => 0,
+                'shipping_amount' => 0,
+                'notes' => 'From '.($invoice->isEstimate() ? 'estimate' : 'invoice').' '.$invoice->number,
+            ]);
+
+            foreach ($invoice->items()->get() as $i) {
+                $po->items()->create([
+                    'organization_id' => $invoice->organization_id,
+                    'description' => $i->description,
+                    'quantity_ordered' => $i->quantity,
+                    'unit_cost' => $i->unit_price,
+                    'line_total' => round((float) $i->quantity * (float) $i->unit_price, 2),
+                    'position' => $i->position,
+                ]);
+            }
+
+            $this->recalcTotals($po);
+
+            return $po->fresh();
+        });
+    }
 
     /** Recompute line totals → subtotal → tax → grand total and persist. */
     public function recalcTotals(PurchaseOrder $po): PurchaseOrder
@@ -168,6 +209,22 @@ class PurchaseOrderService
         $attrs = ['status' => PurchaseOrderStatus::Sent];
         if ($emailedAt !== null) {
             $attrs['emailed_at'] = $emailedAt;
+        }
+        $po->forceFill($attrs)->save();
+
+        return $po;
+    }
+
+    /**
+     * Stamp that the PO was emailed (via the rich "Send to vendor" modal, which
+     * does its own sending). A draft/approved PO advances to Sent; a PO already
+     * further along (received etc.) keeps its status.
+     */
+    public function markEmailed(PurchaseOrder $po): PurchaseOrder
+    {
+        $attrs = ['emailed_at' => now()];
+        if (in_array($po->status, [PurchaseOrderStatus::Draft, PurchaseOrderStatus::Approved], true)) {
+            $attrs['status'] = PurchaseOrderStatus::Sent;
         }
         $po->forceFill($attrs)->save();
 

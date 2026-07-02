@@ -6,8 +6,11 @@ import { Card } from '@/Components/ui/Card';
 import { Pill } from '@/Components/ui/Pill';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { ReceiveModal } from '@/Components/procurement/ReceiveModal';
+import { SendDocumentModal, SendMeta } from '@/Components/procurement/SendDocumentModal';
+import { AttachmentsPanel, Attachment } from '@/Components/procurement/AttachmentsPanel';
+import { ApprovalPanel, ApprovalData } from '@/Components/procurement/ApprovalPanel';
 import { formatCurrency, cn } from '@/Lib/utils';
-import { ArrowLeft, ShoppingCart, Trash2, Send, BadgeCheck, Truck, Ban, PackageCheck } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Trash2, Send, BadgeCheck, Truck, Ban, PackageCheck, Receipt, Mail, FileText } from 'lucide-react';
 
 interface Item {
     id: number; description: string; sku: string | null; product_id: number | null; product: string | null;
@@ -23,14 +26,21 @@ interface Order {
     notes: string | null; approved_by: string | null; approved_at: string | null;
     items: Item[];
 }
+interface BillRef { id: number; number: string; payment_status: string; payment_status_label: string; payment_status_color: string; total: number; currency: string }
 
 interface Props {
     order: Order;
-    can: { manage: boolean; approve: boolean; receive: boolean };
+    can: { manage: boolean; approve: boolean; receive: boolean; createBill: boolean };
+    bills: BillRef[];
+    send: SendMeta & { emailed_at: string | null };
+    attachments: Attachment[];
+    approval: ApprovalData | null;
 }
 
-export default function PurchaseOrderShow({ order, can }: Props) {
+export default function PurchaseOrderShow({ order, can, bills, send, attachments, approval }: Props) {
+    const chainActive = approval?.status === 'pending';
     const [receiveOpen, setReceiveOpen] = useState(false);
+    const [sendOpen, setSendOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [cancelling, setCancelling] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -75,9 +85,12 @@ export default function PurchaseOrderShow({ order, can }: Props) {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                             {order.status === 'draft' && can.manage && <Button variant="secondary" size="sm" icon={Send} onClick={() => act('submit')} disabled={processing}>Submit</Button>}
-                            {(order.status === 'pending_approval' || order.status === 'draft') && can.approve && <Button variant="secondary" size="sm" icon={BadgeCheck} onClick={() => act('approve')} disabled={processing}>Approve</Button>}
+                            {(order.status === 'pending_approval' || order.status === 'draft') && can.approve && !chainActive && <Button variant="secondary" size="sm" icon={BadgeCheck} onClick={() => act('approve')} disabled={processing}>Approve</Button>}
                             {order.status === 'approved' && can.manage && <Button variant="secondary" size="sm" icon={Truck} onClick={() => act('sent')} disabled={processing}>Mark sent</Button>}
+                            {can.manage && <Button variant="secondary" size="sm" icon={Mail} onClick={() => setSendOpen(true)} disabled={processing}>Email vendor</Button>}
+                            <a href={send.pdf_url} target="_blank" rel="noopener"><Button variant="ghost" size="sm" icon={FileText}>PDF</Button></a>
                             {order.can_receive && can.receive && <Button variant="success" size="sm" icon={PackageCheck} onClick={() => setReceiveOpen(true)} disabled={processing}>Receive</Button>}
+                            {['approved', 'sent', 'partially_received', 'received'].includes(order.status) && can.createBill && <Button variant="secondary" size="sm" icon={Receipt} onClick={() => { setProcessing(true); router.post(`/procurement/bills/from-order/${order.id}`, {}, { onFinish: () => setProcessing(false) }); }} disabled={processing}>Create bill</Button>}
                             {!isTerminal && can.manage && <Button variant="ghost" size="sm" icon={Ban} onClick={() => setCancelling(true)} disabled={processing}>Cancel</Button>}
                             {can.manage && !hasReceipts && <Button variant="ghost" size="sm" icon={Trash2} onClick={() => setDeleting(true)} disabled={processing}>Delete</Button>}
                         </div>
@@ -148,9 +161,27 @@ export default function PurchaseOrderShow({ order, can }: Props) {
                         <p className="whitespace-pre-line text-sm text-muted-foreground">{order.notes}</p>
                     </Card>
                 )}
+
+                {bills.length > 0 && (
+                    <Card className="p-5">
+                        <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Bills</h2>
+                        <div className="space-y-2">
+                            {bills.map(b => (
+                                <Link key={b.id} href={`/procurement/bills/${b.id}`} className="flex items-center justify-between rounded-lg border border-border p-2.5 text-sm hover:bg-secondary/50">
+                                    <span className="font-mono text-foreground">{b.number}</span>
+                                    <span className="flex items-center gap-2"><Pill color={b.payment_status_color} label={b.payment_status_label} /><span className="text-muted-foreground">{formatCurrency(b.total, b.currency)}</span></span>
+                                </Link>
+                            ))}
+                        </div>
+                    </Card>
+                )}
+
+                {approval && <div className="mt-4"><ApprovalPanel entity="purchase-orders" id={order.id} approval={approval} /></div>}
+                <div className="mt-4"><AttachmentsPanel entity="purchase-orders" id={order.id} attachments={attachments} canManage={can.manage} /></div>
             </div>
 
             {receiveOpen && <ReceiveModal open onClose={() => setReceiveOpen(false)} orderId={order.id} items={order.items} />}
+            <SendDocumentModal open={sendOpen} onClose={() => setSendOpen(false)} meta={send} kindLabel="purchase order" />
             <ConfirmDialog open={cancelling} onClose={() => setCancelling(false)} onConfirm={() => { setCancelling(false); act('cancel'); }}
                 confirmLabel="Cancel PO" title="Cancel purchase order?" message={<>Cancel <span className="font-mono font-medium text-foreground">{order.number}</span>? This cannot be undone.</>} />
             <ConfirmDialog open={deleting} onClose={() => setDeleting(false)} onConfirm={confirmDelete} processing={processing}

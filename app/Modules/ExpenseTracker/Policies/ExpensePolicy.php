@@ -73,6 +73,13 @@ class ExpensePolicy
         return $this->sameOrg($user, $expense) && $user->can('manage expenses');
     }
 
+    /** Recording / removing payments is allowed regardless of approval state. */
+    public function recordPayment(User $user, Expense $expense): bool
+    {
+        return $this->sameOrg($user, $expense)
+            && ($user->can('manage expenses') || $user->id === $expense->owner_id);
+    }
+
     private function sameOrg(User $user, Expense $expense): bool
     {
         return $user->organization_id === $expense->organization_id;

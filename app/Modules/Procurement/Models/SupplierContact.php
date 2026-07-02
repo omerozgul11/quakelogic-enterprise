@@ -16,11 +16,32 @@ class SupplierContact extends Model
     protected $fillable = [
         'ulid', 'organization_id', 'procurement_supplier_id',
         'name', 'title', 'email', 'phone', 'is_primary',
+        'portal_enabled', 'portal_last_login_at',
     ];
+
+    // portal_password is set explicitly (hashed) — never mass-assigned or serialized.
+    protected $hidden = ['portal_password'];
 
     protected function casts(): array
     {
-        return ['is_primary' => 'boolean'];
+        return [
+            'is_primary' => 'boolean',
+            'portal_enabled' => 'boolean',
+            'portal_last_login_at' => 'datetime',
+        ];
+    }
+
+    /** Whether this contact can sign in to the vendor portal right now. */
+    public function canUsePortal(): bool
+    {
+        if (! $this->portal_enabled || empty($this->portal_password) || ! $this->email || ! $this->supplier) {
+            return false;
+        }
+
+        // status is cast to the SupplierStatus enum; compare on its value.
+        $status = $this->supplier->status;
+
+        return (is_object($status) ? $status->value : $status) === 'active';
     }
 
     protected static function boot(): void

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Modules\ExpenseTracker\Database\Factories\ExpenseFactory;
 use App\Modules\ExpenseTracker\Enums\ExpenseStatus;
 use App\Modules\ExpenseTracker\Enums\PaymentMethod;
+use App\Modules\ExpenseTracker\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -28,8 +29,8 @@ class Expense extends Model
     protected $fillable = [
         'ulid', 'organization_id', 'created_by', 'owner_id', 'approved_by',
         'expense_category_id', 'recurring_expense_id', 'company_id', 'crm_project_id', 'proposal_id',
-        'number', 'vendor', 'description', 'amount', 'currency', 'payment_method', 'status',
-        'is_billable', 'expense_date', 'submitted_at', 'approved_at', 'reimbursed_at',
+        'number', 'vendor', 'description', 'amount', 'currency', 'amount_paid', 'payment_method', 'status',
+        'is_billable', 'expense_date', 'due_date', 'submitted_at', 'approved_at', 'reimbursed_at', 'paid_at',
         'reject_reason', 'notes', 'metadata',
         'source', 'quickbooks_id', 'quickbooks_synced_at',
     ];
@@ -40,11 +41,14 @@ class Expense extends Model
             'status' => ExpenseStatus::class,
             'payment_method' => PaymentMethod::class,
             'amount' => 'decimal:2',
+            'amount_paid' => 'decimal:2',
             'is_billable' => 'boolean',
             'expense_date' => 'date',
+            'due_date' => 'date',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
             'reimbursed_at' => 'datetime',
+            'paid_at' => 'datetime',
             'quickbooks_synced_at' => 'datetime',
             'metadata' => 'array',
         ];
@@ -109,6 +113,36 @@ class Expense extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(ExpenseAttachment::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ExpensePayment::class)->latest('paid_on');
+    }
+
+    /** Outstanding balance = total minus what has been paid (never negative). */
+    public function balanceDue(): float
+    {
+        return max(0.0, (float) $this->amount - (float) $this->amount_paid);
+    }
+
+    /** Derived from amount vs amount_paid so it can never drift out of sync. */
+    public function paymentStatus(): PaymentStatus
+    {
+        $paid = (float) $this->amount_paid;
+        if ($paid <= 0) {
+            return PaymentStatus::Due;
+        }
+
+        return $paid + 0.005 >= (float) $this->amount ? PaymentStatus::Paid : PaymentStatus::PartiallyPaid;
+    }
+
+    /** True once past its due date with a balance still outstanding. */
+    public function isOverdue(): bool
+    {
+        return $this->due_date !== null
+            && $this->balanceDue() > 0
+            && $this->due_date->isPast();
     }
 
     public function scopeForOrganization(Builder $query, int $organizationId): Builder

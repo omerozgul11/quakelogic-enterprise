@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Procurement\Database\Factories\PurchaseOrderFactory;
 use App\Modules\Procurement\Enums\PurchaseOrderStatus;
+use App\Modules\Procurement\Models\Concerns\HasApprovals;
+use App\Modules\Procurement\Models\Concerns\HasProcurementAttachments;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,12 +20,13 @@ use Illuminate\Support\Str;
 
 class PurchaseOrder extends Model
 {
-    use Auditable, HasFactory, SoftDeletes;
+    use Auditable, HasApprovals, HasFactory, HasProcurementAttachments, SoftDeletes;
 
     protected $table = 'procurement_purchase_orders';
 
     protected $fillable = [
         'ulid', 'organization_id', 'crm_project_id', 'created_by', 'procurement_supplier_id', 'inventory_warehouse_id',
+        'procurement_purchase_request_id', 'procurement_quotation_id',
         'number', 'status', 'order_date', 'expected_date', 'currency',
         'subtotal', 'tax_rate', 'tax_amount', 'shipping_amount', 'total',
         'notes', 'approved_by', 'approved_at', 'emailed_at',
@@ -74,6 +77,21 @@ class PurchaseOrder extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'inventory_warehouse_id');
+    }
+
+    public function purchaseRequest(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseRequest::class, 'procurement_purchase_request_id');
+    }
+
+    public function quotation(): BelongsTo
+    {
+        return $this->belongsTo(Quotation::class, 'procurement_quotation_id');
+    }
+
+    public function bills(): HasMany
+    {
+        return $this->hasMany(Bill::class, 'procurement_purchase_order_id');
     }
 
     public function items(): HasMany

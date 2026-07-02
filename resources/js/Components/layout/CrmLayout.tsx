@@ -7,15 +7,19 @@ import {
     Boxes, Package, Warehouse, ArrowLeftRight, ShoppingCart, Factory, ClipboardList,
     ListTree, Wrench, Cpu, HardDrive, BadgeCheck, FileCheck, LifeBuoy, Ticket,
     Settings, ShieldCheck, Clock, CalendarCheck, BarChart3, CopyCheck, Zap, PhoneCall,
+    Wallet, Receipt, Tags, RefreshCw, Plug,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
 import { HeaderClock } from '@/Components/layout/HeaderClock';
+import { MenuSearch, menuMatches } from '@/Components/layout/MenuSearch';
 
 interface NavItem {
     label: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
+    /** Only show this item when the user holds this permission. */
+    permission?: string;
 }
 
 interface NavGroup {
@@ -49,6 +53,18 @@ const navGroups: NavGroup[] = [
         ],
     },
     {
+        label: 'Expenses',
+        permission: 'access expenses',
+        items: [
+            { label: 'Overview', href: '/expenses', icon: Wallet },
+            { label: 'Expenses', href: '/expenses/list', icon: Receipt },
+            { label: 'Categories', href: '/expenses/categories', icon: Tags },
+            { label: 'Recurring costs', href: '/expenses/recurring', icon: RefreshCw },
+            { label: 'Reports', href: '/expenses/reports', icon: BarChart3 },
+            { label: 'QuickBooks', href: '/expenses/quickbooks', icon: Plug },
+        ],
+    },
+    {
         // The Enterprise Hub sections (Finance/AR + the ERP/WMS/EAM modules) all
         // render inside the CRM shell so the sidebar stays put. Each group is
         // gated by its own `access <section>` permission (every role has them).
@@ -56,7 +72,6 @@ const navGroups: NavGroup[] = [
         permission: 'access finance',
         items: [
             { label: 'Overview', href: '/finance', icon: Landmark },
-            { label: 'Receivables', href: '/finance/invoices', icon: ReceiptText },
             { label: 'Credit Notes', href: '/finance/credit-notes', icon: FileMinus },
         ],
     },
@@ -77,6 +92,7 @@ const navGroups: NavGroup[] = [
             { label: 'Overview', href: '/procurement', icon: ShoppingCart },
             { label: 'Suppliers', href: '/procurement/suppliers', icon: Factory },
             { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ClipboardList },
+            { label: 'Approval Flows', href: '/procurement/approval-flows', icon: ShieldCheck, permission: 'manage approval flows' },
         ],
     },
     {
@@ -116,7 +132,7 @@ const navGroups: NavGroup[] = [
 
 // Section roots (/crm, /finance) match exactly; everything else matches the
 // href or any path beneath it.
-const SECTION_ROOTS = ['/crm', '/finance', '/inventory', '/procurement', '/manufacturing', '/assets', '/calibration', '/tickets'];
+const SECTION_ROOTS = ['/crm', '/finance', '/inventory', '/procurement', '/manufacturing', '/assets', '/calibration', '/tickets', '/expenses'];
 function isActive(path: string, href: string): boolean {
     if (SECTION_ROOTS.includes(href)) return path === href;
     return path === href || path.startsWith(href + '/');
@@ -193,6 +209,10 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
     });
     const groupHasActive = (group: NavGroup) => group.items.some(item => isActive(path, item.href));
     const isGroupOpen = (group: NavGroup) => groupHasActive(group) || openGroups[group.label ?? ''] === true;
+
+    // Sidebar menu search. While a query is present every group is force-opened
+    // and only matching items (or all items of a group whose label matches) show.
+    const [menuQuery, setMenuQuery] = useState('');
     const toggleGroup = (label: string) => {
         setOpenGroups(prev => {
             const next = { ...prev, [label]: !(prev[label] ?? false) };
@@ -218,32 +238,54 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
                 </span>
             </div>
 
-            <nav className="sidebar-scroll flex-1 space-y-1 overflow-y-auto px-3 py-3">
-                {navGroups
-                    .filter(group => !group.permission || (user?.permissions ?? []).includes(group.permission))
-                    .map((group, gi) => {
-                        const renderItem = (item: NavItem) => {
-                            const Icon = item.icon;
-                            const active = isActive(path, item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={() => mobile && setSidebarOpen(false)}
-                                    className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
-                                >
-                                    <Icon className="h-[18px] w-[18px] shrink-0" />
-                                    <span className="min-w-0 truncate">{item.label}</span>
-                                </Link>
-                            );
-                        };
+            <MenuSearch value={menuQuery} onChange={setMenuQuery} />
 
+            <nav className="sidebar-scroll flex-1 space-y-1 overflow-y-auto px-3 py-3">
+                {(() => {
+                    const searching = menuQuery.trim() !== '';
+                    const renderItem = (item: NavItem) => {
+                        const Icon = item.icon;
+                        const active = isActive(path, item.href);
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => mobile && setSidebarOpen(false)}
+                                className={cn('nav-chip group', active ? 'nav-chip-active' : 'nav-chip-idle')}
+                            >
+                                <Icon className="h-[18px] w-[18px] shrink-0" />
+                                <span className="min-w-0 truncate">{item.label}</span>
+                            </Link>
+                        );
+                    };
+
+                    const visible = navGroups
+                        .filter(group => !group.permission || (user?.permissions ?? []).includes(group.permission))
+                        .map(group => {
+                            const permitted = group.items.filter(item => !item.permission || (user?.permissions ?? []).includes(item.permission));
+                            const labelMatch = !!group.label && menuMatches(group.label, menuQuery);
+                            const items = searching && !labelMatch
+                                ? permitted.filter(item => menuMatches(item.label, menuQuery))
+                                : permitted;
+                            return { group, items };
+                        })
+                        .filter(({ items }) => items.length > 0);
+
+                    if (searching && visible.length === 0) {
+                        return (
+                            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                No menu items match “{menuQuery.trim()}”.
+                            </p>
+                        );
+                    }
+
+                    return visible.map(({ group, items }) => {
                         // The core CRM group has no label — always shown, never collapses.
                         if (!group.label) {
-                            return <div key="core" className="space-y-0.5">{group.items.map(renderItem)}</div>;
+                            return <div key="core" className="space-y-0.5">{items.map(renderItem)}</div>;
                         }
 
-                        const open = isGroupOpen(group);
+                        const open = searching || isGroupOpen(group);
                         return (
                             <div key={group.label}>
                                 <button
@@ -253,10 +295,11 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
                                     <span className="truncate">{group.label}</span>
                                     <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', open ? '' : '-rotate-90')} />
                                 </button>
-                                {open && <div className="mt-0.5 space-y-0.5">{group.items.map(renderItem)}</div>}
+                                {open && <div className="mt-0.5 space-y-0.5">{items.map(renderItem)}</div>}
                             </div>
                         );
-                    })}
+                    });
+                })()}
             </nav>
 
             <div className="mt-auto p-3">
@@ -283,11 +326,11 @@ export function CrmLayout({ children }: { children: React.ReactNode }) {
                 'glass-panel fixed inset-y-0 left-0 z-50 w-64 transform shadow-2xl transition-transform duration-300 ease-in-out lg:hidden',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
-                <SidebarBody mobile />
+                {SidebarBody({ mobile: true })}
             </aside>
 
             <aside className="glass-panel hidden w-64 shrink-0 lg:block">
-                <div className="sticky top-0 h-screen"><SidebarBody /></div>
+                <div className="sticky top-0 h-screen">{SidebarBody({})}</div>
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">
