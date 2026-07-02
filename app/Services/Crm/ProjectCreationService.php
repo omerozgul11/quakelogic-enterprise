@@ -3,6 +3,7 @@
 namespace App\Services\Crm;
 
 use App\Enums\ProjectStatus;
+use App\Models\Crm\Invoice;
 use App\Models\Crm\Project;
 use App\Models\Crm\ProjectMember;
 use App\Models\Crm\ProjectSetting;
@@ -104,6 +105,57 @@ class ProjectCreationService
             : "created from proposal {$proposal->proposal_number}";
         $this->activity->log($project, $actor?->id, 'created', "Project {$source}.", [
             'proposal_number' => $proposal->proposal_number,
+            'automatic' => $automatic,
+        ]);
+
+        if ($settings->notify_on_create) {
+            $this->notifier->projectCreated($project, $actor);
+        }
+
+        return $project;
+    }
+
+    /**
+     * Create a project from a CRM invoice and link the invoice back to it.
+     * Idempotent — an invoice already tied to a project returns that project.
+     */
+    public function createFromInvoice(Invoice $invoice, ?User $actor = null, bool $automatic = true): Project
+    {
+        if ($invoice->crm_project_id) {
+            return $invoice->project()->firstOrFail();
+        }
+
+        $settings = $this->settingsFor($invoice->organization_id);
+        $ownerId = $invoice->owner_id ?: $invoice->created_by;
+        $managerId = $this->resolveManagerId($settings, $ownerId, $invoice->created_by);
+        $companyName = $invoice->company()->value('name');
+
+        $project = Project::create([
+            'organization_id' => $invoice->organization_id,
+            'created_by' => $actor?->id ?? $invoice->created_by,
+            'owner_id' => $ownerId,
+            'project_manager_id' => $managerId,
+            'company_id' => $invoice->company_id,
+            'name' => $companyName ? "{$companyName} — {$invoice->number}" : ('Project for '.$invoice->number),
+            'project_number' => $this->numbers->generate($invoice->organization_id, $settings->number_prefix),
+            'status' => $this->defaultStatus($settings)->value,
+            'description' => $invoice->notes,
+            'start_date' => $invoice->issue_date,
+            'due_date' => $invoice->due_date,
+            'budget' => $invoice->total,
+            'progress' => 0,
+            'created_via' => $automatic ? 'automatic' : 'manual',
+        ]);
+
+        $invoice->forceFill(['crm_project_id' => $project->id])->save();
+
+        $this->seedTeam($project, $ownerId, $managerId, $settings, $actor?->id);
+
+        $source = $automatic
+            ? "automatically created from invoice {$invoice->number}"
+            : "created from invoice {$invoice->number}";
+        $this->activity->log($project, $actor?->id, 'created', "Project {$source}.", [
+            'invoice_number' => $invoice->number,
             'automatic' => $automatic,
         ]);
 

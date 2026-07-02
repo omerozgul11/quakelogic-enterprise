@@ -40,16 +40,29 @@ export function Select({ value, options, onChange, placeholder, className, size 
     const filtered = searchable && q ? options.filter(o => o.label.toLowerCase().includes(q)) : options;
     // Hide the clearing placeholder while actively searching so an empty result
     // collapses `items` to length 0 and the "No matches" state below can render.
-    const items: SelectOption[] = placeholder && !q ? [{ value: '', label: placeholder }, ...filtered] : filtered;
+    const withPlaceholder: SelectOption[] = placeholder && !q ? [{ value: '', label: placeholder }, ...filtered] : filtered;
+    // De-dupe by value: a page may supply its own empty-value option (e.g. a
+    // "— Custom line —" row) alongside a matching `placeholder`, which would put
+    // two rows with value '' in the list. They collided on the same React key,
+    // so re-filtering on each keystroke left duplicate rows piling up.
+    const seen = new Set<string>();
+    const items: SelectOption[] = withPlaceholder.filter(o => {
+        if (seen.has(o.value)) return false;
+        seen.add(o.value);
+        return true;
+    });
 
     const openMenu = () => {
         const rect = buttonRef.current?.getBoundingClientRect();
         if (!rect) return;
-        const below = window.innerHeight - rect.bottom - 12;
-        const maxHeight = Math.min(288, Math.max(below, 160));
-        // Flip above the button when there's clearly more room there.
-        const flip = below < 160 && rect.top > 300;
-        const top = flip ? rect.top - maxHeight - 4 : rect.bottom + 4;
+        const margin = 12;
+        const spaceBelow = window.innerHeight - rect.bottom - margin;
+        const spaceAbove = rect.top - margin;
+        // Open toward whichever side has more room and cap the height to THAT
+        // side's available space, so the popup can never spill past the viewport.
+        const flip = spaceAbove > spaceBelow;
+        const maxHeight = Math.min(288, Math.max(spaceBelow, spaceAbove));
+        const top = flip ? Math.max(margin, rect.top - maxHeight - 4) : rect.bottom + 4;
         setPos({ top, left: rect.left, width: rect.width, maxHeight, origin: flip ? 'bottom' : 'top' });
         setQuery('');
         setOpen(true);

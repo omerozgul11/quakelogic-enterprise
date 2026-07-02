@@ -25,11 +25,11 @@ class PurchaseOrder extends Model
     protected $table = 'procurement_purchase_orders';
 
     protected $fillable = [
-        'ulid', 'organization_id', 'crm_project_id', 'created_by', 'procurement_supplier_id', 'inventory_warehouse_id',
+        'ulid', 'organization_id', 'crm_project_id', 'company_id', 'created_by', 'procurement_supplier_id', 'inventory_warehouse_id',
         'procurement_purchase_request_id', 'procurement_quotation_id',
         'number', 'status', 'order_date', 'expected_date', 'currency',
         'subtotal', 'tax_rate', 'tax_amount', 'shipping_amount', 'total',
-        'notes', 'approved_by', 'approved_at', 'emailed_at',
+        'notes', 'payment_terms', 'shipping_terms', 'approved_by', 'approved_at', 'emailed_at',
     ];
 
     protected function casts(): array
@@ -67,6 +67,12 @@ class PurchaseOrder extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class, 'procurement_supplier_id');
+    }
+
+    /** The client (CRM company) this purchase is for — distinct from the supplier. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Company::class, 'company_id');
     }
 
     public function project(): BelongsTo

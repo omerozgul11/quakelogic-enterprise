@@ -200,6 +200,18 @@ class Project extends Model
         return $this->hasMany(\App\Modules\Procurement\Models\PurchaseOrder::class, 'crm_project_id')->latest();
     }
 
+    /** Invoices/estimates billed against this project. */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'crm_project_id')->latest('issue_date');
+    }
+
+    /** Expenses attributed to this project (Expense Tracker module, cross-module link). */
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(\App\Modules\ExpenseTracker\Models\Expense::class, 'crm_project_id')->latest('expense_date');
+    }
+
     public function activities(): HasMany
     {
         return $this->hasMany(ProjectActivity::class, 'crm_project_id')->latest();

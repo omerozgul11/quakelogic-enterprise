@@ -145,6 +145,10 @@ class ProjectController extends Controller
         $invoices = Invoice::where('crm_project_id', $project->id)
             ->orderByDesc('issue_date')->get();
 
+        $expenses = \App\Modules\ExpenseTracker\Models\Expense::where('crm_project_id', $project->id)
+            ->with('category:id,name')
+            ->orderByDesc('expense_date')->get();
+
         $canManageTasks = $user->can('manageTasks', $project);
         $canManageTeam = $user->can('manageTeam', $project);
         $canAdminister = $user->can('administer', $project);
@@ -229,7 +233,22 @@ class ProjectController extends Controller
                 'amount_paid' => (float) $i->amount_paid,
                 'balance' => (float) ($i->total - $i->amount_paid),
             ])->values(),
-            'financials' => $this->financials($project, $invoices),
+            'expenses' => $expenses->map(fn (\App\Modules\ExpenseTracker\Models\Expense $e) => [
+                'id' => $e->id,
+                'number' => $e->number,
+                'vendor' => $e->vendor,
+                'description' => $e->description,
+                'category' => $e->category?->name,
+                'amount' => (float) $e->amount,
+                'currency' => $e->currency,
+                'status' => $e->status instanceof \BackedEnum ? $e->status->value : $e->status,
+                'status_label' => $e->status?->label(),
+                'status_color' => $e->status?->color(),
+                'expense_date' => $e->expense_date?->toDateString(),
+            ])->values(),
+            'expenseCategories' => \App\Modules\ExpenseTracker\Models\ExpenseCategory::where('organization_id', $user->organization_id)
+                ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['value' => $c->id, 'label' => $c->name]),
+            'financials' => $this->financials($project, $invoices, $expenses),
             'companies' => $this->companies($user->organization_id),
             'owners' => $this->orgUsers($user->organization_id),
             'statuses' => $this->statusOptions(),
@@ -242,6 +261,7 @@ class ProjectController extends Controller
                 'manageTeam' => $canManageTeam,
                 'administer' => $canAdminister,
                 'delete' => $user->can('delete', $project),
+                'addExpense' => $user->can('create', \App\Modules\ExpenseTracker\Models\Expense::class),
             ],
         ]);
     }
@@ -521,6 +541,44 @@ class ProjectController extends Controller
         $this->activity->log($project, $user->id, 'vendor_added', "Vendor \"{$vendor->company_name}\" added.");
 
         return back()->with('success', 'Vendor added.');
+    }
+
+    /** Create an expense linked to this project (Expense Tracker record). */
+    public function storeExpense(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorize('create', \App\Modules\ExpenseTracker\Models\Expense::class);
+        $user = $request->user();
+
+        $data = $request->validate([
+            'description' => ['required', 'string', 'max:255'],
+            'vendor' => ['nullable', 'string', 'max:255'],
+            'amount' => ['required', 'numeric', 'gt:0', 'max:99999999999'],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'expense_date' => ['nullable', 'date'],
+            'expense_category_id' => ['nullable', \Illuminate\Validation\Rule::exists('expense_categories', 'id')->where('organization_id', $user->organization_id)],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $expense = \App\Modules\ExpenseTracker\Models\Expense::create([
+            'organization_id' => $project->organization_id,
+            'created_by' => $user->id,
+            'owner_id' => $user->id,
+            'crm_project_id' => $project->id,
+            'company_id' => $project->company_id,
+            'number' => app(\App\Modules\ExpenseTracker\Services\ExpenseNumberService::class)->generate($project->organization_id),
+            'description' => $data['description'],
+            'vendor' => $data['vendor'] ?? null,
+            'amount' => $data['amount'],
+            'currency' => strtoupper($data['currency'] ?? 'USD'),
+            'expense_date' => $data['expense_date'] ?? now()->toDateString(),
+            'expense_category_id' => $data['expense_category_id'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'status' => \App\Modules\ExpenseTracker\Enums\ExpenseStatus::Draft->value,
+        ]);
+
+        $this->activity->log($project, $user->id, 'expense_added', "Expense \"{$expense->description}\" added ({$expense->currency} ".number_format((float) $expense->amount, 2).').');
+
+        return back()->with('success', "Expense {$expense->number} added to the project.");
     }
 
     public function updateVendor(Request $request, Project $project, \App\Models\Crm\ProjectVendor $vendor): RedirectResponse
@@ -1370,11 +1428,12 @@ class ProjectController extends Controller
     }
 
     /** @return array<string,mixed> */
-    private function financials(Project $project, \Illuminate\Support\Collection $invoices): array
+    private function financials(Project $project, \Illuminate\Support\Collection $invoices, ?\Illuminate\Support\Collection $expenses = null): array
     {
         $invoiced = (float) $invoices->where('kind', 'invoice')->sum('total');
         $paid = (float) $invoices->where('kind', 'invoice')->sum('amount_paid');
         $budget = $project->budget !== null ? (float) $project->budget : 0.0;
+        $spent = (float) ($expenses?->sum('amount') ?? 0);
 
         return [
             'budget' => $budget,
@@ -1382,6 +1441,8 @@ class ProjectController extends Controller
             'paid' => $paid,
             'outstanding' => round($invoiced - $paid, 2),
             'remaining_budget' => round($budget - $invoiced, 2),
+            'spent' => round($spent, 2),
+            'margin' => round($invoiced - $spent, 2),
         ];
     }
 

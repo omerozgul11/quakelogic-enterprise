@@ -3,6 +3,7 @@
 namespace App\Modules\Procurement\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\User;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
@@ -75,6 +76,45 @@ class PurchaseOrderController extends Controller
         return Inertia::render('Procurement/PurchaseOrders/Create', $this->formData($request));
     }
 
+    /** Edit form for a draft purchase order (prefilled). */
+    public function edit(Request $request, PurchaseOrder $purchaseOrder): Response|RedirectResponse
+    {
+        $this->authorize('update', $purchaseOrder);
+
+        if (! $purchaseOrder->status->isEditable()) {
+            return redirect()->route('procurement.purchase-orders.show', $purchaseOrder)
+                ->with('error', 'Only draft purchase orders can be edited.');
+        }
+
+        $purchaseOrder->load(['items' => fn ($q) => $q->orderBy('position')->orderBy('id')]);
+
+        return Inertia::render('Procurement/PurchaseOrders/Edit', array_merge($this->formData($request), [
+            'order' => [
+                'id' => $purchaseOrder->id,
+                'number' => $purchaseOrder->number,
+                'procurement_supplier_id' => $purchaseOrder->procurement_supplier_id ? (string) $purchaseOrder->procurement_supplier_id : '',
+                'company_id' => $purchaseOrder->company_id ? (string) $purchaseOrder->company_id : '',
+                'inventory_warehouse_id' => $purchaseOrder->inventory_warehouse_id ? (string) $purchaseOrder->inventory_warehouse_id : '',
+                'order_date' => $purchaseOrder->order_date?->toDateString(),
+                'expected_date' => $purchaseOrder->expected_date?->toDateString(),
+                'currency' => $purchaseOrder->currency,
+                'tax_rate' => (float) $purchaseOrder->tax_rate,
+                'tax_amount' => (float) $purchaseOrder->tax_amount,
+                'shipping_amount' => (float) $purchaseOrder->shipping_amount,
+                'notes' => $purchaseOrder->notes,
+                'payment_terms' => $purchaseOrder->payment_terms,
+                'shipping_terms' => $purchaseOrder->shipping_terms,
+                'items' => $purchaseOrder->items->map(fn (PurchaseOrderItem $i) => [
+                    'inventory_product_id' => $i->inventory_product_id ? (string) $i->inventory_product_id : '',
+                    'description' => $i->description,
+                    'sku' => $i->sku,
+                    'quantity_ordered' => (string) (float) $i->quantity_ordered,
+                    'unit_cost' => (string) (float) $i->unit_cost,
+                ]),
+            ],
+        ]));
+    }
+
     public function store(PurchaseOrderRequest $request): RedirectResponse
     {
         $this->authorize('create', PurchaseOrder::class);
@@ -87,6 +127,7 @@ class PurchaseOrderController extends Controller
                 'organization_id' => $user->organization_id,
                 'created_by' => $user->id,
                 'procurement_supplier_id' => $supplierId,
+                'company_id' => $data['company_id'] ?? null,
                 'inventory_warehouse_id' => $data['inventory_warehouse_id'] ?? null,
                 'number' => $this->numbers->generate($user->organization_id),
                 'status' => PurchaseOrderStatus::Draft,
@@ -94,8 +135,11 @@ class PurchaseOrderController extends Controller
                 'expected_date' => $data['expected_date'] ?? null,
                 'currency' => $data['currency'],
                 'tax_rate' => $data['tax_rate'],
+                'tax_amount' => $data['tax_amount'] ?? 0,
                 'shipping_amount' => $data['shipping_amount'],
                 'notes' => $data['notes'] ?? null,
+                'payment_terms' => $data['payment_terms'] ?? null,
+                'shipping_terms' => $data['shipping_terms'] ?? null,
             ]);
 
             $this->syncItems($po, $data['items']);
@@ -117,6 +161,7 @@ class PurchaseOrderController extends Controller
 
         $purchaseOrder->load([
             'supplier:id,name,code,email,payment_terms',
+            'company:id,name',
             'warehouse:id,name,code',
             'approver:id,name',
             'items' => fn ($q) => $q->orderBy('position')->orderBy('id'),
@@ -134,6 +179,7 @@ class PurchaseOrderController extends Controller
                 'is_editable' => $purchaseOrder->status->isEditable(),
                 'can_receive' => $purchaseOrder->status->canReceive(),
                 'supplier' => ['id' => $purchaseOrder->supplier?->id, 'name' => $purchaseOrder->supplier?->name, 'code' => $purchaseOrder->supplier?->code, 'payment_terms' => $purchaseOrder->supplier?->payment_terms],
+                'client' => $purchaseOrder->company ? ['id' => $purchaseOrder->company->id, 'name' => $purchaseOrder->company->name] : null,
                 'warehouse' => $purchaseOrder->warehouse ? ['id' => $purchaseOrder->warehouse->id, 'name' => $purchaseOrder->warehouse->name] : null,
                 'order_date' => $purchaseOrder->order_date?->toDateString(),
                 'expected_date' => $purchaseOrder->expected_date?->toDateString(),
@@ -144,6 +190,8 @@ class PurchaseOrderController extends Controller
                 'shipping_amount' => (float) $purchaseOrder->shipping_amount,
                 'total' => (float) $purchaseOrder->total,
                 'notes' => $purchaseOrder->notes,
+                'payment_terms' => $purchaseOrder->payment_terms,
+                'shipping_terms' => $purchaseOrder->shipping_terms,
                 'approved_by' => $purchaseOrder->approver?->name,
                 'approved_at' => $purchaseOrder->approved_at?->toIso8601String(),
                 'items' => $purchaseOrder->items->map(fn (PurchaseOrderItem $i) => [
@@ -224,13 +272,17 @@ class PurchaseOrderController extends Controller
         DB::transaction(function () use ($purchaseOrder, $data) {
             $purchaseOrder->update([
                 'procurement_supplier_id' => $data['procurement_supplier_id'],
+                'company_id' => $data['company_id'] ?? null,
                 'inventory_warehouse_id' => $data['inventory_warehouse_id'] ?? null,
                 'order_date' => $data['order_date'] ?? $purchaseOrder->order_date,
                 'expected_date' => $data['expected_date'] ?? null,
                 'currency' => $data['currency'],
                 'tax_rate' => $data['tax_rate'],
+                'tax_amount' => $data['tax_amount'] ?? 0,
                 'shipping_amount' => $data['shipping_amount'],
                 'notes' => $data['notes'] ?? null,
+                'payment_terms' => $data['payment_terms'] ?? null,
+                'shipping_terms' => $data['shipping_terms'] ?? null,
             ]);
 
             $purchaseOrder->items()->delete();
@@ -432,6 +484,7 @@ class PurchaseOrderController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'code']),
             'products' => Product::where('organization_id', $orgId)->where('is_active', true)
                 ->orderBy('name')->get(['id', 'sku', 'name', 'unit_cost']),
+            'companies' => Company::where('organization_id', $orgId)->orderBy('name')->get(['id', 'name']),
             'sourceInvoices' => PurchaseRequestController::sourceInvoices($orgId),
         ];
     }

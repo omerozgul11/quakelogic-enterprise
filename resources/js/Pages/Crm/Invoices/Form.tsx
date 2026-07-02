@@ -40,6 +40,7 @@ export default function InvoiceForm({ invoice, kind, companies, projects, status
         currency: invoice?.currency ?? 'USD',
         notes: invoice?.notes ?? '',
         terms: invoice?.terms ?? '',
+        create_project: false as boolean,
         items: invoice?.items?.length
             ? invoice.items.map(i => ({ description: i.description, quantity: String(i.quantity), unit_price: String(i.unit_price) }))
             : [{ description: '', quantity: '1', unit_price: '0' }],
@@ -99,7 +100,16 @@ export default function InvoiceForm({ invoice, kind, companies, projects, status
                         </div>
                         <div>
                             <label className="label">Project</label>
-                            <Select className="w-full" value={form.data.crm_project_id} onChange={v => form.setData('crm_project_id', v)} placeholder="— None —" options={projects.map(p => ({ value: String(p.id), label: p.name }))} />
+                            <Select className="w-full" value={form.data.crm_project_id}
+                                onChange={v => form.setData(d => ({ ...d, crm_project_id: v, create_project: v ? false : d.create_project }))}
+                                placeholder="— None —" options={projects.map(p => ({ value: String(p.id), label: p.name }))} />
+                            {!form.data.crm_project_id && (
+                                <label className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                                    <input type="checkbox" className="h-3.5 w-3.5 rounded border-border" checked={form.data.create_project}
+                                        onChange={e => form.setData('create_project', e.target.checked)} />
+                                    Create a new project for this invoice
+                                </label>
+                            )}
                         </div>
                         <div>
                             <label className="label">Status</label>
