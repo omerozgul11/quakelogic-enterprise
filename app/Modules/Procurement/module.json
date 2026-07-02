@@ -10,14 +10,22 @@
         "access procurement",
         "view procurement",
         "manage suppliers",
+        "manage purchase requests",
+        "approve purchase requests",
+        "manage quotations",
         "manage purchase orders",
         "approve purchase orders",
+        "manage bills",
+        "approve bill payments",
         "receive goods"
     ],
     "navigation": [
         { "label": "Dashboard", "route": "procurement.dashboard", "icon": "layout-dashboard" },
         { "label": "Suppliers", "route": "procurement.suppliers.index", "icon": "factory" },
-        { "label": "Purchase Orders", "route": "procurement.purchase-orders.index", "icon": "shopping-cart" }
+        { "label": "Purchase Requests", "route": "procurement.purchase-requests.index", "icon": "clipboard-list" },
+        { "label": "Quotations", "route": "procurement.quotations.index", "icon": "file-text" },
+        { "label": "Purchase Orders", "route": "procurement.purchase-orders.index", "icon": "shopping-cart" },
+        { "label": "Bills", "route": "procurement.bills.index", "icon": "receipt" }
     ],
     "routes": ["procurement"],
     "widgets": [],

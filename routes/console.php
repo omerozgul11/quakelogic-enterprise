@@ -30,6 +30,8 @@ if (config('integrations.bidprime.email.enabled')) {
 // covered. No --limit: cache-served rows are skipped instantly, quota is the real bound.
 Schedule::command('opportunities:backfill-sam-documents')
     ->dailyAt('07:05')->withoutOverlapping()->runInBackground();
+// Generate any recurring vendor bills that have come due.
+Schedule::command('procurement:generate-recurring-bills')->dailyAt('05:30')->withoutOverlapping();
 Schedule::command('follow-ups:generate')->dailyAt('08:00')->withoutOverlapping();
 // Monthly status follow-up per open proposal (emails only when a mailbox is connected).
 Schedule::command('follow-ups:monthly')->monthlyOn(1, '08:30')->withoutOverlapping();

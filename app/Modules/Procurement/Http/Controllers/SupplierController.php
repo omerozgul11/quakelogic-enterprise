@@ -94,6 +94,8 @@ class SupplierController extends Controller
                 'contacts' => $supplier->contacts->map(fn (SupplierContact $c) => [
                     'id' => $c->id, 'name' => $c->name, 'title' => $c->title,
                     'email' => $c->email, 'phone' => $c->phone, 'is_primary' => $c->is_primary,
+                    'portal_enabled' => (bool) $c->portal_enabled,
+                    'portal_last_login_at' => $c->portal_last_login_at?->toIso8601String(),
                 ]),
             ],
             'orders' => $orders,
@@ -158,6 +160,42 @@ class SupplierController extends Controller
         $contact->update($this->validateContact($request));
 
         return back()->with('success', 'Contact updated.');
+    }
+
+    /**
+     * Grant or revoke vendor-portal access for a contact, and (re)set the portal
+     * password. The password is bcrypt-hashed; disabling never touches it.
+     */
+    public function contactPortal(Request $request, Supplier $supplier, SupplierContact $contact): RedirectResponse
+    {
+        $this->authorize('update', $supplier);
+        abort_unless($contact->procurement_supplier_id === $supplier->id, 404);
+
+        $data = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
+        ]);
+
+        if (! $data['enabled']) {
+            $contact->forceFill(['portal_enabled' => false])->save();
+
+            return back()->with('success', 'Vendor portal access disabled.');
+        }
+
+        if (! $contact->email) {
+            return back()->with('error', 'Add an email to this contact before enabling portal access.');
+        }
+        if (empty($data['password']) && empty($contact->portal_password)) {
+            return back()->with('error', 'Set a password to enable portal access.');
+        }
+
+        $attrs = ['portal_enabled' => true];
+        if (! empty($data['password'])) {
+            $attrs['portal_password'] = \Illuminate\Support\Facades\Hash::make($data['password']);
+        }
+        $contact->forceFill($attrs)->save();
+
+        return back()->with('success', 'Vendor portal access enabled.');
     }
 
     public function destroyContact(Request $request, Supplier $supplier, SupplierContact $contact): RedirectResponse

@@ -4,6 +4,7 @@ import { ProcurementLayout } from '@/Components/layout/ProcurementLayout';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
+import { CopyFromInvoice, SourceInvoice } from '@/Components/procurement/CopyFromInvoice';
 import { formatCurrency } from '@/Lib/utils';
 import { ArrowLeft, Plus, Trash2, ShoppingCart } from 'lucide-react';
 
@@ -12,6 +13,7 @@ interface Props {
     suppliers: { id: number; name: string; code: string; currency: string }[];
     warehouses: { id: number; name: string; code: string }[];
     products: ProductOpt[];
+    sourceInvoices: SourceInvoice[];
 }
 
 interface Line { inventory_product_id: string; description: string; sku: string; quantity_ordered: string; unit_cost: string }
@@ -24,7 +26,7 @@ const emptyNewSupplier = {
     postal_code: '', country: '', notes: '',
 };
 
-export default function PurchaseOrderCreate({ suppliers, warehouses, products }: Props) {
+export default function PurchaseOrderCreate({ suppliers, warehouses, products, sourceInvoices }: Props) {
     const [newSupplier, setNewSupplier] = useState(false);
     const form = useForm({
         procurement_supplier_id: '',
@@ -85,6 +87,8 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products }:
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-gradient text-white"><ShoppingCart className="h-5 w-5" /></div>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">New Purchase Order</h1>
                 </div>
+
+                <CopyFromInvoice invoices={sourceInvoices} target="purchase-orders" suppliers={suppliers} />
 
                 <Card className="mb-4 p-5">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

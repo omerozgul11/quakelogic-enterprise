@@ -48,7 +48,8 @@ class CreditNoteController extends Controller
             'statuses' => \App\Modules\Finance\Enums\CreditNoteStatus::options(),
             'form' => [
                 'companies' => Company::where('organization_id', $orgId)->orderBy('name')->get(['id', 'name']),
-                'invoices' => Invoice::where('organization_id', $orgId)->where('kind', 'invoice')->orderByDesc('id')->limit(200)->get(['id', 'number', 'company_id']),
+                // total + amount_paid are needed by the model's appended `balance`.
+                'invoices' => Invoice::where('organization_id', $orgId)->where('kind', 'invoice')->orderByDesc('id')->limit(200)->get(['id', 'number', 'company_id', 'total', 'amount_paid']),
             ],
             'can' => ['manage' => $request->user()->can('manage finance')],
         ]);

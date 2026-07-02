@@ -242,7 +242,7 @@
     @apply whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground;
   }
   .td { @apply px-4 py-3.5 align-middle text-sm text-foreground; }
-  .row-link { @apply transition-colors hover:bg-secondary/70; }
+  .row-link { @apply cursor-pointer transition-colors hover:bg-secondary/70; }
 
   .chip {
     @apply inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground;
