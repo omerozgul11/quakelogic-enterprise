@@ -92,6 +92,7 @@ const navGroups: NavGroup[] = [
             { label: 'Overview', href: '/procurement', icon: ShoppingCart },
             { label: 'Suppliers', href: '/procurement/suppliers', icon: Factory },
             { label: 'Purchase Orders', href: '/procurement/purchase-orders', icon: ClipboardList },
+            { label: 'Bills', href: '/procurement/bills', icon: Receipt },
             { label: 'Approval Flows', href: '/procurement/approval-flows', icon: ShieldCheck, permission: 'manage approval flows' },
         ],
     },

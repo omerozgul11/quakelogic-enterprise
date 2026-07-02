@@ -102,7 +102,7 @@ export function ApprovalPanel({ entity, id, approval, compact }: Props) {
                     <div className="mt-2 flex gap-2">
                         <Button icon={Check} onClick={approve} disabled={!canSubmitApprove}>{form.processing ? 'Saving…' : 'Approve'}</Button>
                         {rejecting
-                            ? <Button variant="destructive" icon={X} onClick={reject} disabled={form.processing}>Confirm reject</Button>
+                            ? <Button variant="danger" icon={X} onClick={reject} disabled={form.processing}>Confirm reject</Button>
                             : <Button variant="ghost" icon={X} onClick={() => setRejecting(true)} disabled={form.processing}>Reject</Button>}
                     </div>
                 </div>

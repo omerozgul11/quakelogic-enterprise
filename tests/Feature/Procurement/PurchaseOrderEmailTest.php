@@ -4,7 +4,6 @@ namespace Tests\Feature\Procurement;
 
 use App\Models\Organization;
 use App\Models\User;
-use App\Modules\Procurement\Mail\PurchaseOrderMail;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\Supplier;
 use App\Modules\Procurement\Services\PurchaseOrderService;
@@ -14,9 +13,9 @@ use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 /**
- * Purchase order → vendor email: marking a PO "Sent" emails it to the supplier
- * (or its primary contact), records emailed_at, and the full
- * request → approve → send lifecycle works.
+ * Purchase order lifecycle never emails the vendor automatically. Marking a PO
+ * "Sent" (service or POST /sent) is a status-only action — the vendor is only
+ * ever emailed through the explicit "Email vendor" action (see DocumentSendTest).
  */
 class PurchaseOrderEmailTest extends TestCase
 {
@@ -74,12 +73,12 @@ class PurchaseOrderEmailTest extends TestCase
         return app(PurchaseOrderService::class);
     }
 
-    public function test_full_request_to_send_lifecycle_emails_the_vendor(): void
+    public function test_full_request_to_send_lifecycle_never_emails_the_vendor(): void
     {
         $supplier = $this->supplier('vendor@acme.test');
         $po = $this->draftPo($supplier);
 
-        // Purchase request → approval → send to vendor.
+        // Purchase request → approval → mark sent. None of these email the vendor.
         $this->service()->submit($po);
         $this->assertSame('pending_approval', $po->fresh()->status->value);
 
@@ -88,13 +87,13 @@ class PurchaseOrderEmailTest extends TestCase
 
         $this->service()->markSent($po);
 
-        Mail::assertSent(PurchaseOrderMail::class, fn (PurchaseOrderMail $m) => $m->hasTo('vendor@acme.test') && $m->purchaseOrder->id === $po->id);
+        Mail::assertNothingSent();
         $po->refresh();
         $this->assertSame('sent', $po->status->value);
-        $this->assertNotNull($po->emailed_at);
+        $this->assertNull($po->emailed_at);
     }
 
-    public function test_falls_back_to_primary_contact_email(): void
+    public function test_mark_sent_does_not_email_the_primary_contact_either(): void
     {
         $supplier = $this->supplier(null);
         $supplier->contacts()->create(['organization_id' => $this->org->id, 'name' => 'Jana Vendor', 'email' => 'jana@acme.test', 'is_primary' => true]);
@@ -102,11 +101,11 @@ class PurchaseOrderEmailTest extends TestCase
 
         $this->service()->markSent($po);
 
-        Mail::assertSent(PurchaseOrderMail::class, fn (PurchaseOrderMail $m) => $m->hasTo('jana@acme.test'));
-        $this->assertNotNull($po->fresh()->emailed_at);
+        Mail::assertNothingSent();
+        $this->assertNull($po->fresh()->emailed_at);
     }
 
-    public function test_send_without_any_vendor_email_is_graceful(): void
+    public function test_mark_sent_without_any_vendor_email_is_status_only(): void
     {
         $supplier = $this->supplier(null);
         $po = $this->draftPo($supplier);
@@ -119,7 +118,7 @@ class PurchaseOrderEmailTest extends TestCase
         $this->assertNull($po->emailed_at);
     }
 
-    public function test_send_route_emails_the_vendor(): void
+    public function test_send_route_marks_sent_without_emailing_the_vendor(): void
     {
         foreach (['access procurement', 'view procurement', 'manage purchase orders', 'approve purchase orders'] as $p) {
             Permission::findOrCreate($p, 'web');
@@ -134,7 +133,8 @@ class PurchaseOrderEmailTest extends TestCase
             ->post("/procurement/purchase-orders/{$po->id}/sent")
             ->assertRedirect();
 
-        Mail::assertSent(PurchaseOrderMail::class, fn (PurchaseOrderMail $m) => $m->hasTo('vendor@acme.test'));
+        Mail::assertNothingSent();
         $this->assertSame('sent', $po->fresh()->status->value);
+        $this->assertNull($po->fresh()->emailed_at);
     }
 }

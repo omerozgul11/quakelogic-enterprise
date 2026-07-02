@@ -6,8 +6,8 @@ import { Card } from '@/Components/ui/Card';
 import { Button } from '@/Components/ui/Button';
 import { ArrowLeft, Download, RefreshCw, Save, Plus, X, ScrollText, FileText, ImageIcon } from 'lucide-react';
 
-interface Spec { label: string; value: string }
-interface Sections { tagline: string | null; overview: string; key_features: string[]; specifications: Spec[]; applications: string[] }
+interface Spec { [key: string]: string; label: string; value: string }
+interface Sections { [key: string]: string | string[] | Spec[] | null; tagline: string | null; overview: string; key_features: string[]; specifications: Spec[]; applications: string[] }
 interface Datasheet {
     id: number; ulid: string; product_name: string; model_number: string | null; tagline: string | null;
     status: string; input_notes: string | null; sections: Sections;

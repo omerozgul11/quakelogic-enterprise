@@ -48,7 +48,7 @@ createInertiaApp({
         ),
     setup({ el, App, props }) {
         const root = createRoot(el);
-        root.render(<Root App={App as React.ComponentType<Record<string, unknown>>} appProps={props as unknown as Record<string, unknown>} />);
+        root.render(<Root App={App as unknown as React.ComponentType<Record<string, unknown>>} appProps={props as unknown as Record<string, unknown>} />);
     },
     progress: {
         color: '#3B82F6',

@@ -8,8 +8,13 @@ use App\Modules\Procurement\Http\Requests\SupplierRequest;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\Supplier;
 use App\Modules\Procurement\Models\SupplierContact;
+use App\Modules\Procurement\Models\SupplierProduct;
+use App\Modules\Procurement\Services\SupplierPriceListService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -54,7 +59,12 @@ class SupplierController extends Controller
     {
         $this->authorize('view', $supplier);
 
-        $supplier->load(['contacts' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('name')]);
+        $supplier->load([
+            'contacts' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('name'),
+            'attachments.uploader:id,name',
+            'products' => fn ($q) => $q->orderByDesc('last_imported_at')->orderByDesc('id'),
+            'products.product:id,sku,name,unit_cost,unit_price,currency,is_active',
+        ]);
 
         $orders = $supplier->purchaseOrders()
             ->latest('id')->limit(20)->get()
@@ -101,7 +111,90 @@ class SupplierController extends Controller
             'orders' => $orders,
             'spend' => round((float) $supplier->purchaseOrders()->sum('total'), 2),
             'statuses' => SupplierStatus::options(),
+            'products' => $supplier->products->map(fn (SupplierProduct $sp) => [
+                'id' => $sp->id,
+                'supplier_sku' => $sp->supplier_sku,
+                'supplier_price' => $sp->supplier_price !== null ? (float) $sp->supplier_price : null,
+                'currency' => $sp->currency,
+                'last_imported_at' => $sp->last_imported_at?->toDateString(),
+                'product' => $sp->product ? [
+                    'id' => $sp->product->id,
+                    'sku' => $sp->product->sku,
+                    'name' => $sp->product->name,
+                    'unit_cost' => (float) $sp->product->unit_cost,
+                    'currency' => $sp->product->currency,
+                    'is_active' => (bool) $sp->product->is_active,
+                ] : null,
+            ])->values(),
+            'attachments' => AttachmentController::serialize($supplier),
             'can' => ['manage' => $request->user()->can('manage suppliers')],
+        ]);
+    }
+
+    private const PRICE_LIST_MIMES = 'application/pdf,image/jpeg,image/png,image/heic,image/heif,'
+        .'application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,'
+        .'text/plain,text/csv';
+
+    /**
+     * Parse a dropped price list / product sheet into matched line items for
+     * review. The raw file is also kept as a supplier attachment. Returns JSON —
+     * the page shows a review modal before anything is written to inventory.
+     */
+    public function priceListExtract(Request $request, Supplier $supplier, SupplierPriceListService $service): JsonResponse
+    {
+        $this->authorize('update', $supplier);
+
+        $request->validate([
+            'file' => ['required', 'file', 'max:25600', 'mimetypes:'.self::PRICE_LIST_MIMES],
+        ]);
+
+        $file = $request->file('file');
+        $result = $service->parse($file, $supplier);   // read the upload before we move it
+        $this->storeAttachment($supplier, $file, $request->user()->id);
+
+        return response()->json($result);
+    }
+
+    /**
+     * Apply the reviewed price-list lines: update matched products' cost, create
+     * new products for unmatched lines, and upsert the supplier↔product links.
+     */
+    public function priceListApply(Request $request, Supplier $supplier, SupplierPriceListService $service): RedirectResponse
+    {
+        $this->authorize('update', $supplier);
+
+        $data = $request->validate([
+            'lines' => ['required', 'array', 'max:2000'],
+            'lines.*.action' => ['required', Rule::in(['update', 'create', 'skip'])],
+            'lines.*.product_id' => ['nullable', 'integer'],
+            'lines.*.supplier_sku' => ['nullable', 'string', 'max:255'],
+            'lines.*.name' => ['nullable', 'string', 'max:255'],
+            'lines.*.price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.currency' => ['nullable', 'string', 'max:3'],
+        ]);
+
+        $summary = $service->apply($supplier, $data['lines'], $request->user());
+
+        return back()->with('success', sprintf(
+            'Price list applied — %d updated, %d created, %d linked, %d skipped.',
+            $summary['updated'], $summary['created'], $summary['linked'], $summary['skipped'],
+        ));
+    }
+
+    /** Persist the raw dropped file as a supplier attachment (record-keeping). */
+    private function storeAttachment(Supplier $supplier, \Illuminate\Http\UploadedFile $file, int $userId): void
+    {
+        $stored = (string) Str::ulid().'.'.($file->getClientOriginalExtension() ?: 'bin');
+        $path = $file->storeAs("procurement/attachments/suppliers/{$supplier->id}", $stored, 'local');
+
+        $supplier->attachments()->create([
+            'organization_id' => $supplier->organization_id,
+            'uploaded_by' => $userId,
+            'disk' => 'local',
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime' => $file->getMimeType(),
+            'size' => $file->getSize(),
         ]);
     }
 

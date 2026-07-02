@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Contract;
 use App\Models\FollowUp;
+use App\Models\Library\LibraryDocument;
 use App\Models\ProposalFile;
 use App\Models\ProposalNote;
 use App\Models\ProposalSection;
@@ -40,6 +41,7 @@ class EmbeddingObserver
         FollowUp::class => 'follow_up',
         Contract::class => 'contract',
         ComplianceItem::class => 'compliance_item',
+        LibraryDocument::class => 'library_document',
     ];
 
     public function saved(Model $model): void

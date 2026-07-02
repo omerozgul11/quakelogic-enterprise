@@ -9,6 +9,7 @@ use App\Models\Contact;
 use App\Models\Contract;
 use App\Models\DocumentEmbedding;
 use App\Models\FollowUp;
+use App\Models\Library\LibraryDocument;
 use App\Models\Opportunity;
 use App\Models\ProposalFile;
 use App\Models\ProposalNote;
@@ -38,6 +39,7 @@ class KnowledgeBaseService
     public const KINDS = [
         'proposal', 'proposal_file', 'proposal_note', 'proposal_section', 'opportunity',
         'company', 'contact', 'agency', 'follow_up', 'contract', 'compliance_item',
+        'library_document',
     ];
 
     /** @var array<int,string> cache of proposal id => number for file/note labels */
@@ -76,6 +78,13 @@ class KnowledgeBaseService
             'follow_up' => FollowUp::where('organization_id', $organizationId)->cursor(),
             'contract' => Contract::where('organization_id', $organizationId)->cursor(),
             'compliance_item' => ComplianceItem::where('organization_id', $organizationId)->cursor(),
+            // Only shared, AI-enabled current versions — private library docs are
+            // never embedded (they'd surface to other users via QuakeBot answers).
+            'library_document' => LibraryDocument::where('organization_id', $organizationId)
+                ->where('is_current_version', true)
+                ->where('visibility', 'shared')
+                ->where('ai_indexed', true)
+                ->cursor(),
             default => [],
         };
     }
@@ -345,12 +354,33 @@ class KnowledgeBaseService
                 'Compliance: ' . ($r->name ?? 'Item'),
                 $this->join([$r->name, is_string($r->type ?? null) ? $r->type : null, $r->identifier, $r->issuer, $r->notes]),
             ],
+            'library_document' => [
+                'Library: ' . ($r->display_name ?? 'Document'),
+                // Guard here too: the observer re-indexes on ANY save, so a doc
+                // turned private / AI-off yields empty text and its chunks drop.
+                ($r->visibility === 'shared' && $r->ai_indexed)
+                    ? $this->join([$r->display_name, $r->description, $this->libraryFileText($r)])
+                    : '',
+            ],
             default => ['', ''],
         };
     }
 
     /** Extract text from an uploaded proposal file (size-guarded, best-effort). */
     private function fileText(ProposalFile $file): ?string
+    {
+        if (empty($file->path) || (int) ($file->size ?? 0) > self::MAX_FILE_BYTES) {
+            return null;
+        }
+        try {
+            return $this->textExtractor->extract($file->path, (string) $file->mime_type);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** Extract text from a library document (size-guarded, best-effort). */
+    private function libraryFileText(LibraryDocument $file): ?string
     {
         if (empty($file->path) || (int) ($file->size ?? 0) > self::MAX_FILE_BYTES) {
             return null;

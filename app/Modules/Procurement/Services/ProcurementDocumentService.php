@@ -118,17 +118,56 @@ class ProcurementDocumentService
 
     public function defaultSubject(Model $model, string $orgName): string
     {
-        return $this->kindLabel($model)." {$model->number} — {$orgName}";
+        return $this->kindLabel($model)." {$model->number} from {$orgName}";
     }
 
     public function defaultBody(Model $model, string $orgName): string
     {
-        $kind = strtolower($this->kindLabel($model));
-        $lead = $model instanceof Quotation
-            ? "Please find our request for quotation {$model->number} attached. Kindly reply with your pricing and lead time."
-            : "Please find {$kind} {$model->number} attached.";
+        $greeting = $this->greetingFor($model);
+        $number = $model->number;
 
-        return "Hello,\n\n{$lead}\n\nThank you,\n{$orgName}";
+        if ($model instanceof Quotation) {
+            $vendorName = $model->supplier()->value('name') ?: 'your company';
+            $body = "I hope this message finds you well.\n\n"
+                ."We would like to invite {$vendorName} to submit a quotation for the items detailed in the attached Request for Quotation {$number}. We would greatly appreciate your best pricing, availability, and estimated lead time.\n\n"
+                ."If any part of the request needs clarification, please don't hesitate to reach out — we're happy to help.\n\n"
+                .'We look forward to hearing from you.';
+        } elseif ($model instanceof PurchaseOrder) {
+            $shipping = $model->use_ql_shipping_account
+                ? "For this order, kindly arrange shipment using QuakeLogic's carrier account rather than prepaying — please contact us for the account number and preferred carrier before dispatch.\n\n"
+                : '';
+            $body = "I hope this message finds you well.\n\n"
+                ."Please find attached Purchase Order {$number} for your kind attention. We would be grateful if you could confirm receipt of the order and share the expected delivery date at your earliest convenience.\n\n"
+                ."Kindly reference {$number} on all invoices, packing lists, and shipping documents so we can process everything promptly.\n\n"
+                .$shipping
+                ."Should you have any questions or need any further details, please don't hesitate to contact us. Thank you very much for your continued partnership.";
+        } else {
+            $body = "Please find attached {$this->kindLabel($model)} {$number} for your review. I'd be grateful for your consideration at your convenience — please let me know if you need any additional information.";
+        }
+
+        return "{$greeting}\n\n{$body}\n\nKind regards,\n{$orgName}";
+    }
+
+    /**
+     * A respectful greeting addressed to the vendor: the primary contact's first
+     * name when there is one, otherwise the vendor company name ("Dear … Team,").
+     * Falls back to a neutral "Hello," for documents with no vendor (a PR).
+     */
+    private function greetingFor(Model $model): string
+    {
+        $supplier = method_exists($model, 'supplier') ? $model->supplier()->first() : null;
+        if ($supplier) {
+            $contactName = $supplier->contacts()->orderByDesc('is_primary')->orderBy('id')->value('name');
+            $firstName = $contactName ? trim((string) strtok(trim($contactName), ' ')) : '';
+            if ($firstName !== '') {
+                return "Dear {$firstName},";
+            }
+            if ($supplier->name) {
+                return "Dear {$supplier->name} Team,";
+            }
+        }
+
+        return 'Hello,';
     }
 
     // ── View-model normalization ────────────────────────────────────────────

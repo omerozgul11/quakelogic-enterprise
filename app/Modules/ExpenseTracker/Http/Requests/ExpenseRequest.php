@@ -22,7 +22,7 @@ class ExpenseRequest extends FormRequest
 
         return [
             'vendor' => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string', 'max:500'],
+            'description' => ['nullable', 'string', 'max:500'],
             'amount' => ['required', 'numeric', 'gt:0', 'max:99999999999'],
             'currency' => ['nullable', 'string', 'size:3'],
             'payment_method' => ['nullable', new Enum(PaymentMethod::class)],

@@ -4,6 +4,7 @@ import { ProcurementLayout } from '@/Components/layout/ProcurementLayout';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { Pill } from '@/Components/ui/Pill';
+import { Select } from '@/Components/ui/Select';
 import { ConfirmDialog } from '@/Components/ui/Modal';
 import { ReceiveModal } from '@/Components/procurement/ReceiveModal';
 import { SendDocumentModal, SendMeta } from '@/Components/procurement/SendDocumentModal';
@@ -32,13 +33,14 @@ interface BillRef { id: number; number: string; payment_status: string; payment_
 interface Props {
     order: Order;
     can: { manage: boolean; approve: boolean; receive: boolean; createBill: boolean };
+    statuses: { value: string; label: string }[];
     bills: BillRef[];
     send: SendMeta & { emailed_at: string | null };
     attachments: Attachment[];
     approval: ApprovalData | null;
 }
 
-export default function PurchaseOrderShow({ order, can, bills, send, attachments, approval }: Props) {
+export default function PurchaseOrderShow({ order, can, statuses, bills, send, attachments, approval }: Props) {
     const chainActive = approval?.status === 'pending';
     const [receiveOpen, setReceiveOpen] = useState(false);
     const [sendOpen, setSendOpen] = useState(false);
@@ -50,6 +52,11 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
         setProcessing(true);
         router.post(`/procurement/purchase-orders/${order.id}/${verb}`, {}, { preserveScroll: true, onFinish: () => setProcessing(false) });
     };
+    const changeStatus = (status: string) => {
+        if (status === order.status) return;
+        setProcessing(true);
+        router.post(`/procurement/purchase-orders/${order.id}/status`, { status }, { preserveScroll: true, onFinish: () => setProcessing(false) });
+    };
     const confirmDelete = () => {
         setProcessing(true);
         router.delete(`/procurement/purchase-orders/${order.id}`, { onFinish: () => setProcessing(false) });
@@ -59,7 +66,7 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
     const ordered = order.items.reduce((s, i) => s + i.quantity_ordered, 0);
     const pct = ordered > 0 ? Math.round((received / ordered) * 100) : 0;
     const hasReceipts = received > 0;
-    const isTerminal = ['received', 'closed', 'cancelled'].includes(order.status);
+    const isTerminal = ['received', 'delivered', 'closed', 'cancelled'].includes(order.status);
 
     return (
         <ProcurementLayout>
@@ -86,6 +93,12 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            {can.manage && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-medium text-muted-foreground">Status</span>
+                                    <Select value={order.status} options={statuses} onChange={changeStatus} size="sm" className="min-w-[10rem]" />
+                                </div>
+                            )}
                             {order.is_editable && can.manage && <Link href={`/procurement/purchase-orders/${order.id}/edit`}><Button variant="secondary" size="sm" icon={Pencil}>Edit</Button></Link>}
                             {order.status === 'draft' && can.manage && <Button variant="secondary" size="sm" icon={Send} onClick={() => act('submit')} disabled={processing}>Submit</Button>}
                             {(order.status === 'pending_approval' || order.status === 'draft') && can.approve && !chainActive && <Button variant="secondary" size="sm" icon={BadgeCheck} onClick={() => act('approve')} disabled={processing}>Approve</Button>}
@@ -160,14 +173,14 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
                 </Card>
 
                 {order.notes && (
-                    <Card className="p-5">
+                    <Card className="mb-4 p-5">
                         <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Notes</h2>
                         <p className="whitespace-pre-line text-sm text-muted-foreground">{order.notes}</p>
                     </Card>
                 )}
 
                 {bills.length > 0 && (
-                    <Card className="p-5">
+                    <Card className="mb-4 p-5">
                         <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Bills</h2>
                         <div className="space-y-2">
                             {bills.map(b => (

@@ -174,8 +174,8 @@ class PurchaseOrderService
     /**
      * Mark the PO as sent — a status-only action for POs delivered to the vendor
      * outside the app (phone, fax, the buyer's own email). The vendor is NEVER
-     * emailed here; use PurchaseOrderController::sendEmail ("Email vendor") to
-     * actually send.
+     * emailed automatically; sending to the vendor is only ever the explicit
+     * "Email vendor" action (PurchaseOrderController::sendEmail).
      */
     public function markSent(PurchaseOrder $po): PurchaseOrder
     {
@@ -194,6 +194,26 @@ class PurchaseOrderService
         $attrs = ['emailed_at' => now()];
         if (in_array($po->status, [PurchaseOrderStatus::Draft, PurchaseOrderStatus::Approved], true)) {
             $attrs['status'] = PurchaseOrderStatus::Sent;
+        }
+        $po->forceFill($attrs)->save();
+
+        return $po;
+    }
+
+    /**
+     * Manual, free-form status override — set any status at any stage, bypassing
+     * the lifecycle guards. Backs the "Change status" control so a manager can
+     * force a PO to any state (confirmed, delivered, cancelled, back to draft…).
+     * Does NOT post to inventory or run approval side effects; it only relabels
+     * the PO. When moving into Approved and the PO was never formally approved,
+     * the approver/time are stamped so the "Approved by" field is populated.
+     */
+    public function setStatus(PurchaseOrder $po, PurchaseOrderStatus $status, ?int $actorId = null): PurchaseOrder
+    {
+        $attrs = ['status' => $status];
+        if ($status === PurchaseOrderStatus::Approved && ! $po->approved_at) {
+            $attrs['approved_by'] = $actorId;
+            $attrs['approved_at'] = now();
         }
         $po->forceFill($attrs)->save();
 

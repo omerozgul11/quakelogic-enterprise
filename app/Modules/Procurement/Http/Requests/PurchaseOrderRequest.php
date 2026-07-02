@@ -65,6 +65,7 @@ class PurchaseOrderRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             'payment_terms' => ['nullable', 'string', 'max:120'],
             'shipping_terms' => ['nullable', 'string', 'max:120'],
+            'use_ql_shipping_account' => ['nullable', 'boolean'],
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.description' => ['required', 'string', 'max:255'],

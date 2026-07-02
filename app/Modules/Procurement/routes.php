@@ -46,6 +46,10 @@ Route::prefix('procurement')->name('procurement.')->middleware('permission:acces
         Route::match(['put', 'patch'], '/{supplier}', [SupplierController::class, 'update'])->name('update');
         Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
 
+        // Drop a price list / product sheet → parse & match → review → apply to inventory.
+        Route::post('/{supplier}/price-list', [SupplierController::class, 'priceListExtract'])->name('price-list.extract');
+        Route::post('/{supplier}/price-list/apply', [SupplierController::class, 'priceListApply'])->name('price-list.apply');
+
         Route::post('/{supplier}/contacts', [SupplierController::class, 'storeContact'])->name('contacts.store');
         Route::match(['put', 'patch'], '/{supplier}/contacts/{contact}', [SupplierController::class, 'updateContact'])->name('contacts.update');
         Route::post('/{supplier}/contacts/{contact}/portal', [SupplierController::class, 'contactPortal'])->name('contacts.portal');
@@ -118,6 +122,7 @@ Route::prefix('procurement')->name('procurement.')->middleware('permission:acces
         Route::post('/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->name('approve');
         Route::post('/{purchaseOrder}/sent', [PurchaseOrderController::class, 'markSent'])->name('sent');
         Route::post('/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('cancel');
+        Route::post('/{purchaseOrder}/status', [PurchaseOrderController::class, 'setStatus'])->name('status');
         Route::post('/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('receive');
     });
 });

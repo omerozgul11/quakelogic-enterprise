@@ -49,7 +49,8 @@ export default function ReviewExtraction({ proposal, changes, confidence, provid
             company: !!records.company,
             contact: !!records.contact,
             follow_up: !!records.follow_up,
-        })).post(`/proposals/${proposal.id}/review`);
+        }));
+        form.post(`/proposals/${proposal.id}/review`);
     };
 
     const selectedCount = Object.values(fields).filter(Boolean).length + Object.values(records).filter(Boolean).length;

@@ -1,3 +1,5 @@
+import type { ReactElement } from 'react';
+
 /**
  * QuakeBot — the mascot. A pixel-art "Q" creature (matches QuakeLogic) in soft,
  * earthy pastel-terracotta tones, with a little seismic tail. Rendered as crisp
@@ -7,8 +9,8 @@
 
 // Convert a string grid (one char per pixel) into crisp <rect>s, merging
 // horizontal runs of the same color so we emit far fewer nodes.
-export function renderPixels(rows: string[], palette: Record<string, string>, keyPrefix = 'p'): JSX.Element[] {
-    const rects: JSX.Element[] = [];
+export function renderPixels(rows: string[], palette: Record<string, string>, keyPrefix = 'p'): ReactElement[] {
+    const rects: ReactElement[] = [];
     rows.forEach((row, y) => {
         let x = 0;
         while (x < row.length) {

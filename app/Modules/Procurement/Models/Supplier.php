@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Modules\Procurement\Database\Factories\SupplierFactory;
 use App\Modules\Procurement\Enums\SupplierStatus;
+use App\Modules\Procurement\Models\Concerns\HasProcurementAttachments;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,7 +19,7 @@ use Illuminate\Support\Str;
 
 class Supplier extends Model
 {
-    use Auditable, HasFactory, SoftDeletes;
+    use Auditable, HasFactory, HasProcurementAttachments, SoftDeletes;
 
     protected $table = 'procurement_suppliers';
 
@@ -73,6 +74,12 @@ class Supplier extends Model
     public function contacts(): HasMany
     {
         return $this->hasMany(SupplierContact::class, 'procurement_supplier_id');
+    }
+
+    /** Inventory products this supplier sells us (with their SKU + price). */
+    public function products(): HasMany
+    {
+        return $this->hasMany(SupplierProduct::class, 'procurement_supplier_id');
     }
 
     public function purchaseOrders(): HasMany

@@ -14,7 +14,7 @@ interface Order {
     procurement_supplier_id: string; company_id: string; inventory_warehouse_id: string;
     order_date: string | null; expected_date: string | null; currency: string;
     tax_rate: number; tax_amount: number; shipping_amount: number; notes: string | null;
-    payment_terms: string | null; shipping_terms: string | null;
+    payment_terms: string | null; shipping_terms: string | null; use_ql_shipping_account: boolean;
     items: Line[];
 }
 interface Props {
@@ -40,6 +40,7 @@ export default function PurchaseOrderEdit({ order, suppliers, warehouses, produc
         notes: order.notes ?? '',
         payment_terms: order.payment_terms ?? '',
         shipping_terms: order.shipping_terms ?? '',
+        use_ql_shipping_account: order.use_ql_shipping_account,
         items: (order.items.length ? order.items : [{ inventory_product_id: '', description: '', sku: '', quantity_ordered: '1', unit_cost: '0' }]) as Line[],
     });
 
@@ -176,6 +177,11 @@ export default function PurchaseOrderEdit({ order, suppliers, warehouses, produc
                                 </datalist>
                             </div>
                         </div>
+                        <label className="mb-3 flex items-center gap-2 text-sm text-foreground">
+                            <input type="checkbox" className="h-4 w-4 rounded border-border" checked={form.data.use_ql_shipping_account} onChange={e => form.setData('use_ql_shipping_account', e.target.checked)} />
+                            Use QuakeLogic account for shipping
+                            <span className="text-xs text-muted-foreground">(added to the vendor email draft)</span>
+                        </label>
                         <label className="label">Notes</label>
                         <textarea className="input min-h-[96px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} placeholder="Delivery instructions, references…" />
                     </Card>
