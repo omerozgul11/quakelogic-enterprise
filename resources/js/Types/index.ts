@@ -35,6 +35,8 @@ export interface Opportunity {
     status: string;
     agency_name?: string;
     naics_code?: string;
+    set_aside_type?: string;
+    place_of_performance?: string;
     estimated_value?: number;
     probability_of_win?: number;
     due_date?: string;
@@ -83,6 +85,7 @@ export interface Agency {
     website?: string;
     city?: string;
     state?: string;
+    zip_code?: string;
 }
 
 export interface Company {
@@ -186,6 +189,7 @@ export interface Impersonation {
 }
 
 export interface SharedProps {
+    [key: string]: unknown;
     auth: { user: User | null };
     flash: FlashMessages;
     app: { name: string; version: string; server: string; switcher: AppLink[] };

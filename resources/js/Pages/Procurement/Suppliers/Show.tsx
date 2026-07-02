@@ -8,24 +8,36 @@ import { ConfirmDialog } from '@/Components/ui/Modal';
 import { SupplierFormModal, EditableSupplier } from '@/Components/procurement/SupplierFormModal';
 import { SupplierContactModal, EditableSupplierContact } from '@/Components/procurement/SupplierContactModal';
 import { VendorPortalAccess } from '@/Components/procurement/VendorPortalAccess';
+import { SupplierPriceListCard } from '@/Components/procurement/SupplierPriceListCard';
+import { AttachmentsPanel, Attachment } from '@/Components/procurement/AttachmentsPanel';
 import { formatCurrency, cn, getInitials, avatarGradient } from '@/Lib/utils';
-import { ArrowLeft, Factory, Pencil, Trash2, Plus, Mail, Phone, Globe, MapPin, Star, BadgeCheck, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Factory, Pencil, Trash2, Plus, Mail, Phone, Globe, MapPin, Star, BadgeCheck, ShoppingCart, Package } from 'lucide-react';
 
-interface Contact extends EditableSupplierContact { id: number; name: string; portal_enabled: boolean; portal_last_login_at?: string | null }
+interface Contact extends Omit<EditableSupplierContact, 'email'> { id: number; name: string; email: string | null; portal_enabled: boolean; portal_last_login_at?: string | null }
 interface Supplier extends EditableSupplier {
     id: number; code: string; name: string; status_label: string; status_color: string; contacts: Contact[];
 }
 interface OrderRow { id: number; number: string; status_label: string; status_color: string; total: number; currency: string; order_date: string | null }
+interface LinkedProduct {
+    id: number;
+    supplier_sku: string | null;
+    supplier_price: number | null;
+    currency: string;
+    last_imported_at: string | null;
+    product: { id: number; sku: string; name: string; unit_cost: number; currency: string; is_active: boolean } | null;
+}
 
 interface Props {
     supplier: Supplier;
     orders: OrderRow[];
     spend: number;
     statuses: { value: string; label: string }[];
+    products: LinkedProduct[];
+    attachments: Attachment[];
     can: { manage: boolean };
 }
 
-export default function SupplierShow({ supplier, orders, spend, statuses, can }: Props) {
+export default function SupplierShow({ supplier, orders, spend, statuses, products, attachments, can }: Props) {
     const [editOpen, setEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -111,7 +123,7 @@ export default function SupplierShow({ supplier, orders, spend, statuses, can }:
                         {supplier.contacts.length === 0 ? (
                             <p className="py-4 text-sm text-muted-foreground">No contacts yet.</p>
                         ) : (
-                            <div className="space-y-2">
+                            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                                 {supplier.contacts.map(c => (
                                     <div key={c.id} className="rounded-lg border border-border px-3 py-2">
                                         <div className="flex items-center gap-3">
@@ -140,7 +152,7 @@ export default function SupplierShow({ supplier, orders, spend, statuses, can }:
                         {orders.length === 0 ? (
                             <p className="py-4 text-sm text-muted-foreground">No purchase orders yet.</p>
                         ) : (
-                            <div className="space-y-1.5">
+                            <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
                                 {orders.map(po => (
                                     <Link key={po.id} href={`/procurement/purchase-orders/${po.id}`} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-secondary">
                                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{po.number}</span>
@@ -151,6 +163,44 @@ export default function SupplierShow({ supplier, orders, spend, statuses, can }:
                             </div>
                         )}
                     </Card>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    {can.manage && <SupplierPriceListCard supplierId={supplier.id} supplierCurrency={supplier.currency ?? null} />}
+
+                    <Card className="p-5">
+                        <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">
+                            <Package className="h-4 w-4" /> Products supplied
+                        </h2>
+                        {products.length === 0 ? (
+                            <p className="py-4 text-sm text-muted-foreground">No linked products yet. Drop a price list to connect this supplier's products to your inventory.</p>
+                        ) : (
+                            <div className="space-y-1.5">
+                                {products.map(p => (
+                                    <div key={p.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-secondary">
+                                        <span className="min-w-0 flex-1">
+                                            {p.product ? (
+                                                <Link href={`/inventory/products/${p.product.id}`} className="block truncate text-sm font-medium text-foreground hover:text-primary">{p.product.name}</Link>
+                                            ) : (
+                                                <span className="block truncate text-sm text-muted-foreground">(product removed)</span>
+                                            )}
+                                            <span className="block truncate font-mono text-xs text-muted-foreground">{p.supplier_sku ?? p.product?.sku ?? '—'}</span>
+                                        </span>
+                                        <span className="shrink-0 text-right">
+                                            {p.supplier_price != null
+                                                ? <span className="text-sm font-medium text-foreground">{formatCurrency(p.supplier_price, p.currency)}</span>
+                                                : <span className="text-sm text-muted-foreground">—</span>}
+                                            <span className="block text-xs text-muted-foreground">our cost</span>
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </Card>
+                </div>
+
+                <div className="mt-6">
+                    <AttachmentsPanel entity="suppliers" id={supplier.id} attachments={attachments} canManage={can.manage} />
                 </div>
             </div>
 

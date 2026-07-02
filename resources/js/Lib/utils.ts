@@ -28,11 +28,20 @@ export function pacificLabel(d: Date = new Date()): string {
 
 export function formatCurrency(value?: number | string | null, currency = 'USD'): string {
     if (value == null) return '—';
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 0,
-    }).format(Number(value));
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '—';
+    const code = (currency || 'USD').toString().trim().toUpperCase();
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: code,
+            maximumFractionDigits: 0,
+        }).format(num);
+    } catch {
+        // An invalid/partial currency code (e.g. mid-typing) makes Intl throw a
+        // RangeError — fall back to "CODE 1,234" rather than crashing the page.
+        return `${code} ${num.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    }
 }
 
 export function formatDate(date?: string | null): string {

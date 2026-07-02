@@ -25,6 +25,7 @@ use App\Http\Controllers\Web\Crm\TimeClockController as CrmTimeClockController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DocumentController;
 use App\Http\Controllers\Web\FollowUpController;
+use App\Http\Controllers\Web\LibraryController;
 use App\Http\Controllers\Web\OpportunityController;
 use App\Http\Controllers\Web\OpportunityOversightController;
 use App\Http\Controllers\Web\ProposalController;
@@ -224,6 +225,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/{invoice}/create-project', [CrmInvoiceController::class, 'createProject'])->name('create-project');
             Route::post('/{invoice}/payments', [CrmInvoiceController::class, 'storePayment'])->name('payments.store');
             Route::delete('/{invoice}/payments/{payment}', [CrmInvoiceController::class, 'destroyPayment'])->name('payments.destroy');
+        });
+
+        // Legacy CRM project URLs kept for compatibility with older links/tests.
+        Route::prefix('projects')->name('projects.')->group(function () {
+            Route::get('/', [CrmProjectController::class, 'index'])->name('index');
+            Route::post('/', [CrmProjectController::class, 'store'])->name('store');
+            Route::get('/{project}', [CrmProjectController::class, 'show'])->name('show');
+            Route::match(['put', 'patch'], '/{project}', [CrmProjectController::class, 'update'])->name('update');
+            Route::delete('/{project}', [CrmProjectController::class, 'destroy'])->name('destroy');
+            Route::post('/{project}/tasks', [CrmProjectController::class, 'storeTask'])->name('tasks.store');
+            Route::match(['put', 'patch'], '/{project}/tasks/{task}', [CrmProjectController::class, 'updateTask'])->name('tasks.update');
+            Route::delete('/{project}/tasks/{task}', [CrmProjectController::class, 'destroyTask'])->name('tasks.destroy');
+            Route::post('/{project}/members', [CrmProjectController::class, 'storeMember'])->name('members.store');
+            Route::match(['put', 'patch'], '/{project}/members/{member}', [CrmProjectController::class, 'updateMember'])->name('members.update');
+            Route::delete('/{project}/members/{member}', [CrmProjectController::class, 'destroyMember'])->name('members.destroy');
         });
 
         // Time clock (live punch widget, JSON) + Time Cards (review/filter shifts).
@@ -452,6 +468,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [TemplateController::class, 'store'])->name('store');
         Route::match(['put', 'patch'], '/{template}', [TemplateController::class, 'update'])->name('update');
         Route::delete('/{template}', [TemplateController::class, 'destroy'])->name('destroy');
+    });
+
+    // Document Library — Google-Drive-style shared file store under Proposals.
+    // Files live on the private `local` disk; served only via these actions.
+    Route::prefix('library')->name('library.')->group(function () {
+        Route::get('/', [LibraryController::class, 'index'])->middleware('can:view library')->name('index');
+        Route::get('/link-search', [LibraryController::class, 'linkSearch'])->middleware('can:view library')->name('link-search');
+        Route::get('/documents/{document}', [LibraryController::class, 'show'])->middleware('can:view library')->name('show');
+        Route::get('/documents/{document}/preview', [LibraryController::class, 'preview'])->middleware('can:view library')->name('preview');
+        Route::get('/documents/{document}/download', [LibraryController::class, 'download'])->middleware('can:view library')->name('download');
+
+        Route::middleware('can:manage library')->group(function () {
+            Route::post('/upload', [LibraryController::class, 'store'])->name('store');
+            Route::match(['put', 'patch'], '/documents/{document}', [LibraryController::class, 'update'])->name('update');
+            Route::delete('/documents/{document}', [LibraryController::class, 'destroy'])->name('destroy');
+            Route::post('/documents/{document}/versions', [LibraryController::class, 'storeVersion'])->name('versions.store');
+            Route::post('/documents/{document}/versions/{version}/restore', [LibraryController::class, 'restoreVersion'])->name('versions.restore');
+            Route::post('/documents/{document}/links', [LibraryController::class, 'link'])->name('links.store');
+            Route::delete('/links/{link}', [LibraryController::class, 'unlink'])->name('links.destroy');
+
+            Route::post('/folders', [LibraryController::class, 'storeFolder'])->name('folders.store');
+            Route::match(['put', 'patch'], '/folders/{folder}', [LibraryController::class, 'updateFolder'])->name('folders.update');
+            Route::delete('/folders/{folder}', [LibraryController::class, 'destroyFolder'])->name('folders.destroy');
+        });
     });
 
     // CRM - Agencies

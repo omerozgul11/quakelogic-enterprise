@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -104,6 +105,7 @@ class PurchaseOrderController extends Controller
                 'notes' => $purchaseOrder->notes,
                 'payment_terms' => $purchaseOrder->payment_terms,
                 'shipping_terms' => $purchaseOrder->shipping_terms,
+                'use_ql_shipping_account' => (bool) $purchaseOrder->use_ql_shipping_account,
                 'items' => $purchaseOrder->items->map(fn (PurchaseOrderItem $i) => [
                     'inventory_product_id' => $i->inventory_product_id ? (string) $i->inventory_product_id : '',
                     'description' => $i->description,
@@ -140,6 +142,7 @@ class PurchaseOrderController extends Controller
                 'notes' => $data['notes'] ?? null,
                 'payment_terms' => $data['payment_terms'] ?? null,
                 'shipping_terms' => $data['shipping_terms'] ?? null,
+                'use_ql_shipping_account' => $data['use_ql_shipping_account'] ?? false,
             ]);
 
             $this->syncItems($po, $data['items']);
@@ -192,6 +195,7 @@ class PurchaseOrderController extends Controller
                 'notes' => $purchaseOrder->notes,
                 'payment_terms' => $purchaseOrder->payment_terms,
                 'shipping_terms' => $purchaseOrder->shipping_terms,
+                'use_ql_shipping_account' => (bool) $purchaseOrder->use_ql_shipping_account,
                 'approved_by' => $purchaseOrder->approver?->name,
                 'approved_at' => $purchaseOrder->approved_at?->toIso8601String(),
                 'items' => $purchaseOrder->items->map(fn (PurchaseOrderItem $i) => [
@@ -213,6 +217,7 @@ class PurchaseOrderController extends Controller
                 'receive' => $request->user()->can('receive goods'),
                 'createBill' => $request->user()->can('manage bills'),
             ],
+            'statuses' => collect(PurchaseOrderStatus::cases())->map(fn ($s) => ['value' => $s->value, 'label' => $s->label()]),
             'bills' => $purchaseOrder->bills()->orderByDesc('id')->get(['id', 'number', 'payment_status', 'total', 'currency'])
                 ->map(fn ($b) => [
                     'id' => $b->id, 'number' => $b->number,
@@ -283,6 +288,7 @@ class PurchaseOrderController extends Controller
                 'notes' => $data['notes'] ?? null,
                 'payment_terms' => $data['payment_terms'] ?? null,
                 'shipping_terms' => $data['shipping_terms'] ?? null,
+                'use_ql_shipping_account' => $data['use_ql_shipping_account'] ?? false,
             ]);
 
             $purchaseOrder->items()->delete();
@@ -333,11 +339,7 @@ class PurchaseOrderController extends Controller
         $this->authorize('update', $purchaseOrder);
         $po = $this->service->markSent($purchaseOrder);
 
-        $message = $po->emailed_at
-            ? "Purchase order {$po->number} sent and emailed to the supplier."
-            : "Purchase order {$po->number} marked as sent — no supplier email on file.";
-
-        return back()->with('success', $message);
+        return back()->with('success', "Purchase order {$po->number} marked as sent.");
     }
 
     public function cancel(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
@@ -350,6 +352,25 @@ class PurchaseOrderController extends Controller
         }
 
         return back()->with('success', 'Purchase order cancelled.');
+    }
+
+    /**
+     * Free-form status override — set the PO to any status at any stage. This
+     * bypasses the lifecycle guards on purpose (managers can force delivered,
+     * confirmed, cancelled, back to draft…). Inventory receipts are unaffected.
+     */
+    public function setStatus(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse
+    {
+        $this->authorize('update', $purchaseOrder);
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::enum(PurchaseOrderStatus::class)],
+        ]);
+
+        $status = PurchaseOrderStatus::from($validated['status']);
+        $this->service->setStatus($purchaseOrder, $status, $request->user()->id);
+
+        return back()->with('success', "Status set to {$status->label()}.");
     }
 
     public function receive(Request $request, PurchaseOrder $purchaseOrder): RedirectResponse

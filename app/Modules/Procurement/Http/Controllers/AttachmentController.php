@@ -8,6 +8,7 @@ use App\Modules\Procurement\Models\ProcurementAttachment;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\PurchaseRequest;
 use App\Modules\Procurement\Models\Quotation;
+use App\Modules\Procurement\Models\Supplier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ class AttachmentController extends Controller
         'quotations' => Quotation::class,
         'purchase-orders' => PurchaseOrder::class,
         'bills' => Bill::class,
+        'suppliers' => Supplier::class,
     ];
 
     private const MIMES = 'application/pdf,image/jpeg,image/png,image/heic,image/heif,'

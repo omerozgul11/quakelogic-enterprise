@@ -88,6 +88,9 @@ class RolesPermissionsSeeder extends Seeder
 
             // Compliance & Template Library (Phase 7)
             'view compliance', 'manage compliance', 'view templates', 'manage templates',
+
+            // Document Library (Drive-style shared file store under Proposals)
+            'view library', 'manage library',
         ];
 
         foreach ($permissions as $permission) {
@@ -113,6 +116,7 @@ class RolesPermissionsSeeder extends Seeder
             'use ai assistant', 'run document extraction', 'review ai extraction',
             'view contracts', 'manage contracts',
             'view templates', 'manage templates',
+            'view library', 'manage library',
         ]);
 
         // Business Development Manager
@@ -129,6 +133,7 @@ class RolesPermissionsSeeder extends Seeder
             'use ai assistant', 'run document extraction',
             'view contracts', 'manage contracts',
             'view templates', 'manage templates',
+            'view library', 'manage library',
         ]);
 
         // Proposal Manager
@@ -144,6 +149,7 @@ class RolesPermissionsSeeder extends Seeder
             'use ai assistant', 'run document extraction', 'review ai extraction',
             'view contracts', 'manage contracts',
             'view templates', 'manage templates',
+            'view library', 'manage library',
         ]);
 
         // Proposal Writer
@@ -158,6 +164,7 @@ class RolesPermissionsSeeder extends Seeder
             'use ai assistant',
             'view contracts',
             'view templates', 'manage templates',
+            'view library', 'manage library',
         ]);
 
         // Sales Representative
@@ -173,6 +180,7 @@ class RolesPermissionsSeeder extends Seeder
             'use ai assistant',
             'view contracts',
             'view templates',
+            'view library', 'manage library',
         ]);
 
         // Finance
@@ -182,6 +190,7 @@ class RolesPermissionsSeeder extends Seeder
             'view dashboards', 'view executive dashboard', 'export reports',
             'view contracts', 'manage contracts',
             'access crm', 'view crm', 'manage invoices',
+            'view library', 'manage library',
         ]);
 
         // Read Only
@@ -189,7 +198,7 @@ class RolesPermissionsSeeder extends Seeder
         $readOnly->syncPermissions([
             'view opportunities', 'view proposals',
             'view crm', 'access crm', 'view follow ups', 'view dashboards',
-            'view contracts', 'view templates',
+            'view contracts', 'view templates', 'view library',
         ]);
 
         // Collaborative proposal editing: every role can view + edit every

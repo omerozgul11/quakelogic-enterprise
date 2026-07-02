@@ -15,7 +15,8 @@ import {
     MapPinned, ShieldAlert, Star, AlertTriangle, Navigation, Zap, Wifi, Droplets, Wind, Forklift, Construction,
     Clock, BadgeCheck, Smartphone, Package, Boxes, Weight, CalendarClock, ShieldCheck,
     Wrench, CheckSquare, Square, Plane, Hotel, Car, TrainFront, Wallet, SquareParking, Receipt,
-    Folder, FolderPlus, RotateCcw, ChevronDown, ChevronRight, Signature,
+    Folder, FolderOpen, FolderPlus, FileUp, HardHat, Hospital, QrCode, RotateCcw, ChevronDown, ChevronRight, Signature,
+    LayoutDashboard,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -176,6 +177,7 @@ function fileSize(bytes: number): string {
 const PRIORITY_DOT: Record<string, string> = { low: 'bg-gray-400', medium: 'bg-blue-500', high: 'bg-amber-500', critical: 'bg-red-500' };
 
 const TABS = [
+    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { key: 'overview', label: 'Overview', icon: ListChecks },
     { key: 'site', label: 'Site & Safety', icon: MapPinned },
     { key: 'equipment', label: 'Equipment & Shipments', icon: Package },
@@ -194,9 +196,11 @@ const TABS = [
     { key: 'activity', label: 'Activity', icon: History },
 ] as const;
 
+type TabKey = typeof TABS[number]['key'];
+
 export default function ProjectShow(props: Props) {
     const { project, can } = props;
-    const [tab, setTab] = useState<typeof TABS[number]['key']>('overview');
+    const [tab, setTab] = useState<TabKey>('dashboard');
     const [editOpen, setEditOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
@@ -288,6 +292,7 @@ export default function ProjectShow(props: Props) {
                     </nav>
 
                     <div className="min-w-0 flex-1">
+                        {tab === 'dashboard' && <DashboardTab {...props} base={base} onNavigate={setTab} />}
                         {tab === 'overview' && <OverviewTab {...props} base={base} />}
                         {tab === 'site' && <SiteSafetyTab {...props} base={base} />}
                         {tab === 'equipment' && <EquipmentShipmentsTab {...props} base={base} />}
@@ -311,6 +316,196 @@ export default function ProjectShow(props: Props) {
             {editOpen && <ProjectFormModal open onClose={() => setEditOpen(false)} project={project} companies={props.companies} owners={props.owners} statuses={props.statuses} canAdminister={can.administer} />}
             <ConfirmDialog open={deleting} onClose={() => setDeleting(false)} onConfirm={() => router.delete(base)} title="Delete project?" message={<>This removes <span className="font-medium text-foreground">{project.name}</span> and all its tasks, team, files & history.</>} />
         </ProjectsLayout>
+    );
+}
+
+/* ── Dashboard (at-a-glance landing) ────────────────────────────────────── */
+function StatTile({ icon: Icon, label, value, sub, tone, onClick }: { icon: LucideIcon; label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string; onClick?: () => void }) {
+    const body = (
+        <>
+            <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                <span className="text-xs font-medium">{label}</span>
+                {onClick && <ChevronRight className="ml-auto h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />}
+            </div>
+            <p className={cn('mt-2 text-2xl font-bold', tone ?? 'text-foreground')}>{value}</p>
+            {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+        </>
+    );
+    if (onClick) {
+        return (
+            <button type="button" onClick={onClick} className="card-surface group p-4 text-left transition-colors hover:border-primary/40 hover:bg-secondary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                {body}
+            </button>
+        );
+    }
+    return <div className="card-surface p-4">{body}</div>;
+}
+
+function SectionCard({ icon: Icon, title, action, children }: { icon: LucideIcon; title: string; action?: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <div className="card-surface p-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground/70"><Icon className="h-4 w-4" /> {title}</h3>
+                {action}
+            </div>
+            {children}
+        </div>
+    );
+}
+
+function DashboardTab({ project, members, expenses, activities, notes, tasks, financials, purchaseOrders, attachablePurchaseOrders, canProcurement, expenseCategories, can, base, onNavigate }: Props & { base: string; onNavigate: (key: TabKey) => void }) {
+    const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+    const [detaching, setDetaching] = useState<PurchaseOrder | null>(null);
+    const linkForm = useForm({ purchase_order_id: '' });
+
+    const activeMembers = members.filter(m => m.is_active);
+    const doneTasks = tasks.filter(t => t.status === 'completed').length;
+    const poTotal = purchaseOrders.reduce((s, po) => s + po.total, 0);
+    const recentExpenses = expenses.slice(0, 5);
+    const recentNotes = notes.slice(0, 3);
+
+    // Searchable options — typing a PO number or supplier name filters the list.
+    const poOptions = attachablePurchaseOrders.map(po => ({
+        value: String(po.id),
+        label: `${po.number}${po.supplier ? ` · ${po.supplier}` : ''} — ${formatCurrency(po.total)}`,
+    }));
+    const linkPo = () => {
+        if (!linkForm.data.purchase_order_id) return;
+        linkForm.post(`${base}/purchase-orders`, { preserveScroll: true, onSuccess: () => linkForm.reset() });
+    };
+
+    const facts: Array<[string, React.ReactNode]> = [
+        ['Owner', project.owner ?? '—'],
+        ['Project manager', project.manager ?? '—'],
+        ['Client', project.company ?? 'Internal'],
+        ['Start date', project.start_date ? formatDate(project.start_date) : '—'],
+        ['Due date', project.due_date ? formatDate(project.due_date) : '—'],
+        ['Budget', project.budget != null && project.budget > 0 ? formatCurrency(project.budget) : '—'],
+    ];
+
+    return (
+        <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatTile icon={ListChecks} label="Progress" value={`${project.progress}%`} sub={`${doneTasks}/${tasks.length} tasks done`} onClick={() => onNavigate('tasks')} />
+                <StatTile icon={Users} label="Team" value={activeMembers.length} sub={activeMembers.length === 1 ? 'active member' : 'active members'} onClick={() => onNavigate('team')} />
+                <StatTile icon={Receipt} label="Expenses" value={formatCurrency(financials.spent)} sub={`${expenses.length} logged`} tone="text-rose-600 dark:text-rose-400" onClick={() => onNavigate('financial')} />
+                <StatTile icon={ShoppingCart} label="Purchase orders" value={formatCurrency(poTotal)} sub={`${purchaseOrders.length} linked`} onClick={() => onNavigate('pos')} />
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+                <div className="space-y-5 lg:col-span-2">
+                    <SectionCard icon={ClipboardList} title="Overview"
+                        action={<button onClick={() => onNavigate('overview')} className="text-xs font-medium text-primary hover:underline">Details</button>}>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                            {facts.map(([k, v]) => (
+                                <div key={k}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="mt-0.5 text-sm font-medium text-foreground">{v}</dd></div>
+                            ))}
+                        </dl>
+                    </SectionCard>
+
+                    <SectionCard icon={Users} title={`Team (${activeMembers.length})`}
+                        action={<button onClick={() => onNavigate('team')} className="text-xs font-medium text-primary hover:underline">Manage</button>}>
+                        {activeMembers.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No team members yet.</p>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {activeMembers.slice(0, 8).map(m => (
+                                    <div key={m.id} className="flex items-center gap-2 rounded-full bg-secondary/50 py-1 pl-1 pr-3">
+                                        <span className={cn('flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-[10px] font-bold text-white', avatarGradient(m.name))}>{getInitials(m.name)}</span>
+                                        <span className="text-xs"><span className="font-medium text-foreground">{m.name}</span><span className="capitalize text-muted-foreground"> · {m.role}</span></span>
+                                    </div>
+                                ))}
+                                {activeMembers.length > 8 && <span className="self-center text-xs text-muted-foreground">+{activeMembers.length - 8} more</span>}
+                            </div>
+                        )}
+                    </SectionCard>
+
+                    <SectionCard icon={ShoppingCart} title={`Purchase orders (${purchaseOrders.length})`}
+                        action={purchaseOrders.length > 0 ? <button onClick={() => onNavigate('pos')} className="text-xs font-medium text-primary hover:underline">View all</button> : undefined}>
+                        {can.manage && (
+                            <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+                                <Select className="min-w-0 flex-1" searchable searchPlaceholder="Type a PO number or supplier…"
+                                    placeholder={poOptions.length ? 'Link a purchase order…' : 'No unlinked POs available'}
+                                    value={linkForm.data.purchase_order_id} onChange={v => linkForm.setData('purchase_order_id', v)} options={poOptions} />
+                                <Button icon={Link2} onClick={linkPo} disabled={linkForm.processing || !linkForm.data.purchase_order_id}>Link</Button>
+                            </div>
+                        )}
+                        {purchaseOrders.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No purchase orders linked yet.{can.manage && ' Search above to link one.'}</p>
+                        ) : (
+                            <div className="divide-y divide-border">
+                                {purchaseOrders.slice(0, 5).map(po => {
+                                    const inner = (
+                                        <>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="flex items-center gap-2 text-sm font-medium text-foreground"><span className="font-mono">{po.number}</span><Pill color={po.status_color} label={po.status_label} /></p>
+                                                <p className="truncate text-xs text-muted-foreground">{po.supplier ?? 'No supplier'}{po.order_date ? ` · ${formatDate(po.order_date)}` : ''}</p>
+                                            </div>
+                                            <span className="text-sm font-semibold text-foreground">{formatCurrency(po.total)}</span>
+                                        </>
+                                    );
+                                    return (
+                                        <div key={po.id} className="flex items-center gap-3 py-2.5">
+                                            {canProcurement ? (
+                                                <a href={`/procurement/purchase-orders/${po.id}`} className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80">{inner}</a>
+                                            ) : <div className="flex min-w-0 flex-1 items-center gap-3">{inner}</div>}
+                                            {can.manage && <button onClick={() => setDetaching(po)} className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Unlink"><X className="h-4 w-4" /></button>}
+                                        </div>
+                                    );
+                                })}
+                                {purchaseOrders.length > 5 && <button onClick={() => onNavigate('pos')} className="w-full pt-2.5 text-xs font-medium text-primary hover:underline">View all {purchaseOrders.length} purchase orders</button>}
+                            </div>
+                        )}
+                    </SectionCard>
+
+                    <SectionCard icon={Receipt} title="Expenses"
+                        action={<div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">Total {formatCurrency(financials.spent)}</span>{can.addExpense && <button onClick={() => setAddExpenseOpen(true)} className="text-xs font-medium text-primary hover:underline">Add</button>}</div>}>
+                        {recentExpenses.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No expenses linked to this project yet.</p>
+                        ) : (
+                            <div className="divide-y divide-border">
+                                {recentExpenses.map(e => (
+                                    <Link key={e.id} href={`/expenses/${e.id}`} className="flex items-center gap-3 py-2.5 transition-colors hover:opacity-80">
+                                        <span className="font-mono text-xs text-muted-foreground">{e.number}</span>
+                                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{e.description || e.vendor || '—'}</span>
+                                        {e.status_label && <Pill color={e.status_color ?? 'gray'} label={e.status_label} />}
+                                        <span className="text-sm font-medium text-foreground">{formatCurrency(e.amount, e.currency)}</span>
+                                    </Link>
+                                ))}
+                                {expenses.length > recentExpenses.length && <button onClick={() => onNavigate('financial')} className="w-full pt-2.5 text-xs font-medium text-primary hover:underline">View all {expenses.length} expenses</button>}
+                            </div>
+                        )}
+                    </SectionCard>
+                </div>
+
+                <div className="space-y-5">
+                    <SectionCard icon={History} title="Updates"
+                        action={activities.length > 8 ? <button onClick={() => onNavigate('activity')} className="text-xs font-medium text-primary hover:underline">All</button> : undefined}>
+                        <ActivityList activities={activities.slice(0, 8)} compact />
+                    </SectionCard>
+
+                    <SectionCard icon={StickyNote} title="Notes"
+                        action={<button onClick={() => onNavigate('notes')} className="text-xs font-medium text-primary hover:underline">All</button>}>
+                        {recentNotes.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No notes yet.</p>
+                        ) : (
+                            <ul className="space-y-3">
+                                {recentNotes.map(n => (
+                                    <li key={n.id} className="text-sm">
+                                        <p className="line-clamp-3 whitespace-pre-line text-foreground">{n.body}</p>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">{n.author ?? 'Unknown'} · {timeAgo(n.created_at)}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </SectionCard>
+                </div>
+            </div>
+
+            {addExpenseOpen && <AddExpenseModal projectId={project.id} categories={expenseCategories} onClose={() => setAddExpenseOpen(false)} />}
+            <ConfirmDialog open={!!detaching} onClose={() => setDetaching(null)} onConfirm={() => { if (detaching) router.delete(`${base}/purchase-orders/${detaching.id}`, { preserveScroll: true, onFinish: () => setDetaching(null) }); }} title="Unlink purchase order?" message={detaching ? <>Unlink <span className="font-mono font-medium text-foreground">{detaching.number}</span> from this project? The PO itself is kept in Procurement.</> : ''} />
+        </div>
     );
 }
 
@@ -878,7 +1073,7 @@ function FilesTab({ files, folders, base, can }: Props & { base: string }) {
     };
     const uploadHere = (list: FileList | null) => {
         if (!list) return;
-        const extra = typeof folder === 'number' ? { crm_project_folder_id: folder } : {};
+        const extra: Record<string, string | number> = typeof folder === 'number' ? { crm_project_folder_id: folder } : {};
         Array.from(list).forEach(f => upload(f, extra));
     };
     const moveFile = (f: ProjectFile, v: string) => router.patch(`${base}/files/${f.id}/move`, { crm_project_folder_id: v || null }, { preserveScroll: true });

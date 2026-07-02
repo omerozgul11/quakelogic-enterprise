@@ -7,6 +7,7 @@ import {
     BarChart3, Puzzle, Sparkles, ShieldCheck, KanbanSquare,
     Menu, X, Sun, Moon, ChevronDown, TrendingUp, Activity, BookOpen,
     CalendarDays, Inbox, FileSignature, LibraryBig, ScrollText, PenLine, Gauge,
+    FolderOpen,
 } from 'lucide-react';
 import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { clearChat } from '@/Lib/chatStore';
@@ -56,6 +57,7 @@ const sections: NavSection[] = [
         items: [
             { label: 'Compliance', href: '/compliance', icon: ShieldCheck, permission: 'view compliance' },
             { label: 'Template Library', href: '/templates', icon: LibraryBig, permission: 'view templates' },
+            { label: 'Document Library', href: '/library', icon: FolderOpen, permission: 'view library' },
         ],
     },
     {

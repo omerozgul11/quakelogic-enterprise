@@ -43,6 +43,7 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products, c
         notes: '',
         payment_terms: '',
         shipping_terms: '',
+        use_ql_shipping_account: false,
         new_supplier: { ...emptyNewSupplier },
         items: [{ ...emptyLine }] as Line[],
     });
@@ -290,6 +291,11 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products, c
                                 </datalist>
                             </div>
                         </div>
+                        <label className="mb-3 flex items-center gap-2 text-sm text-foreground">
+                            <input type="checkbox" className="h-4 w-4 rounded border-border" checked={form.data.use_ql_shipping_account} onChange={e => form.setData('use_ql_shipping_account', e.target.checked)} />
+                            Use QuakeLogic account for shipping
+                            <span className="text-xs text-muted-foreground">(added to the vendor email draft)</span>
+                        </label>
                         <label className="label">Notes</label>
                         <textarea className="input min-h-[96px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} placeholder="Delivery instructions, references…" />
                     </Card>

@@ -271,12 +271,10 @@ class ProjectController extends Controller
         $this->authorize('create', Project::class);
         $user = $request->user();
 
-        // The dedicated "From Proposal" flow sets from_proposal=true and copies
-        // the proposal's details through the same idempotent service the award
-        // automation uses. The manual form never sets that flag, so it always
-        // falls through to manual creation below — where a chosen proposal is
-        // merely linked (not copied) and "name is required" still applies.
-        if ($request->boolean('from_proposal') && $request->filled('proposal_submission_id')) {
+        // The dedicated "From Proposal" flow sets from_proposal=true. Older
+        // /crm/projects callers only posted proposal_submission_id, so treat a
+        // proposal-only request the same way while preserving named manual links.
+        if (($request->boolean('from_proposal') || ! $request->filled('name')) && $request->filled('proposal_submission_id')) {
             $proposal = ProposalSubmission::where('organization_id', $user->organization_id)
                 ->findOrFail($request->input('proposal_submission_id'));
             $project = $this->creation->createFromProposal($proposal, $user, automatic: false);

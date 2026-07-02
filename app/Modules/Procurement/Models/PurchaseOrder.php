@@ -29,13 +29,14 @@ class PurchaseOrder extends Model
         'procurement_purchase_request_id', 'procurement_quotation_id',
         'number', 'status', 'order_date', 'expected_date', 'currency',
         'subtotal', 'tax_rate', 'tax_amount', 'shipping_amount', 'total',
-        'notes', 'payment_terms', 'shipping_terms', 'approved_by', 'approved_at', 'emailed_at',
+        'notes', 'payment_terms', 'shipping_terms', 'use_ql_shipping_account', 'approved_by', 'approved_at', 'emailed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'status' => PurchaseOrderStatus::class,
+            'use_ql_shipping_account' => 'boolean',
             'order_date' => 'date',
             'expected_date' => 'date',
             'approved_at' => 'datetime',
