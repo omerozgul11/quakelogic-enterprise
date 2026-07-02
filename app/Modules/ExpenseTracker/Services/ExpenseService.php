@@ -4,6 +4,7 @@ namespace App\Modules\ExpenseTracker\Services;
 
 use App\Modules\ExpenseTracker\Enums\ExpenseStatus;
 use App\Modules\ExpenseTracker\Models\Expense;
+use App\Modules\ExpenseTracker\Models\ExpensePayment;
 use RuntimeException;
 
 /**
@@ -69,6 +70,51 @@ class ExpenseService
     public function markPaid(Expense $expense): Expense
     {
         $expense->forceFill(['status' => ExpenseStatus::Paid])->save();
+
+        return $expense;
+    }
+
+    /**
+     * Record a (possibly partial) payment against an expense and re-derive its
+     * paid totals. Payment status (Due / Partially paid / Paid) then follows
+     * from amount vs amount_paid — see Expense::paymentStatus().
+     *
+     * @param  array{amount:float|string,currency?:string,paid_on?:string,method?:string|null,reference?:string|null,note?:string|null}  $data
+     */
+    public function recordPayment(Expense $expense, array $data, int $userId): ExpensePayment
+    {
+        $payment = $expense->payments()->create([
+            'organization_id' => $expense->organization_id,
+            'created_by' => $userId,
+            'amount' => $data['amount'],
+            'currency' => $data['currency'] ?? $expense->currency,
+            'paid_on' => $data['paid_on'] ?? now()->toDateString(),
+            'method' => $data['method'] ?? null,
+            'reference' => $data['reference'] ?? null,
+            'note' => $data['note'] ?? null,
+        ]);
+
+        $this->syncPaymentTotals($expense);
+
+        return $payment;
+    }
+
+    public function removePayment(Expense $expense, ExpensePayment $payment): void
+    {
+        $payment->delete();
+        $this->syncPaymentTotals($expense);
+    }
+
+    /** Recompute amount_paid + paid_at from the live (non-deleted) payments. */
+    public function syncPaymentTotals(Expense $expense): Expense
+    {
+        $paid = (float) $expense->payments()->sum('amount');
+        $fullyPaid = (float) $expense->amount > 0 && $paid + 0.005 >= (float) $expense->amount;
+
+        $expense->forceFill([
+            'amount_paid' => round($paid, 2),
+            'paid_at' => $fullyPaid ? ($expense->paid_at ?? now()) : null,
+        ])->save();
 
         return $expense;
     }

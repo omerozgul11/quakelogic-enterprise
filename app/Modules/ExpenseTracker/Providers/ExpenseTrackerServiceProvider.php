@@ -2,6 +2,7 @@
 
 namespace App\Modules\ExpenseTracker\Providers;
 
+use App\Modules\ExpenseTracker\Console\SeedExpenseCategoriesCommand;
 use App\Modules\ExpenseTracker\Models\Expense;
 use App\Modules\ExpenseTracker\Models\ExpenseCategory;
 use App\Modules\ExpenseTracker\Models\RecurringExpense;
@@ -18,6 +19,10 @@ class ExpenseTrackerServiceProvider extends ModuleServiceProvider
     public function register(): void
     {
         $this->app->singleton(QuickBooksClientInterface::class, fn () => QuickBooksClientFactory::default());
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([SeedExpenseCategoriesCommand::class]);
+        }
     }
 
     public function boot(): void

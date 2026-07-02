@@ -12,6 +12,7 @@ import { cn, getInitials, avatarGradient } from '@/Lib/utils';
 import { clearChat } from '@/Lib/chatStore';
 import { AppSwitcher } from '@/Components/layout/AppSwitcher';
 import { GlobalSearch } from '@/Components/layout/GlobalSearch';
+import { MenuSearch, menuMatches } from '@/Components/layout/MenuSearch';
 import { PwaControls } from '@/Components/layout/PwaControls';
 import { QuakeAiChat } from '@/Components/layout/QuakeAiChat';
 import { HeaderClock } from '@/Components/layout/HeaderClock';
@@ -177,6 +178,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
+    const [menuQuery, setMenuQuery] = useState('');
     const [dark, toggleDark] = useDarkMode();
     const [sidebarWidth, startResize, resizing, resetSidebarWidth] = useSidebarWidth();
     const user = auth.user;
@@ -270,7 +272,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             // Collapsible sections start closed to save space, but auto-open when
             // they contain the current page so its highlight is never hidden.
             const containsActive = items.some(i => i.href === matchedHref);
-            const open = !collapsible || containsActive || (openSections[title ?? ''] ?? false);
+            const open = !collapsible || containsActive || menuQuery.trim() !== '' || (openSections[title ?? ''] ?? false);
             return (
                 <div key={key}>
                     {title && (collapsible ? (
@@ -304,12 +306,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
             </div>
 
-            <nav className="sidebar-scroll flex-1 space-y-5 overflow-y-auto px-3 py-3">
-                {sections.map((section, si) =>
-                    renderSection(si, section.title, section.items.filter(i => hasPermission(i.permission)), !!section.collapsible),
-                )}
+            <MenuSearch value={menuQuery} onChange={setMenuQuery} />
 
-                {isSuperAdmin && renderSection('system', 'System', adminItems, true)}
+            <nav className="sidebar-scroll flex-1 space-y-5 overflow-y-auto px-3 py-3">
+                {(() => {
+                    const searching = menuQuery.trim() !== '';
+                    // A section whose title matches keeps all its items; otherwise
+                    // only items whose label matches survive.
+                    const forSearch = (title: string | undefined, items: NavItem[]) =>
+                        !searching || (title && menuMatches(title, menuQuery))
+                            ? items
+                            : items.filter(i => menuMatches(i.label, menuQuery));
+
+                    const rendered = [
+                        ...sections.map((section, si) => ({
+                            key: si as number | string,
+                            title: section.title,
+                            items: forSearch(section.title, section.items.filter(i => hasPermission(i.permission))),
+                            collapsible: !!section.collapsible,
+                        })),
+                        ...(isSuperAdmin
+                            ? [{ key: 'system', title: 'System', items: forSearch('System', adminItems), collapsible: true }]
+                            : []),
+                    ].filter(s => s.items.length > 0);
+
+                    if (searching && rendered.length === 0) {
+                        return (
+                            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                No menu items match “{menuQuery.trim()}”.
+                            </p>
+                        );
+                    }
+
+                    return rendered.map(s => renderSection(s.key, s.title, s.items, s.collapsible));
+                })()}
             </nav>
 
             <div className="space-y-1 border-t border-border p-3">
@@ -344,13 +374,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 'fixed inset-y-0 left-0 z-50 w-64 transform bg-card shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
-                <SidebarBody mobile />
+                {SidebarBody({ mobile: true })}
             </aside>
 
             {/* Desktop sidebar — drag the right edge to resize */}
             <aside className="glass-panel hidden shrink-0 lg:block" style={{ width: sidebarWidth }}>
                 <div className="sticky top-0 h-screen">
-                    <SidebarBody />
+                    {SidebarBody({})}
                     <div
                         onMouseDown={startResize}
                         onDoubleClick={resetSidebarWidth}
