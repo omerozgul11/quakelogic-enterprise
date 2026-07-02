@@ -107,6 +107,7 @@ Route::prefix('procurement')->name('procurement.')->middleware('permission:acces
         Route::get('/create', [PurchaseOrderController::class, 'create'])->name('create');
         Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
         Route::post('/from-invoice/{invoice}', [PurchaseOrderController::class, 'storeFromInvoice'])->name('from-invoice');
+        Route::get('/{purchaseOrder}/edit', [PurchaseOrderController::class, 'edit'])->name('edit');
         Route::get('/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->name('show');
         Route::match(['put', 'patch'], '/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->name('update');
         Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');

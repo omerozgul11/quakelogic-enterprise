@@ -218,7 +218,7 @@ class ProcurementDocumentService
 
     private function purchaseOrderDoc(PurchaseOrder $po): array
     {
-        $po->loadMissing(['items', 'organization', 'supplier']);
+        $po->loadMissing(['items', 'organization', 'supplier', 'company']);
 
         return [
             'kind_label' => 'Purchase Order',
@@ -230,13 +230,16 @@ class ProcurementDocumentService
             'meta' => array_filter([
                 ['label' => 'Order date', 'value' => optional($po->order_date)->format('M j, Y')],
                 $po->expected_date ? ['label' => 'Expected', 'value' => $po->expected_date->format('M j, Y')] : null,
+                $po->company ? ['label' => 'Client', 'value' => $po->company->name] : null,
                 ['label' => 'Status', 'value' => $po->status->label()],
+                ($po->payment_terms ?: $po->supplier?->payment_terms) ? ['label' => 'Payment terms', 'value' => $po->payment_terms ?: $po->supplier?->payment_terms] : null,
+                $po->shipping_terms ? ['label' => 'Shipping terms', 'value' => $po->shipping_terms] : null,
             ]),
             'show_unit' => false,
             'items' => $this->items($po->items, 'quantity_ordered'),
             'totals' => array_filter([
                 ['label' => 'Subtotal', 'value' => $po->subtotal],
-                ((float) $po->tax_amount) > 0 ? ['label' => 'Tax ('.rtrim(rtrim(number_format((float) $po->tax_rate, 2), '0'), '.').'%)', 'value' => $po->tax_amount] : null,
+                ((float) $po->tax_amount) > 0 ? ['label' => 'Tax'.((float) $po->tax_rate > 0 ? ' ('.rtrim(rtrim(number_format((float) $po->tax_rate, 2), '0'), '.').'%)' : ''), 'value' => $po->tax_amount] : null,
                 ((float) $po->shipping_amount) > 0 ? ['label' => 'Shipping', 'value' => $po->shipping_amount] : null,
                 ['label' => 'Total', 'value' => $po->total, 'grand' => true],
             ]),

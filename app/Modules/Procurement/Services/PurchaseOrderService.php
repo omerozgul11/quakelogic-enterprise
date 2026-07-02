@@ -5,14 +5,12 @@ namespace App\Modules\Procurement\Services;
 use App\Models\User;
 use App\Modules\Inventory\Services\InventoryService;
 use App\Modules\Procurement\Enums\PurchaseOrderStatus;
-use App\Modules\Procurement\Mail\PurchaseOrderMail;
 use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\PurchaseOrderItem;
 use App\Modules\Procurement\Models\SupplierContact;
 use App\Notifications\ActivityNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use RuntimeException;
 
@@ -81,7 +79,10 @@ class PurchaseOrderService
             $subtotal += $lineTotal;
         }
 
-        $taxAmount = round($subtotal * (float) $po->tax_rate / 100, 2);
+        // Tax is either a percentage of the subtotal (when a rate is set) or a
+        // flat amount entered directly (rate 0). A non-zero rate wins.
+        $taxRate = (float) $po->tax_rate;
+        $taxAmount = $taxRate > 0 ? round($subtotal * $taxRate / 100, 2) : round((float) $po->tax_amount, 2);
         $po->forceFill([
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
@@ -100,15 +101,14 @@ class PurchaseOrderService
     }
 
     /**
-     * Fire the "purchase order created" notices: email the supplier a copy of
-     * the PO and send the internal buyer (its creator) an in-app + email
-     * confirmation. Best-effort — a mail failure is logged and never blocks the
-     * request. Call this after the create transaction has committed.
+     * Notify the internal buyer (the PO's creator) that their purchase order was
+     * created — in-app + email. The vendor is NOT emailed automatically; sending
+     * to the vendor is an explicit action (PurchaseOrderController::sendEmail).
+     * Best-effort — a mail failure is logged and never blocks the request. Call
+     * this after the create transaction has committed.
      */
     public function notifyCreated(PurchaseOrder $po): void
     {
-        $this->emailSupplierCopy($po);
-
         $creator = $po->creator()->first();
         if ($creator) {
             try {
@@ -123,22 +123,6 @@ class PurchaseOrderService
             } catch (\Throwable $e) {
                 Log::warning('Purchase order creator notification failed', ['po' => $po->number, 'error' => $e->getMessage()]);
             }
-        }
-    }
-
-    /** Email the supplier (or its primary contact) a copy of the PO. */
-    private function emailSupplierCopy(PurchaseOrder $po): void
-    {
-        $email = $this->vendorEmail($po);
-        if (! $email) {
-            return;
-        }
-
-        try {
-            Mail::to($email)->send(new PurchaseOrderMail($po));
-            $po->forceFill(['emailed_at' => now()])->save();
-        } catch (\Throwable $e) {
-            Log::warning('Purchase order supplier email failed', ['po' => $po->number, 'error' => $e->getMessage()]);
         }
     }
 
@@ -188,29 +172,14 @@ class PurchaseOrderService
     }
 
     /**
-     * Mark the PO as sent and email it to the supplier (its email, or the
-     * primary contact's). The status advances even if the email can't be sent
-     * (logged) so the workflow never gets stuck on a mail hiccup.
+     * Mark the PO as sent — a status-only action for POs delivered to the vendor
+     * outside the app (phone, fax, the buyer's own email). The vendor is NEVER
+     * emailed here; use PurchaseOrderController::sendEmail ("Email vendor") to
+     * actually send.
      */
     public function markSent(PurchaseOrder $po): PurchaseOrder
     {
-        $email = $this->vendorEmail($po);
-        $emailedAt = null;
-
-        if ($email) {
-            try {
-                Mail::to($email)->send(new PurchaseOrderMail($po));
-                $emailedAt = now();
-            } catch (\Throwable $e) {
-                Log::warning('Purchase order vendor email failed', ['po' => $po->number, 'error' => $e->getMessage()]);
-            }
-        }
-
-        $attrs = ['status' => PurchaseOrderStatus::Sent];
-        if ($emailedAt !== null) {
-            $attrs['emailed_at'] = $emailedAt;
-        }
-        $po->forceFill($attrs)->save();
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
 
         return $po;
     }

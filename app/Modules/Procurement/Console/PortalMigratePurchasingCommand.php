@@ -15,6 +15,7 @@ use App\Modules\Procurement\Models\PurchaseOrder;
 use App\Modules\Procurement\Models\PurchaseRequest;
 use App\Modules\Procurement\Models\Quotation;
 use App\Modules\Procurement\Models\Supplier;
+use App\Modules\Procurement\Models\SupplierContact;
 use App\Modules\Procurement\Services\BillService;
 use App\Modules\Procurement\Services\ProcurementNumberService;
 use Illuminate\Console\Command;
@@ -111,45 +112,150 @@ class PortalMigratePurchasingCommand extends Command
     private function migrateVendors(): void
     {
         $rows = DB::connection('portal')->table('rise_pur_vendor')->get();
-        [$created, $matched] = [0, 0];
+        [$created, $matched, $updated, $contactsAdded] = [0, 0, 0, 0];
+
+        // Vendor contact people (with emails + portal logins) live in rise_users
+        // as user_type='vendor' rows linked by vendor_id. Import them and backfill
+        // the supplier's own contact fields.
+        $canPullContacts = $this->sourceHasColumn('rise_users', 'vendor_id');
 
         foreach ($rows as $v) {
-            if ($this->getMap('pur_vendor', (int) $v->userid)) {
+            $vid = (int) $v->userid;
+            $fields = $this->vendorContactFields($v);
+            $supplierId = $this->getMap('pur_vendor', $vid);
+
+            if ($supplierId) {
                 $matched++;
-                continue;
-            }
-            $name = $this->clean($v->company, 255) ?? ('Vendor '.$v->userid);
-            if ($this->dry) {
-                $this->putMap('pur_vendor', (int) $v->userid, $this->dryId(), 'create');
+                // Re-runs backfill only-empty contact fields on the existing supplier.
+                if (! $this->dry && ($supplier = Supplier::find($supplierId)) && $this->backfill($supplier, $fields)) {
+                    $updated++;
+                }
+            } elseif ($this->dry) {
+                $this->putMap('pur_vendor', $vid, $this->dryId(), 'create');
                 $created++;
-                continue;
+            } else {
+                $supplier = Supplier::create(array_merge([
+                    'organization_id' => $this->org,
+                    'created_by' => $this->ownerFor($v->addedfrom ?? null),
+                    'owner_id' => $this->fallbackOwnerId,
+                    'code' => $this->uniqueCode($this->clean($v->vendor_code, 40) ?: ('V'.$vid)),
+                    'name' => $this->clean($v->company, 255) ?? ('Vendor '.$vid),
+                    'status' => ((int) ($v->active ?? 1) === 1) ? 'active' : 'inactive',
+                    'currency' => $this->cur($v->default_currency ?? null),
+                    'metadata' => ['portal_vendor' => $vid],
+                ], $fields));
+                $this->putMap('pur_vendor', $vid, (int) $supplier->id, 'create');
+                $supplierId = (int) $supplier->id;
+                $created++;
             }
 
-            $supplier = Supplier::create([
-                'organization_id' => $this->org,
-                'created_by' => $this->ownerFor($v->addedfrom ?? null),
-                'owner_id' => $this->fallbackOwnerId,
-                'code' => $this->uniqueCode($this->clean($v->vendor_code, 40) ?: ('V'.$v->userid)),
-                'name' => $name,
-                'category' => $this->clean($v->category, 120),
-                'status' => ((int) ($v->active ?? 1) === 1) ? 'active' : 'inactive',
-                'phone' => $this->clean($v->phonenumber, 40),
-                'website' => $this->clean($v->website, 255),
-                'address_line1' => $this->clean($v->address, 255),
-                'city' => $this->clean($v->city, 120),
-                'state' => $this->clean($v->state, 120),
-                'postal_code' => $this->clean($v->zip, 30),
-                'country' => $this->clean($v->country, 120),
-                'payment_terms' => $this->clean($v->payment_terms, 60),
-                'currency' => $this->cur($v->default_currency ?? null),
-                'tax_id' => $this->clean($v->vat, 60),
-                'metadata' => ['portal_vendor' => (int) $v->userid],
-            ]);
-            $this->putMap('pur_vendor', (int) $v->userid, (int) $supplier->id, 'create');
-            $created++;
+            if ($canPullContacts && $supplierId && ! $this->dry) {
+                $contactsAdded += $this->importVendorContacts($vid, $supplierId);
+            }
         }
 
         $this->reportEntity('Vendors', $rows->count(), $created, $matched);
+        if ($updated || $contactsAdded) {
+            $this->line(sprintf('  %-16s backfilled=%-5d contacts+=%-5d', '', $updated, $contactsAdded));
+        }
+    }
+
+    /** Supplier contact fields from a RISE vendor row, with billing/shipping address fallback. */
+    private function vendorContactFields(object $v): array
+    {
+        return [
+            'category' => $this->clean($v->category ?? null, 120),
+            'phone' => $this->clean($v->phonenumber ?? null, 40),
+            'website' => $this->clean($v->website ?? null, 255),
+            'address_line1' => $this->clean($v->address ?? null, 255) ?? $this->clean($v->billing_street ?? null, 255) ?? $this->clean($v->shipping_street ?? null, 255),
+            'city' => $this->clean($v->city ?? null, 120) ?? $this->clean($v->billing_city ?? null, 120) ?? $this->clean($v->shipping_city ?? null, 120),
+            'state' => $this->clean($v->state ?? null, 120) ?? $this->clean($v->billing_state ?? null, 120),
+            'postal_code' => $this->clean($v->zip ?? null, 30) ?? $this->clean($v->billing_zip ?? null, 30),
+            'country' => $this->clean($v->country ?? null, 120) ?? $this->clean($v->billing_country ?? null, 120),
+            'payment_terms' => $this->clean($v->payment_terms ?? null, 60),
+            'tax_id' => $this->clean($v->vat ?? null, 60),
+        ];
+    }
+
+    /** Fill only the empty contact fields on an existing supplier; never overwrite. Returns true if changed. */
+    private function backfill(Supplier $supplier, array $fields): bool
+    {
+        $changed = false;
+        foreach ($fields as $key => $value) {
+            if (($value ?? '') !== '' && ($supplier->{$key} ?? '') === '') {
+                $supplier->{$key} = $value;
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $supplier->save();
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Import a vendor's contact people (rise_users, user_type='vendor', linked by
+     * vendor_id) into supplier contacts, and give the supplier a top-level email
+     * (from its primary contact) if it has none. Idempotent by contact email.
+     */
+    private function importVendorContacts(int $vendorUserId, int $supplierId): int
+    {
+        $rows = DB::connection('portal')->table('rise_users')
+            ->where('user_type', 'vendor')->where('vendor_id', $vendorUserId)->where('deleted', 0)
+            ->get();
+        if ($rows->isEmpty()) {
+            return 0;
+        }
+
+        $supplier = Supplier::find($supplierId);
+        $added = 0;
+        $primaryEmail = null;
+
+        foreach ($rows as $c) {
+            $email = $this->clean($c->email ?? null, 255);
+            $name = trim(($this->clean($c->first_name ?? null, 120) ?? '').' '.($this->clean($c->last_name ?? null, 120) ?? ''));
+            if ($name === '' && ! $email) {
+                continue;
+            }
+            $isPrimary = (int) ($c->is_primary_contact ?? 0) === 1;
+            if ($isPrimary && $email) {
+                $primaryEmail = $email;
+            }
+
+            $exists = SupplierContact::where('procurement_supplier_id', $supplierId)
+                ->when($email !== null, fn ($q) => $q->where('email', $email))
+                ->when($email === null, fn ($q) => $q->where('name', $name))
+                ->exists();
+            if ($exists) {
+                continue;
+            }
+
+            SupplierContact::create([
+                'organization_id' => $this->org,
+                'procurement_supplier_id' => $supplierId,
+                'name' => $name !== '' ? $name : ($email ?: 'Contact'),
+                'title' => $this->clean($c->job_title ?? null, 120),
+                'email' => $email,
+                'phone' => $this->clean($c->phone ?? null, 40),
+                'is_primary' => $isPrimary,
+            ]);
+            $added++;
+        }
+
+        if ($supplier && ($supplier->email ?? '') === '') {
+            $fallback = $primaryEmail ?? $this->clean($rows->first()->email ?? null, 255);
+            if ($fallback) {
+                $supplier->forceFill(['email' => $fallback])->save();
+            }
+        }
+
+        return $added;
+    }
+
+    private function sourceHasColumn(string $table, string $column): bool
+    {
+        return DB::connection('portal')->getSchemaBuilder()->hasColumn($table, $column);
     }
 
     private function migrateRequests(ProcurementNumberService $numbers): void

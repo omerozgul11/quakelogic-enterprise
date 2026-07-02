@@ -49,6 +49,7 @@ interface ProjectFile { id: number; name: string; size: number; mime_type: strin
 interface Folder { id: number; name: string }
 interface Activity { id: number; action: string; description: string; user: string | null; created_at: string }
 interface Invoice { id: number; number: string; kind: string; status: string; total: number; amount_paid: number; balance: number }
+interface Expense { id: number; number: string; vendor: string | null; description: string | null; category: string | null; amount: number; currency: string; status: string; status_label: string | null; status_color: string | null; expense_date: string | null }
 interface Vendor { id: number; category: string; category_label: string; category_color: string; company_name: string; contact_name: string | null; phone: string | null; email: string | null; notes: string | null }
 interface PurchaseOrder { id: number; number: string; supplier: string | null; status: string; status_label: string; status_color: string; total: number; currency: string; order_date: string | null; expected_date: string | null }
 interface AttachablePO { id: number; number: string; supplier: string | null; total: number }
@@ -120,6 +121,8 @@ interface Props {
     folders: Folder[];
     activities: Activity[];
     invoices: Invoice[];
+    expenses: Expense[];
+    expenseCategories: { value: number; label: string }[];
     vendors: Vendor[];
     vendorCategories: Option[];
     sites: ProjectSite[];
@@ -141,7 +144,7 @@ interface Props {
     purchaseOrders: PurchaseOrder[];
     attachablePurchaseOrders: AttachablePO[];
     canProcurement: boolean;
-    financials: { budget: number; invoiced: number; paid: number; outstanding: number; remaining_budget: number };
+    financials: { budget: number; invoiced: number; paid: number; outstanding: number; remaining_budget: number; spent: number; margin: number };
     companies: Person[];
     owners: Person[];
     statuses: Option[];
@@ -149,7 +152,7 @@ interface Props {
     priorities: Option[];
     milestoneStatuses: Option[];
     memberRoles: string[];
-    can: { manage: boolean; manageTeam: boolean; administer: boolean; delete: boolean };
+    can: { manage: boolean; manageTeam: boolean; administer: boolean; delete: boolean; addExpense: boolean };
 }
 
 function timeAgo(iso: string | null): string {
@@ -1158,16 +1161,19 @@ function LinkedTab({ project }: { project: Project }) {
 }
 
 /* ── Financial Summary ──────────────────────────────────────────────────── */
-function FinancialTab({ financials, invoices }: Props) {
+function FinancialTab({ project, financials, invoices, expenses, expenseCategories, can }: Props) {
+    const [addOpen, setAddOpen] = useState(false);
     const cards: Array<[string, number, string]> = [
         ['Awarded budget', financials.budget, 'text-foreground'],
         ['Invoiced', financials.invoiced, 'text-blue-600 dark:text-blue-400'],
         ['Collected', financials.paid, 'text-emerald-600 dark:text-emerald-400'],
         ['Outstanding', financials.outstanding, 'text-amber-600 dark:text-amber-400'],
+        ['Expenses', financials.spent, 'text-rose-600 dark:text-rose-400'],
+        ['Margin', financials.margin, financials.margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'],
     ];
     return (
         <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                 {cards.map(([label, value, tone]) => (
                     <div key={label} className="card-surface p-4">
                         <p className="text-xs text-muted-foreground">{label}</p>
@@ -1175,6 +1181,7 @@ function FinancialTab({ financials, invoices }: Props) {
                     </div>
                 ))}
             </div>
+
             <div className="card-surface p-0">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Invoices & estimates</h3>
@@ -1192,7 +1199,60 @@ function FinancialTab({ financials, invoices }: Props) {
                     {invoices.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No invoices linked to this project yet.</p>}
                 </div>
             </div>
+
+            <div className="card-surface p-0">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Expenses</h3>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground">Total spent: <span className="font-medium text-foreground">{formatCurrency(financials.spent)}</span></span>
+                        {can.addExpense && <Button size="sm" variant="secondary" onClick={() => setAddOpen(true)}>+ Add expense</Button>}
+                    </div>
+                </div>
+                <div className="divide-y divide-border">
+                    {expenses.map(e => (
+                        <Link key={e.id} href={`/expenses/${e.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary" data-no-row-link>
+                            <span className="font-mono text-xs text-muted-foreground">{e.number}</span>
+                            <span className="min-w-0 truncate text-sm text-foreground">{e.description || e.vendor || '—'}{e.category ? <span className="text-muted-foreground"> · {e.category}</span> : null}</span>
+                            {e.status_label && <Pill color={e.status_color ?? 'gray'} label={e.status_label} />}
+                            <span className="ml-auto text-sm font-medium text-foreground">{formatCurrency(e.amount, e.currency)}</span>
+                        </Link>
+                    ))}
+                    {expenses.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No expenses linked to this project yet.</p>}
+                </div>
+            </div>
+
+            {addOpen && <AddExpenseModal projectId={project.id} categories={expenseCategories} onClose={() => setAddOpen(false)} />}
         </div>
+    );
+}
+
+function AddExpenseModal({ projectId, categories, onClose }: { projectId: number; categories: { value: number; label: string }[]; onClose: () => void }) {
+    const form = useForm({ description: '', vendor: '', amount: '', currency: 'USD', expense_date: new Date().toISOString().slice(0, 10), expense_category_id: '', notes: '' });
+    const submit = () => form.post(`/projects/${projectId}/expenses`, { preserveScroll: true, onSuccess: () => onClose() });
+
+    return (
+        <Modal open onClose={onClose} title="Add expense" description="Logs a draft expense linked to this project."
+            footer={<>
+                <Button variant="ghost" onClick={onClose} disabled={form.processing}>Cancel</Button>
+                <Button onClick={submit} disabled={form.processing || !form.data.description || !form.data.amount}>{form.processing ? 'Saving…' : 'Add expense'}</Button>
+            </>}>
+            <div className="space-y-3">
+                <div><label className="label">Description *</label><input className="input" autoFocus value={form.data.description} onChange={e => form.setData('description', e.target.value)} />{form.errors.description && <p className="mt-1 text-xs text-destructive">{form.errors.description}</p>}</div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div><label className="label">Amount *</label><input type="number" step="0.01" min="0" className="input" value={form.data.amount} onChange={e => form.setData('amount', e.target.value)} />{form.errors.amount && <p className="mt-1 text-xs text-destructive">{form.errors.amount}</p>}</div>
+                    <div><label className="label">Currency</label><input className="input uppercase" maxLength={3} value={form.data.currency} onChange={e => form.setData('currency', e.target.value.toUpperCase())} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div><label className="label">Vendor</label><input className="input" value={form.data.vendor} onChange={e => form.setData('vendor', e.target.value)} /></div>
+                    <div><label className="label">Date</label><input type="date" className="input" value={form.data.expense_date} onChange={e => form.setData('expense_date', e.target.value)} /></div>
+                </div>
+                <div>
+                    <label className="label">Category</label>
+                    <Select className="w-full" value={form.data.expense_category_id} placeholder="— None —" onChange={v => form.setData('expense_category_id', v)} options={categories.map(c => ({ value: String(c.value), label: c.label }))} />
+                </div>
+                <div><label className="label">Notes</label><textarea className="input min-h-[60px]" value={form.data.notes} onChange={e => form.setData('notes', e.target.value)} /></div>
+            </div>
+        </Modal>
     );
 }
 

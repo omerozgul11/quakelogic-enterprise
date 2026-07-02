@@ -382,7 +382,7 @@ class PurchaseRequestController extends Controller
     {
         return \App\Models\Crm\Invoice::where('organization_id', $orgId)
             ->whereIn('kind', ['invoice', 'estimate'])
-            ->with('company:id,name')
+            ->with(['company:id,name', 'items' => fn ($q) => $q->orderBy('position')->orderBy('id')])
             ->orderByDesc('id')->limit(100)
             ->get(['id', 'number', 'kind', 'company_id', 'total', 'amount_paid', 'currency'])
             ->map(fn ($inv) => [
@@ -392,6 +392,12 @@ class PurchaseRequestController extends Controller
                 'company' => $inv->company?->name,
                 'total' => (float) $inv->total,
                 'currency' => $inv->currency,
+                // Sell price seeds the PO unit cost (same as fromCrmInvoice); the buyer adjusts.
+                'items' => $inv->items->map(fn ($it) => [
+                    'description' => $it->description,
+                    'quantity' => (float) $it->quantity,
+                    'unit_cost' => (float) $it->unit_price,
+                ])->values()->all(),
             ])->all();
     }
 }

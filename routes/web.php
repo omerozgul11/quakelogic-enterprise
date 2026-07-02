@@ -221,6 +221,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::match(['put', 'patch'], '/{invoice}', [CrmInvoiceController::class, 'update'])->name('update');
             Route::delete('/{invoice}', [CrmInvoiceController::class, 'destroy'])->name('destroy');
             Route::post('/{invoice}/status', [CrmInvoiceController::class, 'updateStatus'])->name('status');
+            Route::post('/{invoice}/create-project', [CrmInvoiceController::class, 'createProject'])->name('create-project');
             Route::post('/{invoice}/payments', [CrmInvoiceController::class, 'storePayment'])->name('payments.store');
             Route::delete('/{invoice}/payments/{payment}', [CrmInvoiceController::class, 'destroyPayment'])->name('payments.destroy');
         });
@@ -267,6 +268,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{project}/tasks/{task}/comments', [CrmProjectController::class, 'storeTaskComment'])->name('tasks.comments.store');
 
         // Team members
+        Route::post('/{project}/expenses', [CrmProjectController::class, 'storeExpense'])->name('expenses.store');
+
         Route::post('/{project}/members', [CrmProjectController::class, 'storeMember'])->name('members.store');
         Route::match(['put', 'patch'], '/{project}/members/{member}', [CrmProjectController::class, 'updateMember'])->name('members.update');
         Route::delete('/{project}/members/{member}', [CrmProjectController::class, 'destroyMember'])->name('members.destroy');

@@ -10,7 +10,7 @@ import { SendDocumentModal, SendMeta } from '@/Components/procurement/SendDocume
 import { AttachmentsPanel, Attachment } from '@/Components/procurement/AttachmentsPanel';
 import { ApprovalPanel, ApprovalData } from '@/Components/procurement/ApprovalPanel';
 import { formatCurrency, cn } from '@/Lib/utils';
-import { ArrowLeft, ShoppingCart, Trash2, Send, BadgeCheck, Truck, Ban, PackageCheck, Receipt, Mail, FileText } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Trash2, Send, BadgeCheck, Truck, Ban, PackageCheck, Receipt, Mail, FileText, Pencil } from 'lucide-react';
 
 interface Item {
     id: number; description: string; sku: string | null; product_id: number | null; product: string | null;
@@ -20,10 +20,11 @@ interface Order {
     id: number; number: string; status: string; status_label: string; status_color: string;
     is_editable: boolean; can_receive: boolean;
     supplier: { id: number | null; name: string | null; code: string | null; payment_terms: string | null };
+    client: { id: number; name: string } | null;
     warehouse: { id: number; name: string } | null;
     order_date: string | null; expected_date: string | null; currency: string;
     subtotal: number; tax_rate: number; tax_amount: number; shipping_amount: number; total: number;
-    notes: string | null; approved_by: string | null; approved_at: string | null;
+    notes: string | null; payment_terms: string | null; shipping_terms: string | null; approved_by: string | null; approved_at: string | null;
     items: Item[];
 }
 interface BillRef { id: number; number: string; payment_status: string; payment_status_label: string; payment_status_color: string; total: number; currency: string }
@@ -80,10 +81,12 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
                                         ? <Link href={`/procurement/suppliers/${order.supplier.id}`} className="text-primary hover:underline">{order.supplier.name}</Link>
                                         : <span>{order.supplier.name}</span>}
                                     {order.warehouse && <span className="chip">→ {order.warehouse.name}</span>}
+                                    {order.client && <span className="chip">Client: {order.client.name}</span>}
                                 </div>
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            {order.is_editable && can.manage && <Link href={`/procurement/purchase-orders/${order.id}/edit`}><Button variant="secondary" size="sm" icon={Pencil}>Edit</Button></Link>}
                             {order.status === 'draft' && can.manage && <Button variant="secondary" size="sm" icon={Send} onClick={() => act('submit')} disabled={processing}>Submit</Button>}
                             {(order.status === 'pending_approval' || order.status === 'draft') && can.approve && !chainActive && <Button variant="secondary" size="sm" icon={BadgeCheck} onClick={() => act('approve')} disabled={processing}>Approve</Button>}
                             {order.status === 'approved' && can.manage && <Button variant="secondary" size="sm" icon={Truck} onClick={() => act('sent')} disabled={processing}>Mark sent</Button>}
@@ -99,7 +102,8 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
                     <div className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4 sm:grid-cols-4">
                         <div><p className="text-xs text-muted-foreground">Order date</p><p className="mt-0.5 font-medium text-foreground">{order.order_date ?? '—'}</p></div>
                         <div><p className="text-xs text-muted-foreground">Expected</p><p className="mt-0.5 font-medium text-foreground">{order.expected_date ?? '—'}</p></div>
-                        <div><p className="text-xs text-muted-foreground">Terms</p><p className="mt-0.5 font-medium text-foreground">{order.supplier.payment_terms ?? '—'}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Payment terms</p><p className="mt-0.5 font-medium text-foreground">{order.payment_terms || order.supplier.payment_terms || '—'}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Shipping terms</p><p className="mt-0.5 font-medium text-foreground">{order.shipping_terms || '—'}</p></div>
                         <div><p className="text-xs text-muted-foreground">Approved by</p><p className="mt-0.5 font-medium text-foreground">{order.approved_by ?? '—'}</p></div>
                     </div>
 
@@ -148,7 +152,7 @@ export default function PurchaseOrderShow({ order, can, bills, send, attachments
                     <div className="flex justify-end border-t border-border px-4 py-4">
                         <div className="w-full max-w-xs space-y-1.5 text-sm">
                             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="text-foreground">{formatCurrency(order.subtotal, order.currency)}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Tax ({order.tax_rate}%)</span><span className="text-foreground">{formatCurrency(order.tax_amount, order.currency)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Tax{order.tax_rate > 0 ? ` (${order.tax_rate}%)` : ''}</span><span className="text-foreground">{formatCurrency(order.tax_amount, order.currency)}</span></div>
                             <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span className="text-foreground">{formatCurrency(order.shipping_amount, order.currency)}</span></div>
                             <div className="flex justify-between border-t border-border pt-1.5 text-base font-bold text-foreground"><span>Total</span><span>{formatCurrency(order.total, order.currency)}</span></div>
                         </div>

@@ -49,12 +49,22 @@ class PurchaseOrderRequest extends FormRequest
                 'nullable',
                 Rule::exists('inventory_warehouses', 'id')->where('organization_id', $orgId)->whereNull('deleted_at'),
             ],
+            // Optional client (CRM company) the purchase is for — not the supplier.
+            'company_id' => [
+                'nullable',
+                Rule::exists('companies', 'id')->where('organization_id', $orgId)->whereNull('deleted_at'),
+            ],
             'order_date' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'currency' => ['nullable', 'string', 'size:3'],
             'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // Tax may be entered as a rate (above) OR as a flat amount here; a
+            // non-zero rate takes precedence, otherwise this fixed amount is used.
+            'tax_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999'],
             'shipping_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999999'],
             'notes' => ['nullable', 'string'],
+            'payment_terms' => ['nullable', 'string', 'max:120'],
+            'shipping_terms' => ['nullable', 'string', 'max:120'],
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.description' => ['required', 'string', 'max:255'],

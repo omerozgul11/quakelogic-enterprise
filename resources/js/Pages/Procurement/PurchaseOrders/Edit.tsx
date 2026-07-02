@@ -4,142 +4,87 @@ import { ProcurementLayout } from '@/Components/layout/ProcurementLayout';
 import { Button } from '@/Components/ui/Button';
 import { Card } from '@/Components/ui/Card';
 import { Select } from '@/Components/ui/Select';
-import { CopyFromInvoice, SourceInvoice } from '@/Components/procurement/CopyFromInvoice';
 import { formatCurrency } from '@/Lib/utils';
 import { ArrowLeft, Plus, Trash2, ShoppingCart } from 'lucide-react';
 
 interface ProductOpt { id: number; sku: string; name: string; unit_cost: number }
+interface Line { inventory_product_id: string; description: string; sku: string; quantity_ordered: string; unit_cost: string }
+interface Order {
+    id: number; number: string;
+    procurement_supplier_id: string; company_id: string; inventory_warehouse_id: string;
+    order_date: string | null; expected_date: string | null; currency: string;
+    tax_rate: number; tax_amount: number; shipping_amount: number; notes: string | null;
+    payment_terms: string | null; shipping_terms: string | null;
+    items: Line[];
+}
 interface Props {
+    order: Order;
     suppliers: { id: number; name: string; code: string; currency: string }[];
     warehouses: { id: number; name: string; code: string }[];
     products: ProductOpt[];
     companies: { id: number; name: string }[];
-    sourceInvoices: SourceInvoice[];
 }
 
-interface Line { inventory_product_id: string; description: string; sku: string; quantity_ordered: string; unit_cost: string }
-
-const emptyLine: Line = { inventory_product_id: '', description: '', sku: '', quantity_ordered: '1', unit_cost: '0' };
-
-const emptyNewSupplier = {
-    name: '', code: '', category: '', email: '', phone: '', website: '',
-    payment_terms: '', tax_id: '', address_line1: '', city: '', state: '',
-    postal_code: '', country: '', notes: '',
-};
-
-export default function PurchaseOrderCreate({ suppliers, warehouses, products, companies, sourceInvoices }: Props) {
-    const [newSupplier, setNewSupplier] = useState(false);
-    const [taxMode, setTaxMode] = useState<'percent' | 'amount'>('percent');
+export default function PurchaseOrderEdit({ order, suppliers, warehouses, products, companies }: Props) {
+    const [taxMode, setTaxMode] = useState<'percent' | 'amount'>(order.tax_rate > 0 ? 'percent' : (order.tax_amount > 0 ? 'amount' : 'percent'));
     const form = useForm({
-        procurement_supplier_id: '',
-        company_id: '',
-        inventory_warehouse_id: '',
-        order_date: new Date().toISOString().slice(0, 10),
-        expected_date: '',
-        currency: 'USD',
-        tax_rate: '0',
-        tax_amount: '0',
-        shipping_amount: '0',
-        notes: '',
-        payment_terms: '',
-        shipping_terms: '',
-        new_supplier: { ...emptyNewSupplier },
-        items: [{ ...emptyLine }] as Line[],
+        procurement_supplier_id: order.procurement_supplier_id,
+        company_id: order.company_id,
+        inventory_warehouse_id: order.inventory_warehouse_id,
+        order_date: order.order_date ?? '',
+        expected_date: order.expected_date ?? '',
+        currency: order.currency,
+        tax_rate: String(order.tax_rate),
+        tax_amount: String(order.tax_amount),
+        shipping_amount: String(order.shipping_amount),
+        notes: order.notes ?? '',
+        payment_terms: order.payment_terms ?? '',
+        shipping_terms: order.shipping_terms ?? '',
+        items: (order.items.length ? order.items : [{ inventory_product_id: '', description: '', sku: '', quantity_ordered: '1', unit_cost: '0' }]) as Line[],
     });
 
-    const setNs = (patch: Partial<typeof emptyNewSupplier>) =>
-        form.setData('new_supplier', { ...form.data.new_supplier, ...patch });
-    const nsErr = (k: string) => (form.errors as Record<string, string>)[`new_supplier.${k}`];
-
-    const setLine = (i: number, patch: Partial<Line>) => {
-        const items = form.data.items.map((l, idx) => (idx === i ? { ...l, ...patch } : l));
-        form.setData('items', items);
-    };
+    const setLine = (i: number, patch: Partial<Line>) =>
+        form.setData('items', form.data.items.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
     const pickProduct = (i: number, productId: string) => {
         const p = products.find(pr => String(pr.id) === productId);
-        setLine(i, p
-            ? { inventory_product_id: productId, description: p.name, sku: p.sku, unit_cost: String(p.unit_cost) }
-            : { inventory_product_id: '' });
+        setLine(i, p ? { inventory_product_id: productId, description: p.name, sku: p.sku, unit_cost: String(p.unit_cost) } : { inventory_product_id: '' });
     };
-    const addLine = () => form.setData('items', [...form.data.items, { ...emptyLine }]);
+    const addLine = () => form.setData('items', [...form.data.items, { inventory_product_id: '', description: '', sku: '', quantity_ordered: '1', unit_cost: '0' }]);
     const removeLine = (i: number) => form.setData('items', form.data.items.length > 1 ? form.data.items.filter((_, idx) => idx !== i) : form.data.items);
 
     const subtotal = form.data.items.reduce((s, l) => s + (parseFloat(l.quantity_ordered) || 0) * (parseFloat(l.unit_cost) || 0), 0);
-    const taxAmount = taxMode === 'percent'
-        ? subtotal * (parseFloat(form.data.tax_rate) || 0) / 100
-        : (parseFloat(form.data.tax_amount) || 0);
+    const taxAmount = taxMode === 'percent' ? subtotal * (parseFloat(form.data.tax_rate) || 0) / 100 : (parseFloat(form.data.tax_amount) || 0);
     const total = subtotal + taxAmount + (parseFloat(form.data.shipping_amount) || 0);
-
     const productOptions = [{ value: '', label: '— Custom line —' }, ...products.map(p => ({ value: String(p.id), label: `${p.sku} · ${p.name}` }))];
-
-    // Prefill the form from a picked CRM sales invoice/estimate: copy its line
-    // items (sell price seeds unit cost — adjust before saving), currency and a
-    // reference note. Supplier stays blank — an invoice's customer is not the PO's vendor.
-    const applyInvoice = (inv: SourceInvoice) => {
-        const items: Line[] = inv.items && inv.items.length
-            ? inv.items.map(it => ({ inventory_product_id: '', description: it.description, sku: '', quantity_ordered: String(it.quantity), unit_cost: String(it.unit_cost) }))
-            : [{ ...emptyLine }];
-        setTaxMode('percent');
-        form.setData(d => ({
-            ...d,
-            currency: inv.currency || d.currency,
-            notes: d.notes ? d.notes : `From ${inv.kind} ${inv.number}`,
-            items,
-        }));
-    };
+    const lineErr = (i: number, field: string) => (form.errors as Record<string, string>)[`items.${i}.${field}`];
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
-        form.transform(data => ({
-            ...data,
-            procurement_supplier_id: newSupplier ? null : data.procurement_supplier_id,
-            new_supplier: newSupplier ? data.new_supplier : null,
-            company_id: data.company_id || null,
-        }));
-        form.post('/procurement/purchase-orders', { preserveScroll: true });
+        form.put(`/procurement/purchase-orders/${order.id}`, { preserveScroll: true });
     };
-    const lineErr = (i: number, field: string) => (form.errors as Record<string, string>)[`items.${i}.${field}`];
 
     return (
         <ProcurementLayout>
-            <Head title="New Purchase Order · Procurement" />
+            <Head title={`Edit ${order.number} · Procurement`} />
             <form onSubmit={submit} className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-                <Link href="/procurement/purchase-orders" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="h-4 w-4" /> Purchase Orders
+                <Link href={`/procurement/purchase-orders/${order.id}`} className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+                    <ArrowLeft className="h-4 w-4" /> {order.number}
                 </Link>
 
                 <div className="mb-6 flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-gradient text-white"><ShoppingCart className="h-5 w-5" /></div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">New Purchase Order</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Edit {order.number}</h1>
                 </div>
-
-                <CopyFromInvoice invoices={sourceInvoices} target="purchase-orders" onApply={applyInvoice} />
 
                 <Card className="mb-4 p-5">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <div className="flex items-center justify-between gap-2">
-                                <label className="label">Supplier *</label>
-                                <button type="button" onClick={() => setNewSupplier(v => !v)}
-                                    className="text-xs font-medium text-primary hover:underline">
-                                    {newSupplier ? 'Choose existing' : '+ New supplier'}
-                                </button>
-                            </div>
-                            {newSupplier ? (
-                                <>
-                                    <input className="input" autoFocus placeholder="New supplier name"
-                                        value={form.data.new_supplier.name} onChange={e => setNs({ name: e.target.value })} />
-                                    {nsErr('name') && <p className="mt-1 text-xs text-destructive">{nsErr('name')}</p>}
-                                </>
-                            ) : (
-                                <>
-                                    <Select className="w-full" value={form.data.procurement_supplier_id} placeholder="Select supplier…"
-                                        searchable searchPlaceholder="Search suppliers…"
-                                        onChange={v => { const s = suppliers.find(su => String(su.id) === v); form.setData(d => ({ ...d, procurement_supplier_id: v, currency: s?.currency ?? d.currency })); }}
-                                        options={suppliers.map(s => ({ value: String(s.id), label: `${s.name} (${s.code})` }))} />
-                                    {form.errors.procurement_supplier_id && <p className="mt-1 text-xs text-destructive">{form.errors.procurement_supplier_id}</p>}
-                                </>
-                            )}
+                            <label className="label">Supplier *</label>
+                            <Select className="w-full" value={form.data.procurement_supplier_id} placeholder="Select supplier…"
+                                searchable searchPlaceholder="Search suppliers…"
+                                onChange={v => { const s = suppliers.find(su => String(su.id) === v); form.setData(d => ({ ...d, procurement_supplier_id: v, currency: s?.currency ?? d.currency })); }}
+                                options={suppliers.map(s => ({ value: String(s.id), label: `${s.name} (${s.code})` }))} />
+                            {form.errors.procurement_supplier_id && <p className="mt-1 text-xs text-destructive">{form.errors.procurement_supplier_id}</p>}
                         </div>
                         <div>
                             <label className="label">Receive into warehouse</label>
@@ -148,7 +93,7 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products, c
                                 options={warehouses.map(w => ({ value: String(w.id), label: w.code ? `${w.name} (${w.code})` : w.name }))} />
                         </div>
                         <div>
-                            <label className="label">Client <span className="font-normal text-muted-foreground">(optional — the customer this is for)</span></label>
+                            <label className="label">Client <span className="font-normal text-muted-foreground">(optional)</span></label>
                             <Select className="w-full" value={form.data.company_id} placeholder="— None —" searchable searchPlaceholder="Search clients…"
                                 onChange={v => form.setData('company_id', v)}
                                 options={companies.map(c => ({ value: String(c.id), label: c.name }))} />
@@ -163,65 +108,6 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products, c
                         </div>
                     </div>
                 </Card>
-
-                {newSupplier && (
-                    <Card className="mb-4 p-5">
-                        <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground/70">New supplier details</h2>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <div>
-                                <label className="label">Code</label>
-                                <input className="input" placeholder="Auto if blank" value={form.data.new_supplier.code} onChange={e => setNs({ code: e.target.value })} />
-                                {nsErr('code') && <p className="mt-1 text-xs text-destructive">{nsErr('code')}</p>}
-                            </div>
-                            <div>
-                                <label className="label">Category</label>
-                                <input className="input" value={form.data.new_supplier.category} onChange={e => setNs({ category: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">Payment terms</label>
-                                <input className="input" placeholder="Net 30" value={form.data.new_supplier.payment_terms} onChange={e => setNs({ payment_terms: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">Email</label>
-                                <input type="email" className="input" value={form.data.new_supplier.email} onChange={e => setNs({ email: e.target.value })} />
-                                {nsErr('email') && <p className="mt-1 text-xs text-destructive">{nsErr('email')}</p>}
-                            </div>
-                            <div>
-                                <label className="label">Phone</label>
-                                <input className="input" value={form.data.new_supplier.phone} onChange={e => setNs({ phone: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">Website</label>
-                                <input className="input" value={form.data.new_supplier.website} onChange={e => setNs({ website: e.target.value })} />
-                            </div>
-                            <div className="sm:col-span-2">
-                                <label className="label">Address</label>
-                                <input className="input" value={form.data.new_supplier.address_line1} onChange={e => setNs({ address_line1: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">City</label>
-                                <input className="input" value={form.data.new_supplier.city} onChange={e => setNs({ city: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">State</label>
-                                <input className="input" value={form.data.new_supplier.state} onChange={e => setNs({ state: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">Postal code</label>
-                                <input className="input" value={form.data.new_supplier.postal_code} onChange={e => setNs({ postal_code: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">Country</label>
-                                <input className="input" value={form.data.new_supplier.country} onChange={e => setNs({ country: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="label">Tax ID</label>
-                                <input className="input" value={form.data.new_supplier.tax_id} onChange={e => setNs({ tax_id: e.target.value })} />
-                            </div>
-                        </div>
-                        <p className="mt-3 text-xs text-muted-foreground">Saved as a new supplier when you create the purchase order — currency {form.data.currency || 'USD'}.</p>
-                    </Card>
-                )}
 
                 <Card className="mb-4 overflow-hidden">
                     <div className="border-b border-border px-5 py-3"><h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Line items</h2></div>
@@ -295,7 +181,7 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products, c
                     </Card>
                     <Card className="p-5">
                         <div className="space-y-2 text-sm">
-                            <Row label="Subtotal" value={formatCurrency(subtotal, form.data.currency)} />
+                            <div className="flex items-center justify-between"><span className="text-muted-foreground">Subtotal</span><span className="text-foreground">{formatCurrency(subtotal, form.data.currency)}</span></div>
                             <div className="flex items-center justify-between gap-2">
                                 <span className="flex items-center gap-1.5 text-muted-foreground">Tax
                                     <span className="inline-flex overflow-hidden rounded-md border border-border">
@@ -319,15 +205,11 @@ export default function PurchaseOrderCreate({ suppliers, warehouses, products, c
                             </div>
                         </div>
                         <Button type="submit" className="mt-4 w-full" disabled={form.processing}>
-                            {form.processing ? 'Creating…' : 'Create Purchase Order'}
+                            {form.processing ? 'Saving…' : 'Save changes'}
                         </Button>
                     </Card>
                 </div>
             </form>
         </ProcurementLayout>
     );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-    return <div className="flex items-center justify-between"><span className="text-muted-foreground">{label}</span><span className="text-foreground">{value}</span></div>;
 }

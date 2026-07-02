@@ -12,6 +12,7 @@ export interface SourceInvoice {
     company: string | null;
     total: number;
     currency: string;
+    items?: { description: string; quantity: number; unit_cost: number }[];
 }
 
 interface Props {
@@ -20,6 +21,12 @@ interface Props {
     target: 'purchase-requests' | 'purchase-orders';
     /** Vendors — required when target is purchase-orders (a PO needs a supplier). */
     suppliers?: { id: number; name: string }[];
+    /**
+     * When provided, picking an invoice fills the parent form in-place (client
+     * side) instead of posting a server-side "copy to draft". Used on the PO
+     * create form so the buyer can review/adjust before saving.
+     */
+    onApply?: (invoice: SourceInvoice) => void;
 }
 
 /**
@@ -28,7 +35,7 @@ interface Props {
  * Posts straight to the from-invoice endpoint, which creates the draft and
  * opens it. The CRM document is read-only.
  */
-export function CopyFromInvoice({ invoices, target, suppliers }: Props) {
+export function CopyFromInvoice({ invoices, target, suppliers, onApply }: Props) {
     const [invoiceId, setInvoiceId] = useState('');
     const [supplierId, setSupplierId] = useState('');
     const [processing, setProcessing] = useState(false);
@@ -42,6 +49,19 @@ export function CopyFromInvoice({ invoices, target, suppliers }: Props) {
         value: String(inv.id),
         label: `${inv.number} · ${inv.kind}${inv.company ? ` · ${inv.company}` : ''} · ${inv.currency} ${inv.total.toFixed(2)}`,
     }));
+
+    // In-place prefill mode (PO create): picking an invoice fills the form below.
+    if (onApply) {
+        return (
+            <Card className="mb-4 border-dashed p-5">
+                <h2 className="mb-1 text-sm font-bold text-foreground">Prefill from a sales invoice or estimate</h2>
+                <p className="mb-3 text-xs text-muted-foreground">Pick a CRM sales document to copy its line items, currency and reference into the form below — then choose a supplier and adjust costs before saving.</p>
+                <Select className="w-full sm:max-w-md" value={invoiceId} placeholder="Search a sales invoice/estimate…" searchable
+                    onChange={v => { setInvoiceId(v); const inv = invoices.find(i => String(i.id) === v); if (inv) onApply(inv); }}
+                    options={invoiceOpts} />
+            </Card>
+        );
+    }
 
     const copy = () => {
         if (!ready) return;

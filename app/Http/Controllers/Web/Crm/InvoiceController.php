@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Crm\Invoice;
 use App\Models\Crm\Payment;
 use App\Models\Crm\Project;
+use App\Services\Crm\ProjectCreationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -94,8 +95,29 @@ class InvoiceController extends Controller
             return $invoice;
         });
 
+        // Optional: spin up a linked project when the form asked for one (the user
+        // can pick an existing project instead, or leave it unlinked — not required).
+        if (! $invoice->crm_project_id && $request->boolean('create_project')) {
+            app(ProjectCreationService::class)->createFromInvoice($invoice, $user, automatic: false);
+        }
+
         return redirect()->route('crm.invoices.show', $invoice)
             ->with('success', ($invoice->isEstimate() ? 'Estimate' : 'Invoice')." {$invoice->number} created.");
+    }
+
+    /** Manually create a managed project from this invoice and link it. */
+    public function createProject(Request $request, Invoice $invoice): RedirectResponse
+    {
+        $this->authorize('update', $invoice);
+
+        if ($invoice->crm_project_id) {
+            return back()->with('error', 'This invoice is already linked to a project.');
+        }
+
+        $project = app(ProjectCreationService::class)->createFromInvoice($invoice, $request->user(), automatic: false);
+
+        return redirect()->route('projects.show', $project)
+            ->with('success', "Project {$project->project_number} created from invoice {$invoice->number}.");
     }
 
     public function show(Request $request, Invoice $invoice): Response
@@ -323,6 +345,7 @@ class InvoiceController extends Controller
             'status' => ['nullable', new Enum(InvoiceStatus::class)],
             'company_id' => ['nullable', Rule::exists('companies', 'id')->where('organization_id', $user->organization_id)],
             'crm_project_id' => ['nullable', Rule::exists('crm_projects', 'id')->where('organization_id', $user->organization_id)],
+            'create_project' => ['nullable', 'boolean'],
             'issue_date' => 'nullable|date',
             'due_date' => 'nullable|date',
             'tax_rate' => 'nullable|numeric|min:0|max:100',

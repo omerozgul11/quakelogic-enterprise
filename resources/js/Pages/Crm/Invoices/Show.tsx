@@ -8,7 +8,7 @@ import { Select } from '@/Components/ui/Select';
 import { NumberInput } from '@/Components/ui/NumberInput';
 import { Modal, ConfirmDialog } from '@/Components/ui/Modal';
 import { formatCurrency, formatDate } from '@/Lib/utils';
-import { ArrowLeft, Pencil, Trash2, Plus, Building2, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Plus, Building2, Mail, Phone, FolderPlus } from 'lucide-react';
 
 interface Item { id: number; description: string; quantity: number; unit_price: number; amount: number }
 interface PaymentRow { id: number; amount: number; paid_at: string | null; method: string | null; reference: string | null; notes: string | null; recorder: string | null }
@@ -53,12 +53,14 @@ export default function InvoiceShow({ invoice, statuses, can }: Props) {
                             {isEstimate && <span className="chip">Estimate</span>}
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            {invoice.company?.name ?? 'No client'}{invoice.project ? ` · ${invoice.project.name}` : ''}
+                            {invoice.company?.name ?? 'No client'}
+                            {invoice.project ? <> · <Link href={`/projects/${invoice.project.id}`} className="text-primary hover:underline">{invoice.project.name}</Link></> : ''}
                         </p>
                     </div>
                     {can.manage && (
                         <div className="flex flex-wrap items-center gap-2">
                             <Select className="w-40" value={invoice.status} onChange={changeStatus} options={statuses.map(s => ({ value: s.value, label: s.label }))} />
+                            {!invoice.project && <Button variant="secondary" icon={FolderPlus} onClick={() => router.post(`/crm/invoices/${invoice.id}/create-project`, {}, { preserveScroll: true })}>Create project</Button>}
                             <Button variant="secondary" icon={Pencil} href={`/crm/invoices/${invoice.id}/edit`}>Edit</Button>
                             <Button variant="danger" icon={Trash2} onClick={() => setDeleting(true)}>Delete</Button>
                         </div>
